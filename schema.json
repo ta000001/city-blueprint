@@ -1,0 +1,117 @@
+{
+  "version": 20260919,
+  "builders": {
+    "house": {
+      "footprint": { "shape": "RECT", "anchor": "corner", "size": ["depth", "width"] },
+      "fields": {
+        "depth":          { "type": "int" },
+        "width":          { "type": "int" },
+        "numStories":     { "type": "int" },
+        "floorHeight":    { "type": "int" },
+        "windowWidth":    { "type": "int" },
+        "windowHeight":   { "type": "int" },
+        "windowInterval": { "type": "int" },
+        "lightInterval":  { "type": "int" },
+        "roofType":     { "type": "enum", "values": ["NONE","FLAT","GABLE","GABLE2","SHED","A_FRAME","CURVED","DOME"] },
+        "doorPosition": { "type": "enum", "values": ["CENTER","LEFT","RIGHT"] },
+        "lightType":    { "type": "enum", "values": ["TORCH_CHANDELIER","SOUL_TORCH_CHANDELIER","LANTERN_HANGING","SOUL_LANTERN_HANGING","END_ROD","GLOWSTONE","SEA_LANTERN","SHROOMLIGHT","FROGLIGHT_OCHRE","FROGLIGHT_VERDANT","FROGLIGHT_PEARLESCENT","JACK_O_LANTERN"] },
+        "wall":   { "type": "blockspec" },
+        "frame":  { "type": "blockspec" },
+        "floor":  { "type": "blockspec" },
+        "roof":   { "type": "blockspec" },
+        "window": { "type": "blockspec" },
+        "door":   { "type": "blockspec" },
+        "button": { "type": "blockspec" },
+        "stairs": { "type": "blockspec" },
+        "fence":  { "type": "blockspec" }
+      }
+    },
+    "cylinder": {
+      "footprint": { "shape": "CIRCLE", "anchor": "center", "size": ["diameter"] },
+      "fields": {
+        "diameter":             { "type": "int" },
+        "height":               { "type": "int" },
+        "optPlacementInterval": { "type": "int" },
+        "optPlacementNum":      { "type": "int" },
+        "wallFlag":  { "type": "bool" },
+        "floorFlag": { "type": "bool" },
+        "dotted":    { "type": "bool" },
+        "wall":  { "type": "blockspec" },
+        "floor": { "type": "blockspec" },
+        "opt":   { "type": "blockspec" }
+      }
+    },
+    "tower": {
+      "footprint": { "shape": "CIRCLE", "anchor": "center", "size": ["diameter"] },
+      "fields": {
+        "diameter":             { "type": "int" },
+        "stories":              { "type": "int" },
+        "optPlacementInterval": { "type": "int" },
+        "optPlacementNum":      { "type": "int" },
+        "wall":   { "type": "blockspec" },
+        "floor":  { "type": "blockspec" },
+        "stairs": { "type": "blockspec" },
+        "opt":    { "type": "blockspec" }
+      }
+    },
+    "sphere": {
+      "footprint": { "shape": "CIRCLE", "anchor": "center", "size": ["diameter"] },
+      "fields": {
+        "diameter": { "type": "int" },
+        "arcSpan":  { "type": "enum", "values": ["FULL","UPPER_HALF","LOWER_HALF"] },
+        "wall":     { "type": "blockspec" }
+      }
+    },
+    "spiral_stair": {
+      "footprint": { "shape": "CIRCLE", "anchor": "center", "size": ["diameter"] },
+      "fields": {
+        "diameter": { "type": "int" },
+        "stories":  { "type": "int" },
+        "floor":  { "type": "blockspec" },
+        "stairs": { "type": "blockspec" }
+      }
+    },
+    "lying_cylinder": {
+      "footprint": [
+        { "when": { "orientation": "AXIS_ALONG_DEPTH" }, "shape": "RECT", "anchor": { "d": "corner", "w": "center" }, "size": ["length", "diameter"] },
+        { "when": { "orientation": "AXIS_ALONG_WIDTH" }, "shape": "RECT", "anchor": { "d": "center", "w": "corner" }, "size": ["diameter", "length"] }
+      ],
+      "fields": {
+        "diameter":    { "type": "int" },
+        "length":      { "type": "int" },
+        "orientation": { "type": "enum", "values": ["AXIS_ALONG_WIDTH","AXIS_ALONG_DEPTH"] },
+        "arcSpan":     { "type": "enum", "values": ["FULL","UPPER_HALF","LOWER_HALF"] },
+        "block":       { "type": "blockspec" }
+      }
+    },
+    "road": {
+      "footprint": { "shape": "RECT", "anchor": "corner", "size": ["depth", "width"] },
+      "fields": {
+        "depth": { "type": "int" },
+        "width": { "type": "int" },
+        "block": { "type": "blockspec" }
+      }
+    },
+    "rampart": {
+      "footprint": [
+        { "when": { "shape": "RECT" },   "shape": "RECT",   "anchor": "corner", "size": ["depth", "width"] },
+        { "when": { "shape": "CIRCLE" }, "shape": "CIRCLE", "anchor": "center", "size": ["diameter"] }
+      ],
+      "fields": {
+        "shape":         { "type": "enum", "values": ["RECT","CIRCLE"] },
+        "depth":         { "type": "int" },
+        "width":         { "type": "int" },
+        "diameter":      { "type": "int" },
+        "height":        { "type": "int" },
+        "thickness":     { "type": "int" },
+        "gateWidth":     { "type": "int" },
+        "gateHeight":    { "type": "int" },
+        "torchInterval": { "type": "int" },
+        "torchHeight":   { "type": "int" },
+        "wall":      { "type": "blockspec" },
+        "gateFrame": { "type": "blockspec" },
+        "torch":     { "type": "blockspec" }
+      }
+    }
+  }
+}

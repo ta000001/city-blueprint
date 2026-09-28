@@ -1,0 +1,119 @@
+{
+  "version": 20260919,
+  "presets": {
+    "house": {
+      "DEFAULTS": {
+        "depth": 12, "width": 10, "numStories": 3, "floorHeight": 5,
+        "windowWidth": 1, "windowHeight": 2, "windowInterval": 4, "lightInterval": 6,
+        "roofType": "NONE", "doorPosition": "CENTER", "lightType": "TORCH_CHANDELIER",
+        "wall":   { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "frame":  { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "floor":  { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "roof":   { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "window": { "form": "FULLBLOCK", "mat": "GLASS" },
+        "door":   { "form": "DOOR", "mat": "IRON" },
+        "button": { "form": "BUTTON", "mat": "STONE" },
+        "stairs": { "form": "STAIRS", "mat": "COBBLESTONE" },
+        "fence":  { "form": "FENCE", "mat": "COBBLESTONE" }
+      },
+      "COTTAGE": {
+        "depth": 8, "width": 8, "numStories": 1, "roofType": "GABLE2",
+        "wall":  { "form": "FULLBLOCK", "mat": "OAK_PLANKS" },
+        "frame": { "form": "FULLBLOCK", "mat": "OAK_LOG" },
+        "roof":  { "form": "FULLBLOCK", "mat": "OAK_PLANKS" },
+        "floor": { "form": "FULLBLOCK", "mat": "OAK_PLANKS" }
+      },
+      "HIGHRISE": {
+        "numStories": 6, "floorHeight": 5, "windowInterval": 2, "windowWidth": 2, "windowHeight": 3,
+        "wall":  { "form": "FULLBLOCK", "mat": "WHITE_CONCRETE" },
+        "frame": { "form": "FULLBLOCK", "mat": "LIGHT_GRAY_CONCRETE" }
+      },
+      "DUNGEON": {
+        "roofType": "FLAT", "windowInterval": 0, "lightInterval": 0,
+        "wall":  { "form": "FULLBLOCK", "mat": "DEEPSLATE_BRICK" },
+        "frame": { "form": "FULLBLOCK", "mat": "DEEPSLATE_TILE" }
+      },
+      "CITY_HOUSE_DEFAULT": {
+        "numStories": { "range": [1, 12] },
+        "wall":   { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "window": { "form": "FULLBLOCK", "mat": "GLASS" },
+        "door":   { "form": "DOOR", "mat": "IRON" },
+        "button": { "form": "BUTTON", "mat": "STONE" },
+        "stairs": { "form": "STAIRS", "mat": "COBBLESTONE" },
+        "fence":  { "form": "FENCE", "mat": "COBBLESTONE" }
+      },
+      "RANDOM_VILLAGE": {
+        "depth": { "range": [6, 12] },
+        "width": { "range": [6, 10] },
+        "numStories": { "choice": [1, 2] },
+        "roofType": { "choice": ["GABLE", "GABLE2", "SHED"] },
+        "wall":  { "choice": [ { "form": "FULLBLOCK", "mat": "OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "DARK_OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "BRICK" } ] },
+        "frame": { "choice": [ { "form": "FULLBLOCK", "mat": "OAK_LOG" }, { "form": "FULLBLOCK", "mat": "DARK_OAK_LOG" }, { "form": "FULLBLOCK", "mat": "COBBLESTONE" } ] },
+        "floor": { "choice": [ { "form": "FULLBLOCK", "mat": "OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "DARK_OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "SMOOTH_STONE" } ] },
+        "roof":  { "choice": [ { "form": "FULLBLOCK", "mat": "OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "DARK_OAK_PLANKS" }, { "form": "FULLBLOCK", "mat": "COBBLESTONE" } ] }
+      },
+      "RANDOM_URBAN": {
+        "numStories": { "range": [3, 8] },
+        "floorHeight": { "range": [4, 6] },
+        "windowWidth": { "choice": [1, 2] },
+        "windowHeight": { "choice": [2, 3] },
+        "windowInterval": { "range": [2, 4] },
+        "roofType": { "choice": ["FLAT", "DOME"] },
+        "wall":  { "choice": [ { "form": "FULLBLOCK", "mat": "WHITE_CONCRETE" }, { "form": "FULLBLOCK", "mat": "LIGHT_GRAY_CONCRETE" }, { "form": "FULLBLOCK", "mat": "COBBLESTONE" } ] },
+        "frame": { "choice": [ { "form": "FULLBLOCK", "mat": "LIGHT_GRAY_CONCRETE" }, { "form": "FULLBLOCK", "mat": "COBBLESTONE" } ] }
+      }
+    },
+    "cylinder": {
+      "DEFAULTS": {
+        "diameter": 17, "height": 12, "optPlacementInterval": 3, "optPlacementNum": 1,
+        "wallFlag": true, "floorFlag": true, "dotted": false,
+        "wall":  { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "floor": { "form": "FULLBLOCK", "mat": "SMOOTH_STONE" },
+        "opt":   { "form": "TORCH", "mat": "COAL" }
+      }
+    },
+    "tower": {
+      "DEFAULTS": {
+        "diameter": 29, "stories": 2, "optPlacementInterval": 6, "optPlacementNum": 3,
+        "wall":   { "form": "FULLBLOCK", "mat": "BRICK" },
+        "floor":  { "form": "FULLBLOCK", "mat": "SMOOTH_STONE" },
+        "stairs": { "form": "STAIRS", "mat": "COBBLESTONE" },
+        "opt":    { "form": "TORCH", "mat": "COAL" }
+      }
+    },
+    "sphere": {
+      "DEFAULTS": {
+        "diameter": 19, "arcSpan": "FULL",
+        "wall": { "form": "FULLBLOCK", "mat": "GLASS" }
+      }
+    },
+    "spiral_stair": {
+      "DEFAULTS": {
+        "diameter": 23, "stories": 2,
+        "floor":  { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "stairs": { "form": "STAIRS", "mat": "COBBLESTONE" }
+      }
+    },
+    "lying_cylinder": {
+      "DEFAULTS": {
+        "diameter": 7, "length": 12, "orientation": "AXIS_ALONG_DEPTH", "arcSpan": "FULL",
+        "block": { "form": "FULLBLOCK", "mat": "COBBLESTONE" }
+      }
+    },
+    "road": {
+      "DEFAULTS": {
+        "depth": 10, "width": 5,
+        "block": { "form": "FULLBLOCK", "mat": "DIRT" }
+      }
+    },
+    "rampart": {
+      "DEFAULTS": {
+        "shape": "RECT", "depth": 60, "width": 60, "diameter": 60, "height": 8, "thickness": 2,
+        "gateWidth": 4, "gateHeight": 4, "torchInterval": 8, "torchHeight": 3,
+        "wall":      { "form": "FULLBLOCK", "mat": "COBBLESTONE" },
+        "gateFrame": { "form": "FULLBLOCK", "mat": "DARK_OAK_LOG" },
+        "torch":     { "form": "WALL_TORCH", "mat": "COAL" }
+      }
+    }
+  }
+}

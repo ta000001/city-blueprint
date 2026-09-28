@@ -1,0 +1,2538 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>city-blueprint</title>
+<meta name="theme-color" content="#10171A">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="city-blueprint">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#10171A; --panel:#172124; --panel2:#1D2A2C; --rule:#2A3B3C;
+  --brass:#D4A93C; --brass-dim:#6E5820; --verdigris:#4F8A7B;
+  --chalk:#DCE5E2; --dim:#7D908C;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--ink)}
+body{
+  color:var(--chalk);font-family:'JetBrains Mono',ui-monospace,monospace;
+  touch-action:manipulation;-webkit-text-size-adjust:100%;
+  padding:max(14px,env(safe-area-inset-top)) 12px calc(28px + env(safe-area-inset-bottom));
+  -webkit-tap-highlight-color:transparent;overscroll-behavior:none;
+}
+.head{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+h1{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;
+  font-size:22px;letter-spacing:-.02em;line-height:1;margin:0}
+.sub{font-size:11px;color:var(--dim);letter-spacing:.08em}
+.ver{font-size:11px;color:var(--brass);border:1px solid var(--brass-dim);border-radius:50%;
+  width:18px;height:18px;line-height:16px;text-align:center;cursor:pointer;flex:none;align-self:center}
+#vmodal,#hmodal,#pmodal,#smodal,#savemodal,#loadmodal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:60}
+#vmodal.on,#hmodal.on,#pmodal.on,#smodal.on,#savemodal.on,#loadmodal.on{display:flex}
+#vmodal .panel,#hmodal .panel,#pmodal .panel,#smodal .panel,#savemodal .panel,#loadmodal .panel{background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:16px 20px;min-width:220px;max-width:88%}
+#vmodal h3,#hmodal h3,#pmodal h3,#smodal h3,#savemodal h3,#loadmodal h3{margin:0 0 10px;font-size:13px;color:var(--brass)}
+#vmodal .vrow{font-size:12px;color:var(--brass);letter-spacing:.04em;line-height:1.9;font-family:ui-monospace,monospace}
+#hmodal .hrow,#pmodal .hrow,#smodal .hrow{font-size:12px;color:var(--dim);line-height:1.9}
+#hmodal .hnote{padding-left:1.1em;font-size:11px;color:var(--dim);opacity:.8;line-height:1.7}
+#hmodal .hgrp,#pmodal .hgrp,#smodal .hgrp{margin-bottom:10px}
+#hmodal .panel{width:min(460px,92%);max-height:84%;display:flex;flex-direction:column}
+#help-tabs{margin:0 0 10px;flex:none}
+#hmodal-body{overflow:auto;min-height:0}
+#smodal .note{margin-top:6px}
+.palhelp{display:flex;align-items:center;gap:6px;margin:10px 0 4px;font-size:11px;color:var(--dim)}
+#hmodal b{color:var(--brass)}
+.topmode{display:flex;gap:2px;background:var(--panel);padding:3px;border-radius:5px;margin-bottom:12px}
+.topmode button{flex:1;background:transparent;border:none;color:var(--dim);padding:8px;border-radius:4px;font-size:13px;cursor:pointer;letter-spacing:.04em}
+.topmode button[aria-pressed="true"]{background:var(--panel2);color:var(--brass)}
+#pal-list{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+#pal-list .pal-form{font-size:11px;color:var(--brass);margin:8px 0 2px;letter-spacing:.06em}
+#pal-list .pal-row{display:flex;align-items:center;gap:8px}
+#pal-list .pal-sw{width:16px;height:16px;border-radius:3px;flex:none;border:1px solid var(--rule)}
+#pal-list .pal-slot{font-size:12px;font-family:ui-monospace,monospace;color:var(--chalk);flex:none;min-width:100px}
+#pal-list .pal-sel{flex:1;min-width:0;background:var(--panel);border:1px solid var(--rule);color:var(--chalk);border-radius:4px;padding:6px;font-size:12px}
+.dims{display:flex;gap:6px;align-items:center;margin-left:auto}
+.dims label{font-size:10px;color:var(--dim)}
+.dims input{width:38px;background:var(--panel);border:1px solid var(--rule);
+  color:var(--chalk);font-family:inherit;font-size:12px;padding:4px;text-align:center;
+  border-radius:3px;outline:none}
+#name,#pal-name,#struct-name{background:transparent;border:none;border-bottom:1px solid var(--rule);
+  color:var(--chalk);font-family:inherit;font-size:12px;padding:3px 2px;width:100%;
+  max-width:190px;outline:none;margin-bottom:12px}
+.palname{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.palname span{font-size:10px;color:var(--dim);min-width:64px}
+.palname input{margin-bottom:0}
+.alias{font-size:9px;font-weight:400;line-height:1.05;opacity:.85}   /* スロット別名（役割ボタン下/パレット左） */
+.apphead{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.icobtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;color:var(--dim);cursor:pointer;flex:none;border-radius:7px;border:1px solid transparent}
+.icobtn:hover,.icobtn:active{color:var(--chalk);border-color:var(--rule);background:rgba(255,255,255,.04)}
+.icobtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+#loadmodal .panel,#savemodal .panel{width:min(460px,92%)}
+.ldgrp{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.ldradio{flex:none;display:flex;align-items:center}
+.ldradio input{width:15px;height:15px}
+.ldrows{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.ldrow{display:flex;align-items:center;gap:12px;min-width:0}
+.ldrow .btn{flex:none;min-width:88px}
+.ldfn{flex:1;min-width:0;font-size:11px;color:var(--brass);font-family:ui-monospace,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid var(--rule);padding:6px 2px;letter-spacing:.02em}
+.ldfn:empty::after{content:'\00a0'}
+#savemodal .ldrow{margin-bottom:14px}
+.fnwrap{flex:1;min-width:0;display:flex;align-items:center;border-bottom:1px solid var(--rule)}
+#savemodal .ldrow input{flex:1;min-width:0;max-width:none;margin-bottom:0;padding:6px 2px;font-size:12px;border-bottom:none}
+.ext{flex:none;color:var(--dim);font-family:ui-monospace,monospace;font-size:12px;padding:6px 2px 6px 0}
+.modnote{font-size:11px;color:var(--dim);line-height:1.4;margin-top:10px}
+.appname{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;
+  font-size:20px;letter-spacing:-.02em;line-height:1;color:var(--chalk)}
+.namerow{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.namerow #name{margin-bottom:0}
+.tabs{display:flex;gap:2px;background:var(--panel);padding:3px;border-radius:5px;margin-bottom:12px}
+.tabs button{flex:1;padding:8px 4px;background:transparent;border:none;color:var(--dim);
+  font-family:inherit;font-size:12px;border-radius:3px}
+.tabs button[aria-selected="true"]{background:var(--panel2);color:var(--brass)}
+.tabs button[aria-pressed="true"]{background:var(--panel2);color:var(--brass)}   /* モードタブ（選択/置く/壊す）*/
+.bar{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.bar.sep{border-top:1px solid var(--verdigris);padding-top:7px;margin-top:7px;position:relative}
+.bar.sep:empty{border-top:0;padding-top:0;margin-top:0}   /* 中身が無いバー（例：プロパティ無し form の dir）は線を出さない */
+.bar.sep[data-label]::before{content:attr(data-label);position:absolute;left:12px;top:0;transform:translateY(-50%);   /* 区切り線の上に小さくエリア名（線はこの部分だけ途切れる・縦幅は増えない） */
+  background:var(--ink);color:var(--verdigris);font-size:9px;letter-spacing:.06em;padding:0 6px;pointer-events:none;white-space:nowrap}
+.bar.sep:empty::before{display:none}
+.palbar{display:flex;align-items:center;gap:6px;margin-top:8px}
+.palbar-t{font-size:10px;color:var(--dim);min-width:36px;letter-spacing:.06em}
+.palbar .btn{min-width:0}
+.btn{flex:1 1 auto;min-width:76px;padding:10px 8px;background:var(--panel);
+  border:1px solid var(--rule);color:var(--chalk);font-family:inherit;font-size:11px;border-radius:4px}
+.btn:active{background:var(--panel2)}
+.btn[aria-pressed="true"]{border-color:var(--brass);color:var(--brass)}
+.btn[disabled]{opacity:.35}
+#space{position:relative;width:100%;height:56vh;min-height:300px;background:var(--panel);
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;touch-action:none;margin-top:12px}
+#space canvas{display:block;width:100%;height:100%}
+.hud{position:absolute;left:10px;top:10px;pointer-events:none;font-size:10px;color:var(--dim);line-height:1.6}
+.hud b{color:var(--brass);font-weight:600}
+.vtoggles{position:absolute;top:10px;right:10px;display:flex;gap:6px;z-index:6}
+.vtoggle{font-size:10px;padding:3px 9px;border-radius:12px;border:1px solid var(--rule);
+  background:rgba(0,0,0,.4);color:var(--dim);cursor:pointer}
+.vtoggle[aria-pressed="true"]{color:var(--brass);border-color:var(--brass-dim)}
+.hbadge{width:20px;height:20px;line-height:18px;text-align:center;
+  border-radius:50%;border:1px solid var(--rule);background:rgba(0,0,0,.4);color:var(--dim);font-size:12px;cursor:pointer}
+.vbottom{position:absolute;right:10px;bottom:10px;display:flex;gap:6px;z-index:6}
+.vbtn{width:34px;height:34px;font-size:17px;line-height:1;border-radius:8px;border:1px solid var(--rule);
+  background:rgba(0,0,0,.45);color:var(--chalk);cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.vbtn:disabled{opacity:.4}
+.vbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.vpick{position:absolute;left:10px;bottom:10px;z-index:6}
+.vpick .vbtn[aria-pressed="true"]{color:var(--brass);border-color:var(--brass-dim)}
+.vbtn{transition:transform .06s ease, background .12s ease}
+.kbfocus{outline:2px solid var(--brass) !important;outline-offset:1px}
+.vbtn:active:not(:disabled){transform:scale(.86);background:rgba(255,255,255,.1)}
+.vpick .vbtn.picked{animation:pickpop .45s ease}
+@keyframes pickpop{
+  0%{transform:scale(.82);color:var(--brass);border-color:var(--brass);box-shadow:0 0 0 0 rgba(212,169,60,.6)}
+  40%{transform:scale(1.14);color:var(--brass);border-color:var(--brass);box-shadow:0 0 11px 3px rgba(212,169,60,.55)}
+  100%{transform:scale(1);box-shadow:0 0 0 0 rgba(212,169,60,0)}
+}
+#inspect,#pinspect{position:absolute;left:10px;top:10px;max-width:calc(100% - 20px);font-size:11px;color:var(--brass);
+  display:none;font-family:ui-monospace,monospace;pointer-events:none;z-index:6;text-align:left;line-height:1.5;
+  text-shadow:0 1px 3px rgba(0,0,0,0.95)}
+#inspect.on,#pinspect.on{display:block}
+.slider{display:flex;align-items:center;gap:8px;margin-top:10px}
+.slider input{flex:1;accent-color:#D4A93C;height:26px}
+.y{font-family:'Bricolage Grotesque',system-ui,sans-serif;font-weight:800;font-size:22px;line-height:1;color:var(--brass)}
+.stage{display:flex;gap:10px;align-items:stretch;margin-top:12px}
+#spine{width:44px;flex:none;display:flex;flex-direction:column-reverse;background:var(--panel);
+  border:1px solid var(--rule);border-radius:4px;overflow:hidden;touch-action:none}
+.seg{flex:1;min-height:7px;position:relative;border-top:1px solid #0d1315;display:flex;align-items:center;padding-left:5px}
+.seg span.n{font-size:9px;color:var(--dim);position:relative;z-index:2}
+.seg span.f{position:absolute;inset:0;background:var(--brass)}
+.seg[data-cur="1"]{box-shadow:inset 0 0 0 2px var(--verdigris)}
+.seg[data-clip="cut"]{outline:2px dashed #ffd24a;outline-offset:-2px;z-index:3}
+.seg[data-clip="copy"]{outline:2px dashed #8ff0ff;outline-offset:-2px;z-index:3}
+#grid[data-clip="cut"]{outline:2px dashed #ffd24a;outline-offset:3px}
+#grid[data-clip="copy"]{outline:2px dashed #8ff0ff;outline-offset:3px}
+.gridbox{position:relative;flex:1;min-width:0;display:flex;background:var(--panel);border:1px solid var(--rule);border-radius:4px}
+#gridwrap{flex:1;min-width:0;overflow:auto;margin-bottom:46px;
+  padding:38px 6px 6px;max-height:60vh;min-height:300px;-webkit-overflow-scrolling:touch;touch-action:none}
+#grid{display:grid;width:max-content;margin:0 auto;border-left:1px solid var(--rule);border-top:1px solid var(--rule);--hcol:#ff8a8a;--vcol:#8aa8ff}
+.cell{border-right:1px solid #22302f;border-bottom:1px solid #22302f;background:#131c1e;position:relative;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:8px;line-height:1;color:#0e1416;text-align:center;font-family:ui-monospace,monospace}
+.cell[data-origin="1"]::after{content:'';position:absolute;inset:0;box-shadow:inset 3px 0 0 var(--vcol),inset 0 -3px 0 var(--hcol);pointer-events:none;z-index:2}
+.cell .axlab{position:absolute;line-height:1;font-weight:700;pointer-events:none;z-index:4;font-family:ui-monospace,monospace}
+.cell .axlab-v{left:2px;top:1px}
+.cell .axlab-h{right:2px;bottom:1px}
+.cell[data-cx="1"]{border-right-color:var(--rule)}
+.cell[data-cz="1"]{border-bottom-color:var(--rule)}
+.cell[data-below="1"]{background:#1b2320;box-shadow:inset 0 0 0 1px var(--brass-dim)}
+.cell[data-dim="1"]{opacity:.24}
+.cell[data-on="1"]{background:var(--brass);box-shadow:inset -2px -2px 0 rgba(0,0,0,.22)}
+.cell[data-preview="draw"]{box-shadow:inset 0 0 0 2px var(--brass)!important;z-index:3}
+.cell[data-preview="break"]{box-shadow:inset 0 0 0 2px #c0533f!important;z-index:3}
+.cell[data-preview="select"]{box-shadow:inset 0 0 0 2px #8ff0ff!important;z-index:3}
+.cell[data-sel="1"]{background:rgba(143,240,255,.16);box-shadow:inset 0 0 0 1px rgba(143,240,255,.5)}
+.cell[data-inspect="1"]{box-shadow:inset 0 0 0 3px #8ff0ff!important;z-index:5}
+.cell[data-clipsrc="cut"]{outline:2px dashed #ffd24a;outline-offset:-2px;z-index:4}
+.cell[data-clipsrc="copy"]{outline:2px dashed #8ff0ff;outline-offset:-2px;z-index:4}
+.cell[data-clipdst="1"]{outline:2px dashed #7ad79a;outline-offset:-2px;z-index:4}
+.cell[data-preview="dst"]{outline:2px dashed #7ad79a;outline-offset:-2px;background:rgba(122,215,154,.22);z-index:4}
+.readout{display:flex;align-items:baseline;gap:8px;margin:0 0 8px}
+.readout .c{margin-left:auto;font-size:11px;color:var(--dim)}
+#json,#pal-json{width:100%;height:300px;background:var(--panel);border:1px solid var(--rule);color:var(--chalk);
+  font-family:inherit;font-size:11px;line-height:1.5;padding:10px;border-radius:4px;white-space:pre;outline:none}
+.note{font-size:10px;color:var(--dim);line-height:1.6;margin:8px 0 0}
+#status{font-size:10px;color:var(--verdigris);min-height:14px;margin-top:8px}
+.hidden{display:none}
+.btn small{display:block;font-size:9px;color:var(--brass);line-height:1.2}
+#modal,#matmodal,#propmodal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+#modal.on,#matmodal.on,#propmodal.on{display:flex}
+#modal .panel,#matmodal .panel,#propmodal .panel{background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:14px;max-width:88%;max-height:78%;overflow:auto}
+#modal h3,#matmodal h3,#propmodal h3{margin:0 0 10px;font-size:13px;color:var(--brass)}
+#modal .grid,#propmodal .grid{display:flex;flex-wrap:wrap;gap:6px}
+#modal .grid .btn,#propmodal .grid .btn{flex:0 0 auto;min-width:110px}
+#propmodal .grid .btn{min-width:90px}
+#propmodal .pv{display:flex;align-items:center;justify-content:center;gap:14px;margin:2px 0 10px}
+#propmodal .pv .val{font-size:20px;font-weight:700;color:var(--brass);min-width:52px;text-align:center}
+#propmodal input[type=range]{display:block;width:250px;max-width:70vw;margin:0 auto 4px}
+#matmodal .panel{width:min(420px,88%);display:flex;flex-direction:column;overflow:hidden;min-height:0}
+#mat-search{background:var(--panel);border:1px solid var(--rule);color:var(--chalk);border-radius:4px;padding:9px 8px;font-size:13px;margin:0 0 8px;font-family:ui-monospace,monospace;box-sizing:border-box;width:100%;flex:none}
+#matmodal-list{display:flex;flex-direction:column;flex:1;overflow:auto;min-height:0}
+.matrow{display:flex;align-items:center;gap:10px;padding:8px 6px;border:none;border-bottom:1px solid var(--rule);background:transparent;cursor:pointer;text-align:left;width:100%}
+.matrow.on{background:var(--panel)}
+.matphys{font-family:ui-monospace,monospace;font-size:12px;color:var(--chalk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.matbcol{display:flex;flex-direction:column;gap:1px;flex:none;align-items:flex-end;max-width:55%;min-width:0}
+.matja{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mattop{display:flex;align-items:baseline;gap:8px;min-width:0}
+.matthumb{width:24px;height:24px;flex:none;border:1px solid var(--rule);border-radius:3px;overflow:hidden;background:var(--panel)}
+.matthumb img{width:100%;height:100%;image-rendering:pixelated;display:block}
+.matthumb.noimg{background:repeating-conic-gradient(var(--rule) 0% 25%,transparent 0% 50%) 0/8px 8px}
+.pal-pick{display:flex;align-items:center;gap:8px;flex:1;min-width:0;background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:5px 8px;cursor:pointer;text-align:left}
+.pal-pick-t{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;overflow:hidden}
+.mp-phys{font-family:ui-monospace,monospace;font-size:12px;color:var(--chalk);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-ja{font-size:11px;color:var(--dim);white-space:nowrap}
+.mp-none{font-size:12px;color:var(--dim)}
+.mattext{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
+.matblock{font-family:ui-monospace,monospace;font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mp-block{font-family:ui-monospace,monospace;font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#rawmodal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:55}
+#rawmodal.on{display:flex}
+#rawmodal .panel{background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:14px;width:min(480px,94%);max-height:84%;display:flex;flex-direction:column;min-height:0}
+#rawmodal h3{margin:0 0 8px;font-size:13px;color:var(--brass)}
+#raw-search{background:var(--panel);border:1px solid var(--rule);color:var(--chalk);border-radius:4px;padding:9px 8px;font-size:13px;margin:0 0 6px;font-family:ui-monospace,monospace;box-sizing:border-box;width:100%;flex:none}
+#raw-form,#raw-light,#raw-sort,#mat-light,#mat-sort{background:var(--panel);border:1px solid var(--rule);color:var(--chalk);border-radius:4px;padding:10px 8px;font-size:13px;line-height:1.3;margin:0 0 6px;font-family:ui-monospace,monospace;box-sizing:border-box;width:100%;flex:none;height:auto}
+.matlight{font-size:10px;color:var(--brass);font-family:ui-monospace,monospace;flex:none;white-space:nowrap;margin-left:4px}
+.filttog{background:transparent;border:1px dashed var(--rule);color:var(--dim);border-radius:4px;padding:6px 8px;font-size:11px;margin:0;width:100%;text-align:left;cursor:pointer;font-family:inherit;box-sizing:border-box}
+.filtwrap.on{margin-top:6px}
+.filtwrap{display:none}
+.filtwrap.on{display:block}
+.matphys.clip{text-overflow:clip}
+.moretip{flex:none;color:var(--brass);font-weight:700;cursor:pointer;padding:0 4px;align-self:center;user-select:none;border-bottom:1px dotted var(--brass)}
+.fulltip{position:fixed;z-index:100;max-width:80vw;background:var(--panel2);color:var(--chalk);border:1px solid var(--brass);border-radius:5px;padding:6px 9px;font-family:ui-monospace,monospace;font-size:12px;word-break:break-all;box-shadow:0 3px 12px rgba(0,0,0,.5);display:none;cursor:pointer}
+#rawmodal-list{flex:1;overflow:auto;min-height:0}
+.rawhdr{position:sticky;top:0;z-index:2;background:var(--panel2);color:var(--brass);font-size:11px;font-weight:700;letter-spacing:.05em;padding:8px 6px 5px;border-bottom:1px solid var(--brass-dim)}
+.rawhdr:first-child{padding-top:2px}
+.rawlistwrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.rawpin{position:absolute;top:0;left:0;right:0;z-index:5;pointer-events:none;display:none}
+</style>
+</head>
+<body>
+<div class="apphead"><span class="appname">mc-blueprint</span><span class="ver" id="ver" role="button" tabindex="0" aria-label="バージョン情報">?</span><span class="icobtn" id="sv-open" style="margin-left:auto" role="button" tabindex="0" aria-label="保存"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span><span class="icobtn" id="ld-open" role="button" tabindex="0" aria-label="読み込み"><svg viewBox="0 0 24 24"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg></span><span class="icobtn" id="s-open" role="button" tabindex="0" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="2.1"/><circle cx="15" cy="12" r="2.1"/><circle cx="8" cy="17" r="2.1"/></svg></span></div>
+<div class="topmode"><button id="m-place" aria-pressed="true">place</button><button id="m-palette" aria-pressed="false">palette</button></div>
+<div id="place-root">
+<div class="namerow">
+  <span class="ver" id="b-help" role="button" tabindex="0" aria-label="操作方法">?</span>
+  <div class="dims">
+    <label>D<input id="dz" type="number" min="1" max="64" value="16"></label>
+    <label>H<input id="dy" type="number" min="1" max="64" value="16"></label>
+    <label>W<input id="dx" type="number" min="1" max="64" value="16"></label>
+  </div>
+</div>
+
+<div class="tabs">
+  <button id="t-space" aria-selected="true">3D</button>
+  <button id="t-plan" aria-selected="false">2D</button>
+  <button id="t-json" aria-selected="false">JSON</button>
+</div>
+
+<section id="v-space">
+  <div class="tabs">
+    <button id="b-info" aria-pressed="true">選択</button>
+    <button id="b-place" aria-pressed="false">置く</button>
+    <button id="b-break" aria-pressed="false">壊す</button>
+  </div>
+  <div id="space"><div id="inspect"></div><div class="vtoggles"><button class="vtoggle" id="b-hl" aria-pressed="false">強調</button><button class="vtoggle" id="b-label" aria-pressed="false">ラベル</button></div><div class="vpick"><button class="vbtn" id="b-pick" aria-label="スポイト（選択ブロックを反映）" title="選択中ブロックの form/プロパティ/slot をボタンへ反映" disabled><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button></div><div class="vbottom"><button class="vbtn" id="b-undo" aria-label="元に戻す">↶</button><button class="vbtn" id="b-redo" aria-label="進む" disabled>↷</button></div></div>
+  <div class="slider"><span class="y" id="y3">H00</span><input id="plane" type="range" min="0" max="15" value="0" aria-label="作業面の高さ"></div>
+  <div class="bar">
+    <button class="btn" id="b-down">▼ 下の層</button>
+    <button class="btn" id="b-up">▲ 上の層</button>
+    <button class="btn" id="b-fit">視点をリセット</button>
+  </div>
+  <div class="bar cellclip-bar sep hidden" data-label="action">
+    <button class="btn c-fill">置く</button>
+    <button class="btn c-clear">壊す</button>
+    <button class="btn c-copy">コピー</button>
+    <button class="btn c-cut">切り取り</button>
+    <button class="btn c-rot" disabled>↻ 回転</button>
+    <button class="btn c-paste">貼り付け</button>
+  </div>
+  <div class="bar sep" id="form-space" data-label="form"></div>
+  <div class="bar sep" id="dir-space" data-label="property"></div>
+  <div class="bar sep" id="roles-space" data-label="slot"></div>
+  <div class="bar sep" data-label="reset"><button class="btn" id="b-clear">すべて消去</button></div>
+  <p class="note">合計 <span id="tot">0</span></p>
+</section>
+
+<section id="v-plan" class="hidden">
+  <div class="tabs" id="plane-tabs">
+    <button id="pt-WD" aria-selected="true">上面 W×D</button>
+    <button id="pt-WH" aria-selected="false">正面 W×H</button>
+    <button id="pt-DH" aria-selected="false">側面 D×H</button>
+  </div>
+  <div class="readout"><span class="y" id="y2">H00</span><span class="sub" id="ymax">/ 15</span><span class="c" id="cnt"></span></div>
+  <div class="tabs">
+    <button id="pm-info" aria-pressed="true">選択</button>
+    <button id="pm-place" aria-pressed="false">置く</button>
+    <button id="pm-break" aria-pressed="false">壊す</button>
+  </div>
+  <div class="stage">
+    <div id="spine"></div>
+    <div class="gridbox">
+      <div id="gridwrap"><div id="grid"></div></div>
+      <div id="pinspect"></div>
+      <div class="vtoggles"><button class="vtoggle" id="pl-hl" aria-pressed="false">強調</button><button class="vtoggle" id="pl-label" aria-pressed="false">ラベル</button></div>
+      <div class="vpick"><button class="vbtn" id="pm-pick" aria-label="スポイト（選択ブロックを反映）" title="選択中ブロックの form/プロパティ/slot をボタンへ反映" disabled><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button></div>
+      <div class="vbottom"><button class="vbtn" id="pl-undo" aria-label="元に戻す">↶</button><button class="vbtn" id="pl-redo" aria-label="進む" disabled>↷</button></div>
+    </div>
+  </div>
+  <div class="bar">
+    <button class="btn" id="p-down">▼ 下の層</button>
+    <button class="btn" id="p-up">▲ 上の層</button>
+    <button class="btn" id="p-zo">− 縮小</button>
+    <button class="btn" id="p-zi">＋ 拡大</button>
+  </div>
+  <div class="bar cellclip-bar sep hidden" data-label="action">
+    <button class="btn c-fill">置く</button>
+    <button class="btn c-clear">壊す</button>
+    <button class="btn c-copy">コピー</button>
+    <button class="btn c-cut">切り取り</button>
+    <button class="btn c-rot" disabled>↻ 回転</button>
+    <button class="btn c-paste">貼り付け</button>
+  </div>
+  <div class="bar sep" data-label="layer action">
+    <button class="btn" id="p-lcopy">層をコピー</button>
+    <button class="btn" id="p-lpaste">層を貼り付け</button>
+    <button class="btn" id="p-ladd">層を追加</button>
+  </div>
+  <div class="bar">
+    <button class="btn" id="p-lcut">層を切り取り</button>
+    <button class="btn" id="p-lins">層を挿入</button>
+    <button class="btn" id="p-ldel">層を削除</button>
+  </div>
+  <div class="bar sep" id="form-plan" data-label="form"></div>
+  <div class="bar sep" id="dir-plan" data-label="property"></div>
+  <div class="bar sep" id="roles-plan" data-label="slot"></div>
+</section>
+
+<section id="v-json" class="hidden">
+  <div class="tabs" style="margin:0 0 2px">
+    <button id="j-voxels" aria-selected="true">レコード</button>
+    <button id="j-layers" aria-selected="false">層グリッド</button>
+  </div>
+  <textarea id="json" spellcheck="false"></textarea>
+  <div class="bar">
+    <button class="btn" id="j-apply">✓ 反映</button>
+    <button class="btn" id="j-copy">コピー</button>
+  </div>
+</section>
+</div><!-- /place-root -->
+
+<div id="palette-root" class="hidden">
+  <div class="tabs">
+    <button id="pv-list" aria-selected="true">一覧</button>
+    <button id="pv-json" aria-selected="false">JSON</button>
+  </div>
+  <section id="pv-list-sec">
+    <p class="palhelp"><span class="ver" id="pal-help" role="button" tabindex="0" aria-label="使い方">?</span></p>
+    <div id="pal-list"></div>
+  </section>
+  <section id="pv-json-sec" class="hidden">
+    <textarea id="pal-json" spellcheck="false"></textarea>
+    <div class="bar">
+      <button class="btn" id="pal-apply">✓ 反映</button>
+      <button class="btn" id="pal-copy">コピー</button>
+    </div>
+  </section>
+  <input id="pal-file" type="file" accept="application/json,.json" class="hidden">
+  <input id="pal-file2" type="file" accept="application/json,.json" class="hidden">
+  <input id="pal-file3" type="file" accept="application/json,.json" class="hidden">
+</div>
+
+<div id="status"></div>
+<div id="modal"><div class="panel"><h3>種類を選択</h3><div class="grid" id="modal-grid"></div></div></div>
+<div id="propmodal"><div class="panel"><h3 id="propmodal-title"></h3><div id="propmodal-body"></div></div></div>
+<div id="matmodal"><div class="panel"><h3 id="matmodal-title">mat を選択</h3><input id="mat-search" placeholder="mat / block / 和名 で検索" autocomplete="off" spellcheck="false"><button type="button" class="filttog" id="mat-filttog" aria-expanded="false">絞り込み・並び替え ▸</button><div class="filtwrap" id="mat-filts"><select id="mat-light" aria-label="光源で絞り込み"><option value="all">光源: すべて</option><option value="light">光源のみ</option><option value="dark">非光源のみ</option></select><select id="mat-sort" aria-label="並び替え"><option value="form">並び: 既定(mat名)</option><option value="prefix">並び: prefix(接頭辞)</option><option value="suffix">並び: suffix(接尾辞)</option></select></div><div id="matmodal-list"></div></div></div>
+<div id="rawmodal"><div class="panel"><h3>ブロックを指定</h3>
+  <input id="raw-search" placeholder="物理名 / 和名 で検索" autocomplete="off" spellcheck="false">
+  <button type="button" class="filttog" id="raw-filttog" aria-expanded="false">絞り込み・並び替え ▸</button>
+  <div class="filtwrap" id="raw-filts">
+    <select id="raw-form" aria-label="form で絞り込み"></select>
+    <select id="raw-light" aria-label="光源で絞り込み"><option value="all">光源: すべて</option><option value="light">光源のみ</option><option value="dark">非光源のみ</option></select>
+    <select id="raw-sort" aria-label="並び替え"><option value="form">並び: FORM(既定)</option><option value="prefix">並び: prefix(接頭辞)</option><option value="suffix">並び: suffix(接尾辞)</option></select>
+  </div>
+  <div class="rawlistwrap"><div id="raw-pin" class="rawhdr rawpin"></div><div id="rawmodal-list"></div></div>
+</div></div>
+<div id="vmodal"><div class="panel"><h3>バージョン情報</h3><div id="vmodal-body"></div></div></div>
+<div id="pmodal"><div class="panel"><h3>palette / structure の使い方</h3>
+  <div class="hgrp">
+    <div class="hrow">・palette ＝ slot→mat の対応表。place のスロットに mat を割り当てる。</div>
+    <div class="hrow">・place 読込でスロットが form 別に並ぶ。palette 読込で既存の割当を復元（place に無い slot は無視）。</div>
+    <div class="hrow">・structure 保存 ＝ place＋palette を合成（slot→mat 解決）。</div>
+    <div class="hrow">・structure 読込 ＝ place＋palette へ分解（form 毎に mat を FORM_n へ採番）。</div>
+    <div class="hrow">・JSON タブで直接編集も可：{ "palette": { "slot": "mat" } }</div>
+  </div>
+</div></div>
+<div id="hmodal"><div class="panel"><h3>使い方</h3>
+  <div class="tabs" id="help-tabs">
+    <button data-v="space" aria-selected="true">3D</button>
+    <button data-v="plan" aria-selected="false">2D</button>
+    <button data-v="json" aria-selected="false">JSON</button>
+  </div>
+  <div id="hmodal-body"></div>
+</div></div>
+<div id="smodal"><div class="panel"><h3>設定</h3>
+  <div class="hgrp">
+    <div class="hrow"><b>保存先フォルダ</b></div>
+    <p class="note" id="fs-note" style="display:none">この端末はフォルダ保存に非対応です。保存はすべてダウンロード（ファイル）になります。</p>
+    <div id="fs-rows">
+      <div class="bar" style="margin-top:6px"><button class="btn" id="s-dir-place">📁 place の保存先</button></div>
+      <p class="note" id="dirlabel-place"></p>
+      <div class="bar" style="margin-top:6px"><button class="btn" id="s-dir-palette">📁 palette の保存先</button></div>
+      <p class="note" id="dirlabel-palette"></p>
+      <div class="bar" style="margin-top:6px"><button class="btn" id="s-dir-structure">📁 structure の保存先</button></div>
+      <p class="note" id="dirlabel-structure"></p>
+    </div>
+  </div>
+</div></div>
+<div id="savemodal"><div class="panel"><h3>保存</h3>
+  <div class="ldrow"><button class="btn" id="j-dl">place</button><span class="fnwrap"><input id="name" value="blueprint-01" aria-label="place の名前"><span class="ext">.json</span></span></div>
+  <div class="ldrow"><button class="btn" id="pal-save">palette</button><span class="fnwrap"><input id="pal-name" value="palette-01" aria-label="palette の名前"><span class="ext">.json</span></span></div>
+  <div class="ldrow"><button class="btn" id="pal-struct">structure</button><span class="fnwrap"><input id="struct-name" value="structure-01" aria-label="structure の名前"><span class="ext">.json</span></span></div>
+  <div class="bar sep"><button class="btn" id="save-all" style="flex:1">一括保存（place + palette + structure）</button></div>
+  <div class="modnote">保存先フォルダは設定画面で指定できます（未指定の端末はダウンロード保存）。</div>
+</div></div>
+<div id="loadmodal"><div class="panel"><h3>読み込み</h3>
+  <div class="ldgrp">
+    <label class="ldradio"><input type="radio" name="ldmode" value="pp" checked></label>
+    <div class="ldrows">
+      <div class="ldrow"><button class="btn" id="pal-load">place</button><span class="ldfn" id="fn-place"></span></div>
+      <div class="ldrow"><button class="btn" id="pal-load-pal">palette</button><span class="ldfn" id="fn-palette"></span></div>
+    </div>
+  </div>
+  <div class="ldgrp">
+    <label class="ldradio"><input type="radio" name="ldmode" value="st"></label>
+    <div class="ldrows">
+      <div class="ldrow"><button class="btn" id="pal-loadstruct">structure</button><span class="ldfn" id="fn-structure"></span></div>
+    </div>
+  </div>
+  <div class="modnote">設定画面で指定したフォルダから読み込めます。</div>
+</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const APP_VERSION = '5.04';
+const $ = (s) => document.querySelector(s);
+const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
+const K=(x,y,z)=>x+','+y+','+z;
+
+/* 役割（色）＝place の mat。palette 側で 役割→dict mat を対応づける */
+const ROLE_COLORS = [0xC0533F,0x3F63B0,0x4E9A5A,0xB8862F,0x9B5AC0,0x5AB6D0,0xC05A9B,0xC0A03F,0x5AC0A0,0x8A8F94,0xC07A3F,0x8FA04E,0x2F6B4E,0x6E5A3F,0xB0B4B8,0x5F3F8F];  // 役割番号1〜16の色
+const MAX_ROLES = 16;   // form あたりのスロット種上限（v4.85: 10→16）
+const roleForm  = (role)=> String(role).replace(/_\d+$/,'');                 // 'FULLBLOCK_2' -> 'FULLBLOCK'
+const roleColor = (role)=>{ const n=parseInt(String(role).split('_').pop(),10), L=ROLE_COLORS.length; return ROLE_COLORS[(((n||1)-1)%L+L)%L]; };
+const roleHex   = (role)=> '#'+roleColor(role).toString(16).padStart(6,'0');
+
+const SHAPES = ['fullblock','slab','stairs','trapdoor'];   // 形（MOD form: FULLBLOCK/SLAB/STAIRS/TRAPDOOR）
+const FAC = ['FRONT','RIGHT','BACK','LEFT','UP','DOWN'];   // facing（相対トークン, full は6方向）
+const FAC_I = {FRONT:0,RIGHT:1,BACK:2,LEFT:3,UP:4,DOWN:5};
+const AXES = ['VERTICAL','DEPTH','WIDTH'];                 // axis（相対軸 RelAxis, 原木/柱など）
+
+/* app 側に残す最小情報（聖典＝dict/form_dict 以外）:
+   - PRIMARY_SHAPES: 形バーに出す基本形（残りは others モーダルへ・form_dict から導出）
+   - STATE_OPTIN: 状態プロパティを出す form の例外（open はトラップドアのみ）
+   - NOMAT_FORMS: mat が「材質パレット(role)」でなく「変種選択」の form（松明系）
+   - 3D 見た目（others form の形状）は buildGeos() の「形状レジストリ」1か所に form 名で登録。未登録 form は 'other' フォールバック（DOOR は hinge 別）。
+   others に出す form／各 form のプロパティボタンは form_dict から導出。ラベルは form 名（そのまま）。 */
+const PRIMARY_SHAPES = ['FULLBLOCK','SLAB','STAIRS','TRAPDOOR'];
+const STATE_OPTIN = { open: ['TRAPDOOR'] };            // 既定 close 固定、ここに挙げた form だけ open ボタン
+const MIRROR = new Set(['facing','hinge','east','west']);            // 左右ミラー対象(I/O時に反転)。east↔west は W 反転で入替
+const OTHER_KEY2FORM = { door:'DOOR', torch:'TORCH', wall_torch:'WALL_TORCH', lantern:'LANTERN', campfire:'CAMPFIRE', chain:'CHAIN', fence:'FENCE', fence_gate:'FENCE_GATE' };  // 旧 other-key → form 移行
+let FORM_PROPS = {};      // form -> { propName: [values...] }（dict×block_class_all 由来）
+let FORM_SETTABLE = {};   // form -> { propName: settable(bool) }（block_class_all の settable）
+let FORM_PROP_REL = {};   // form -> { propName: rel種別 }（block_class_all の rel。回転/ミラーの機械適用に使う）
+let FORM_LIST  = [];      // unregistered 以外の全 form
+function blockProps(blockId){   // block の properties（settable 付き）＝blocks_all.blockClass → block_class_all を join
+  const ba=BLOCKS_ALL[blockId]; if(!ba) return [];
+  if(ba.properties) return ba.properties;                        // 旧スキーマ(v4以前)後方互換
+  const bc=BLOCK_CLASS[ba.blockClass]; return (bc && bc.properties) || [];
+}
+function buildFormProps(){   // dict(block→form) × block_class_all(blockClass→properties/settable/rel) から form→プロパティ を導出
+  const fp={}, fs={}, fr={}, order=[];
+  for(const e of DICT_ENTRIES){ const f=e.form; if(!f) continue;
+    if(!(f in fp)){ fp[f]={}; fs[f]={}; fr[f]={}; order.push(f); }
+    for(const pr of blockProps(e.block)){ const cur=fp[f][pr.name]||[];
+      for(const v of (pr.values||[])) if(!cur.includes(v)) cur.push(v); fp[f][pr.name]=cur;
+      if(pr.settable!==false) fs[f][pr.name]=true;                 // form 内のどれかの class で設定可なら出す
+      if(pr.rel) fr[f][pr.name]=pr.rel; } }
+  FORM_PROPS=fp; FORM_SETTABLE=fs; FORM_PROP_REL=fr; FORM_LIST=order;
+}
+function relMapOf(properties){ const m={}; for(const pr of (properties||[])) if(pr.rel) m[pr.name]=pr.rel; return m; }   // raw 用: name→rel
+// 汎用ハンドラ: settable(block_class_all) + 例外 から、出すプロパティを [{name,values}] で返す（旧 SHOW allowlist 廃止）
+function isMultiHalf(form){ const p=FORM_PROPS[form]; return !!(p && (p.half||[]).includes('upper')); }  // half=upper/lower→複数ブロック
+const propsMapOf = (properties)=>{ const m={}; for(const pr of (properties||[])) m[pr.name]=pr.values||[]; return m; };
+const PROP_ORDER = ['facing','axis','half','type','hinge','hanging','face','open',
+                    'up','north','south','east','west','leaves','age','stage'];   // ボタン表示順（残りは末尾に名前順）
+function filterShown(form, p, settableOf){   // p={name:[values]} → 表示するプロパティ [{name,values}]（settable＋順）
+  const names = [...PROP_ORDER.filter(n=>n in p), ...Object.keys(p).filter(n=>!PROP_ORDER.includes(n)).sort()];
+  const out = [];
+  for(const name of names){
+    if(settableOf && settableOf(name)===false) continue;                       // 設定不可（周囲/BlockEntityで再計算）は出さない
+    if((p[name]||[]).length<2) continue;                                       // 値が1つ＝選択の余地なし
+    if(name==='half' && (p.half||[]).includes('upper')) continue;              // 複数ブロック→自動(非ボタン)
+    if(STATE_OPTIN[name] && form && !STATE_OPTIN[name].includes(form)) continue; // 状態 opt-in(open→trapdoorのみ)。raw(form='')は制限なし
+    out.push({name, values:p[name]});
+  }
+  return out;
+}
+function shownProps(form){ const fs=FORM_SETTABLE[form]||{};
+  return filterShown(form, FORM_PROPS[form] || {}, n=>fs[n]===true); }
+function shownPropsRaw(rawId){ const list=blockProps(rawId); const st={};
+  for(const pr of list) st[pr.name]=(pr.settable!==false);
+  return filterShown('', propsMapOf(list), n=>st[n]); }   // raw＝ブロック自身の properties（settable でフィルタ）
+function curShownProps(){ return S.shape==='raw' ? shownPropsRaw(S.raw) : shownProps(formOf({s:S.shape, ot:S.other})); }
+
+/* dict.json（block/form/mat 対応）を起動時に ./dict.json から fetch して読む（下記 loadDict）。
+   単一ソースは MOD の data/master/block/dict.json。
+   ★このアプリ側で dict を編集しない。更新は必ず MOD 側 dict.json を直し、それを一方向 sync（コピー）して反映する（厳守）。 */
+let DICT_ENTRIES = [];   // loadDict() が ./dict.json から投入（form/mat 聖典・ここに直書きしない）
+let DICT_VERSION = null;
+let NAMES_JA = {};              // block(short) -> 和名（blocks_all.json 由来）
+let BLOCKTEX_VERSION = null;    // blocktex.json の version（番号(yyyymmdd)）
+let BLOCKS_ALL = {};            // block(short) -> {block, blockClass, suffix, lightMax, ja, updated}（全 vanilla・blocks_all.json 由来）
+let BLOCKS_ALL_ARR = [];        // 同上（配列・raw ピッカーの一覧用）
+let BLOCKS_ALL_VERSION = null;
+let BLOCK_CLASS = {};           // blockClass -> {properties:[{name,values,settable}]}（block_class_all.json 由来）
+let BLOCK_CLASS_VERSION = null;
+let REL_DEFS_VERSION = null;    // rel_defs.json の version（角度規約の定義。回転/ミラーの語彙・角度・妥当性は RD としてここから構築）
+let DICT_BY_BLOCK = {};         // block(short) -> {form, mat}（dict 逆引き。form 登録有無の判定にも使う）
+let BLOCK_BY_FORMMAT = {};      // 'FORM|MAT' -> block_id（画像/和名は block id キー。form 毎に別ブロック）
+function buildBlockIndex(){ BLOCK_BY_FORMMAT={}; DICT_BY_BLOCK={};
+  for(const e of DICT_ENTRIES){ if(!e.block) continue; DICT_BY_BLOCK[e.block]={form:e.form,mat:e.mat};
+    if(e.mat) BLOCK_BY_FORMMAT[e.form+'|'+e.mat]=String(e.block).replace(/:/g,'__'); } }
+async function loadDict(){
+  const res = await fetch('./dict.json?v='+APP_VERSION, {cache:'no-cache'});
+  if(!res.ok) throw new Error('dict.json HTTP '+res.status);
+  const j = await res.json();
+  DICT_ENTRIES = Array.isArray(j) ? j : (j.entries||[]);
+  DICT_VERSION = (j && j.version!=null) ? j.version : null;
+  buildBlockIndex();
+  // blocks_all.json（全 vanilla: block 固有列）。form/mat は dict と、properties/settable は block_class_all と join。
+  try { const rB = await fetch('./blocks_all.json?v='+APP_VERSION, {cache:'no-cache'});
+        if(rB.ok){ const jB = await rB.json(); BLOCKS_ALL_VERSION = (jB && jB.version!=null) ? jB.version : null;
+          BLOCKS_ALL={}; NAMES_JA={}; BLOCKS_ALL_ARR = jB.blocks || [];
+          for(const b of BLOCKS_ALL_ARR){ BLOCKS_ALL[b.block]=b; NAMES_JA[b.block]=b.ja||''; } } }
+  catch(_){}
+  // block_class_all.json（blockClass -> properties[name/values/settable]）
+  try { const rC = await fetch('./block_class_all.json?v='+APP_VERSION, {cache:'no-cache'});
+        if(rC.ok){ const jC = await rC.json(); BLOCK_CLASS_VERSION = (jC && jC.version!=null) ? jC.version : null;
+          BLOCK_CLASS={}; for(const c of (jC.classes||[])) BLOCK_CLASS[c.blockClass]=c; } }
+  catch(_){}
+  // rel_defs.json（角度規約の定義）。回転/ミラーの語彙・角度・トークン逆引き（RD）をここから構築。
+  try { const rR = await fetch('./rel_defs.json?v='+APP_VERSION, {cache:'no-cache'});
+        if(rR.ok){ const jR = await rR.json(); REL_DEFS_VERSION = (jR && jR.version!=null) ? jR.version : null;
+          buildRelDefs(jR); } }
+  catch(_){}
+  // blocktex.json（画像群の version のみ・任意）
+  try { const r4 = await fetch('./blocktex.json?v='+APP_VERSION, {cache:'no-cache'});
+        if(r4.ok){ const j4 = await r4.json(); BLOCKTEX_VERSION = (j4 && j4.version!=null) ? j4.version : null; } }
+  catch(_){}
+  buildFormProps();   // dict + blocks_all から FORM_PROPS/FORM_LIST を導出
+}
+const SHAPE_FORM = {fullblock:'FULLBLOCK', slab:'SLAB', stairs:'STAIRS', trapdoor:'TRAPDOOR'};
+const formOf  = (v)=> v.s==='others' ? (v.ot||'') : (SHAPE_FORM[v.s]||'');   // v.ot は form 文字列
+// mat auto/select は撤去。全 form が form 別役割（FORM_n）方式（A案・2026-08-14）
+/* three.js(右手系) ⇄ Minecraft/autobuilder(左手系) の橋渡し。
+   内部 x はファイル w の反転（mirW・I/O 時のみ）。これは描画の利き手（カイラリティ）吸収だけが目的で、
+   意味は外に出ない。プレイヤーフレーム統一(v4.81)により facing/hinge/rot16 等の値は無変換
+   （FRONT/RIGHT 等はアプリ表示・ファイル・in-game すべて「プレイヤーから見た向き」で一致）。 */
+const mirW  = (w, width)=> (width-1) - w;                       // W 反転（0..width-1 内）
+
+const S = {
+  dims:{x:16,y:16,z:16}, vox:new Map(), layer:0, mode:'info', tool:'draw', role:'FULLBLOCK_1',
+  shape:'fullblock', other:'DOOR', raw:'stone', roleCount:{},
+  props:{facing:'FRONT', half:'bottom', type:'bottom', axis:'VERTICAL', hinge:'left', open:'false', hanging:'false', face:'wall'},
+  view:'space', jsonMode:'blocks', cell:20, hist:[], redo:[], manualZoom:false, dirs:{place:null,palette:null,structure:null}, files:{place:null,palette:null,structure:null}, labels:false, hlForm:false,
+  top:'place', pal:{map:{}}, aliases:{}, plane:'WD', lay:{x:0,z:0}, inspect:null, clip:null, clipMode:null, clipLayer:0, clipPlane:null, sel:null, cellClip:null
+};
+const cur = ()=> S.shape==='raw'
+  ? {s:'raw', raw:S.raw, props:{...S.props}}                        // raw＝具体ブロック直指定（block=id）
+  : {r:S.role, s:S.shape, ot:S.other, props:{...S.props}};
+const sig = (v)=>{ if(!v) return ''; const n=norm(v), p=n.props;
+  return [n.r,n.s,n.ot,n.raw||'',n.f,n.h,n.ax,n.hg,n.o,n.hang,n.fc,
+          p.up,p.north,p.south,p.east,p.west,p.age,p.leaves,p.stage].join('|'); };   // raw id・vine面・bamboo状態も同一性に含める
+const norm = (v)=>{
+  if(typeof v==='string') v={r:v};
+  let props = v.props;
+  if(!props){   // 旧個別フィールド -> props へ移行
+    props = {facing:FAC[v.f||0]||'FRONT', half:v.h||'bottom', type:v.h||'bottom', axis:v.ax||'VERTICAL',
+             hinge:v.hg||'left', open:v.o||'false', hanging:v.hang||'false', face:v.fc||'wall'};
+  }
+  props = {facing:'FRONT',half:'bottom',type:'bottom',axis:'VERTICAL',hinge:'left',open:'false',hanging:'false',face:'wall', ...props};
+  let ot = v.ot || 'DOOR'; if(OTHER_KEY2FORM[ot]) ot=OTHER_KEY2FORM[ot];   // 旧 other-key -> form 移行
+  const o = {r:v.r||'FULLBLOCK_1', s:v.s||'fullblock', ot, props};
+  if(v.s==='raw') o.raw = v.raw || 'stone';   // 具体ブロック id（short）
+  o.f=FAC_I[props.facing]||0; o.h=(o.s==='slab'?props.type:props.half)||'bottom';   // 描画互換の派生フィールド
+  o.ax=props.axis; o.hg=props.hinge; o.o=props.open; o.hang=props.hanging; o.fc=props.face;
+  return o;
+};
+// 表示用プロパティ名: 面キー(north等=アプリ内部名)は正典の相対名(front/right/back/left/up)で見せる（保存・出力は従来どおり）
+const dispProp=(n)=>(typeof RD!=='undefined'&&RD&&RD.faceApp&&RD.faceApp[n])||n;
+const RAW_COL = 0x9a8f7a;                                    // raw ブロックの固定色（役割色と別・識別はラベル）
+const voxColor = (v)=> v.s==='raw' ? RAW_COL : roleColor(v.r);   // 描画色（raw は固定色）
+
+/* ---------- persistence ---------- */
+// 旧フレーム(〜v4.80)保存値 → プレイヤーフレーム(v4.81〜)。見た目が変わらない変換:
+// FRONT↔BACK（RIGHT/LEFT は旧アプリでも見た目基準だったので不変）・hinge 反転（mirHinge 撤去の補償）・
+// rot16 r→(8−r)mod16・orientation/rail は FRONT↔BACK 成分のみ入替（rail は鋳造順 FRONT<BACK<LEFT<RIGHT に正規化）
+const FB_MIG={FRONT:'BACK',BACK:'FRONT'};
+const RAIL_ORD={FRONT:0,BACK:1,LEFT:2,RIGHT:3};
+function migRail(t){ if(t.startsWith('ASCEND_')) return 'ASCEND_'+(FB_MIG[t.slice(7)]||t.slice(7));
+  const p=t.split('_'); if(p.length!==2||!(p[0] in RAIL_ORD)||!(p[1] in RAIL_ORD)) return t;
+  const a=FB_MIG[p[0]]||p[0], b=FB_MIG[p[1]]||p[1];
+  return RAIL_ORD[a]<=RAIL_ORD[b] ? a+'_'+b : b+'_'+a; }
+function migrateFrameVox(v){
+  if(!v || typeof v==='string') return v;
+  const o={...v};
+  if(o.props){ const p=o.props={...o.props};
+    if(FB_MIG[p.facing]) p.facing=FB_MIG[p.facing];
+    if(p.hinge==='left') p.hinge='right'; else if(p.hinge==='right') p.hinge='left';
+    if(p.rotation!=null && p.rotation!=='') p.rotation=String((((8-(+p.rotation))%16)+16)%16);
+    if(p.orientation && p.orientation.indexOf('_')>0) p.orientation=p.orientation.split('_').map(t=>FB_MIG[t]||t).join('_');
+    if(p.shape) p.shape=migRail(p.shape);
+  } else {
+    if(o.f===0) o.f=2; else if(o.f===2) o.f=0;
+    if(o.hg==='left') o.hg='right'; else if(o.hg==='right') o.hg='left';
+  }
+  return o;
+}
+function save(){
+  try{ localStorage.setItem('blueprint:current', JSON.stringify({
+    frame:2, dims:S.dims, name:$('#name').value, voxels:[...S.vox.entries()], role:S.role, roleCount:S.roleCount, aliases:S.aliases
+  })); }catch(e){}
+}
+function load(){
+  try{
+    const raw = localStorage.getItem('blueprint:current');
+    if(!raw) return;
+    const d = JSON.parse(raw);
+    const oldFrame = d.frame!==2;   // frame 無し＝v4.80 以前の保存
+    if(d.dims) S.dims = d.dims;
+    if(d.name) $('#name').value = d.name;
+    if(Array.isArray(d.voxels)) S.vox = new Map(d.voxels.map(([k,v])=>[k, norm(oldFrame?migrateFrameVox(v):v)]));
+    if(d.role) S.role = d.role;
+    if(d.roleCount) S.roleCount = d.roleCount;
+    if(d.aliases && typeof d.aliases==='object') S.aliases = d.aliases;
+    try{ const fs=new Set(Object.keys(S.roleCount)); S.vox.forEach(v=>fs.add(roleForm(norm(v).r))); fs.forEach(f=>{ if(f) cleanupRoles(f); }); }catch(_){}   // 読み込み時も未使用役割を整理（vox使用中の form も対象）
+  }catch(e){}
+}
+function status(m){ $('#status').textContent = m; clearTimeout(status._t);
+  status._t = setTimeout(()=>$('#status').textContent='',2600); }
+
+/* ---------- model ---------- */
+function snapHist(){ return {vox:new Map(S.vox), dims:{...S.dims}}; }   // vox+dims を1組で保存（層数もundo対象）
+function restoreHist(s){ S.vox = new Map(s.vox);
+  if(s.dims && (s.dims.x!==S.dims.x||s.dims.y!==S.dims.y||s.dims.z!==S.dims.z)){
+    for(const ax of ['x','z']) if(S.lay[ax] >= s.dims[ax]) S.lay[ax] = Math.max(0, s.dims[ax]-1);   // 非y層カーソルを範囲内へ
+    applyDims({...s.dims});   // dims が変わった時だけジオメトリ/スパイン/入力欄を再構築
+  } else changed();
+}
+function pushHist(){ S.hist.push(snapHist()); if(S.hist.length>60) S.hist.shift(); S.redo=[]; } // 新規操作でredo破棄
+function updateHistBtns(){ const dis=S.redo.length===0; const r=$('#b-redo'), pr=$('#pl-redo'); if(r) r.disabled=dis; if(pr) pr.disabled=dis; }
+function inB(x,y,z){ const d=S.dims; return x>=0&&y>=0&&z>=0&&x<d.x&&y<d.y&&z<d.z; }
+function place(x,y,z){ if(!inB(x,y,z)) return; if(y>S.layer) return;  // 作業面より上には置かない
+  const k=K(x,y,z), v=cur(); if(sig(S.vox.get(k))===sig(v)) return; pushHist(); S.vox.set(k,v); changed(); }
+function remove(x,y,z){ const k=K(x,y,z); if(!S.vox.has(k)) return; pushHist(); S.vox.delete(k); changed(); }
+function undo(){ const p=S.hist.pop(); if(!p) return; S.redo.push(snapHist()); restoreHist(p); }
+function redo(){ const n=S.redo.pop(); if(!n) return; S.hist.push(snapHist()); restoreHist(n); } // 元に戻すの取り消し
+
+function changed(){ syncVox(); if(S.view==='plan'){ renderGrid(); renderSpine(); }
+  if(S.view==='json') renderJson(); $('#tot').textContent=S.vox.size; save(); updateHistBtns(); }
+
+function setDims(nd){
+  S.dims = nd;
+  const keep = new Map();
+  S.vox.forEach((role,k)=>{ const [x,y,z]=k.split(',').map(Number);
+    if(x<nd.x&&y<nd.y&&z<nd.z) keep.set(k,role); });
+  S.vox = keep;
+  S.layer = clamp(S.layer,0,nd.y-1);
+  $('#plane').max = nd.y-1; $('#plane').value = S.layer;
+  $('#ymax').textContent = '/ '+(nd.y-1);
+  buildFloor(); buildOrigin(); buildPlane(); frameCamera(); changed(); renderGrid(); renderSpine(); setLayer(S.layer);
+}
+
+function setLayer(v){
+  S.layer = clamp(v,0,S.dims.y-1);
+  $('#plane').value = S.layer;
+  $('#y3').textContent = 'H'+String(S.layer).padStart(2,'0');   // 立体スライダのラベル（平面の y2 は renderSpine が担当）
+  buildPlane(); syncVox(); renderGrid(); renderSpine();
+}
+
+/* ---------- three.js ---------- */
+let renderer,scene,camera,editMeshes=[],ghostMeshes=[],outlineMeshes=[],preview,floorObj,planeObj,originObj,geo,GEOS,mat,ghostMat,dimMat,ghostDimMat,outlineMat,outlineGhostMat,hingeMat,hingeGhostMat,HINGE_GEO,orientMat,orientGhostMat,axisFaceMat,axisFaceGhostMat,EDGE_POS,previewMat,previewBreakMat,inspectMat,clipSrcMat,clipDstMat,target,sph,dirty=true;
+function boxAt(w,h,d,oy,oz){ const g=new THREE.BoxGeometry(w,h,d); g.translate(0,oy||0,oz||0); return g; }
+function mergeGeo(a,b){   // 2つの indexed BoxGeometry を結合（階段用）
+  const g=new THREE.BufferGeometry(), cat=(n,sz)=>{ const aa=a.attributes[n].array, bb=b.attributes[n].array;
+    const out=new Float32Array(aa.length+bb.length); out.set(aa); out.set(bb,aa.length);
+    g.setAttribute(n,new THREE.BufferAttribute(out,sz)); };
+  cat('position',3); cat('normal',3); cat('uv',2);
+  const ai=a.index.array, bi=b.index.array, off=a.attributes.position.count;
+  const idx=new Uint16Array(ai.length+bi.length); idx.set(ai);
+  for(let i=0;i<bi.length;i++) idx[ai.length+i]=bi[i]+off;
+  g.setIndex(new THREE.BufferAttribute(idx,1)); return g;
+}
+function doorGeo(left){   // ドア＝2ブロック高の薄板＋蝶番側の縦バー（cell下端→上へ2マス）
+  const T=0.1875, oy=0.5;
+  // 閉じた板は facing の反対側の縁（MC準拠・v4.83。ジオメトリ -z=facing面 → 板は +z 縁）
+  const panel=new THREE.BoxGeometry(0.94,2,T); panel.translate(0,oy,0.5-T/2);
+  // hinge の左右＝「ドアから見て」＝facing と同じ向きを向いたときの左右（MC DoorBlock.getShape 準拠・v4.84）。
+  // ジオメトリは -z=facing面 → ドアから見た左は -x（手前向きドアを正面から見ると左右が逆に見えるのが正しい）
+  const bar=new THREE.BoxGeometry(0.12,2,T+0.14); bar.translate(left?-0.42:0.42, oy, 0.5-(T+0.14)/2);
+  return mergeGeo(panel,bar);
+}
+function buildGeos(){
+  const T=0.1875;   // trapdoor 厚み
+  GEOS={
+    full: new THREE.BoxGeometry(1,1,1),
+    slab_bottom: boxAt(1,0.5,1,-0.25,0), slab_top: boxAt(1,0.5,1,0.25,0),
+    trapdoor_bottom: boxAt(1,T,1,-0.5+T/2,0), trapdoor_top: boxAt(1,T,1,0.5-T/2,0),
+    trapdoor_open:   boxAt(1,1,T,0,0.5-T/2),   // 開＝facing の反対側(ジオメトリ+z=蝶番側)に立つ縦板（MC準拠・door とは逆／half 非依存）
+    stairs_bottom: mergeGeo(boxAt(1,0.5,1,-0.25,0), boxAt(1,0.5,0.5,0.25,-0.25)), // 高段=facing側(ジオメトリ-z。meshAngle で FDIR[f] へ回す)
+    stairs_top:    mergeGeo(boxAt(1,0.5,1,0.25,0),  boxAt(1,0.5,0.5,-0.25,-0.25)),
+    other:    boxAt(1,1,1,0,0),                              // 形状未登録 form の保険＝フルブロック形（form 名ラベルで区別。設計するまでの一時姿）
+    door_left:  doorGeo(true),                               // ドア（蝶番=左）2ブロック高・hinge 別の特例
+    door_right: doorGeo(false),                              // ドア（蝶番=右）
+    // ▼▼ others form の形状レジストリ：新しい form の 3D 見た目はここに「聖典 form 名」で1行足すだけ ▼▼
+    TORCH:        boxAt(0.16,0.62,0.16,-0.19,0),             // 松明(床)＝中央の細い棒
+    WALL_TORCH:   boxAt(0.16,0.55,0.16,0.02,0.36),           // 壁松明＝取り付け壁際(+z=facingの反対縁・MC準拠 v4.83)の細い棒
+    LANTERN:      boxAt(0.34,0.5,0.34,-0.12,0),              // ランタン＝小さな箱
+    CAMPFIRE:     boxAt(0.86,0.24,0.86,-0.38,0),             // 焚き火＝低く幅広（薪）
+    CHAIN:        boxAt(0.14,1,0.14,0,0),                    // チェーン＝細い縦棒
+    FENCE:        boxAt(0.22,1,0.22,0,0),                    // 柵＝中央の支柱
+    FENCE_GATE:   boxAt(0.92,0.42,0.16,0.02,0),              // フェンスゲート＝幅広の薄板（facingで回転）
+    BUTTON:       boxAt(0.32,0.14,0.18,-0.32,0.40),          // ボタン＝小さい低いポッチ（取り付け壁際=+z=facingの反対縁・MC準拠 v4.83）
+    PANE:         mergeGeo(boxAt(0.12,1,1,0,0), boxAt(1,1,0.12,0,0)),  // ガラス板＝薄い十字
+    GRATE:        boxAt(0.86,0.86,0.86,0,0),                 // 格子(copper_grate)＝無方向。フルブロックより一回り小さい立方体で区別（対称＝回転不変）
+    POPPY:        mergeGeo(boxAt(0.08,0.6,0.6,-0.2,0), boxAt(0.6,0.6,0.08,-0.2,0)),  // 花＝小さい十字
+    PRESSURE_PLATE: boxAt(0.86,0.06,0.86,-0.47,0),           // 感圧板＝床の薄い板
+    CARPET:       boxAt(1,0.06,1,-0.47,0),                   // カーペット＝床全面の薄い層
+    BED:          boxAt(1,0.34,1,-0.33,0),                   // ベッド＝低い箱（2ブロックだがapp1セルは低い床）
+    BANNER:       mergeGeo(boxAt(0.1,1,0.1,0,0), boxAt(0.5,0.7,0.06,0.12,0)),  // 旗＝細い支柱＋薄い布
+    AIR:          boxAt(0.22,0.22,0.22,0,0),                 // 空気＝小さいドット（マーカー）
+    // ▲▲ ここまで（DOOR=door_left/right・VINE/BAMBOO_PLANT=下の状態依存ジオメトリが特例） ▲▲
+  };
+  geo = GEOS.full;
+}
+/* ---- 状態依存ジオメトリ（プロパティで形が変わる form）。キーに状態を畳み込み、遅延生成して GEOS にキャッシュ ---- */
+function box3(w,h,d,ox,oy,oz){ const g=new THREE.BoxGeometry(w,h,d); g.translate(ox||0,oy||0,oz||0); return g; }
+const FACE_DIR = { north:[0,0,-1], south:[0,0,1], east:[1,0,0], west:[-1,0,0], up:[0,1,0] };   // vine 面→内部方向
+const VINE_FACES = Object.keys(FACE_DIR);   // 最低1面が必要（0面は不可）
+const vineAny = (P)=> VINE_FACES.some(f=>P[f]==='true');   // 1面でも true か
+const faceOfVec = (d)=>{ for(const f in FACE_DIR){ const e=FACE_DIR[f]; if(e[0]===d[0]&&e[1]===d[1]&&e[2]===d[2]) return f; } return null; };
+const pTrue = (P,k)=> (P&&P[k])==='true';
+function buildVineGeo(v){   // 付く面ごとに薄板を貼る（無指定は -z の1枚でフォールバック）
+  const P=v.props||{}, t=0.08, parts=[];
+  if(pTrue(P,'north')) parts.push(box3(1,1,t, 0,0,-0.5+t/2));
+  if(pTrue(P,'south')) parts.push(box3(1,1,t, 0,0, 0.5-t/2));
+  if(pTrue(P,'west'))  parts.push(box3(t,1,1, -0.5+t/2,0,0));
+  if(pTrue(P,'east'))  parts.push(box3(t,1,1,  0.5-t/2,0,0));
+  if(pTrue(P,'up'))    parts.push(box3(1,t,1, 0, 0.5-t/2,0));
+  if(!parts.length) parts.push(box3(1,1,t, 0,0,-0.5+t/2));
+  return parts.reduce((a,b)=>a?mergeGeo(a,b):b, null);
+}
+function buildBambooGeo(v){   // 太さ=age・葉=leaves（stage は見た目ほぼ不変で無視）
+  const P=v.props||{}, th = P.age==='1' ? 0.36 : 0.22;
+  let g = box3(th,1,th,0,0,0);
+  const lv=P.leaves; if(lv==='small'||lv==='large'){ const s=lv==='large'?0.72:0.5;
+    g = mergeGeo(g, box3(s,0.44,0.05, 0,0.24,0)); g = mergeGeo(g, box3(0.05,0.44,s, 0,0.24,0)); }
+  return g;
+}
+function geoFor(gk, v){   // gk が静的登録に無ければ状態依存で生成
+  if(GEOS[gk]) return GEOS[gk];
+  if(gk.startsWith('VINE_'))   return GEOS[gk]=buildVineGeo(v);
+  if(gk.startsWith('BAMBOO_')) return GEOS[gk]=buildBambooGeo(v);
+  return GEOS.other;
+}
+const vineKey   = (v)=>{ const P=v.props||{}; const b=k=>pTrue(P,k)?1:0; return 'VINE_'+b('up')+b('north')+b('south')+b('east')+b('west'); };
+const bambooKey = (v)=>{ const P=v.props||{}; return 'BAMBOO_'+(P.age||'0')+'_'+(P.leaves||'none'); };
+const geoKey = (v)=> (v.s==='fullblock' || v.s==='raw') ? 'full'
+  : v.s==='others' ? (v.ot==='DOOR' ? 'door_'+(v.hg||'left')
+      : v.ot==='VINE' ? vineKey(v) : v.ot==='BAMBOO_PLANT' ? bambooKey(v)   // 状態依存
+      : (GEOS[v.ot] ? v.ot : 'other'))  // 聖典 form 名で直接引く（未登録は 'other'）
+  : (v.s==='trapdoor' && v.o==='true') ? 'trapdoor_open'   // 開はhalf非依存で同一形状
+  : v.s+'_'+v.h;
+
+function initThree(){
+  const mount = $('#space');
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  renderer.setClearColor(0x131d1f,1);
+  mount.appendChild(renderer.domElement);
+  scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x131d1f,40,220);
+  camera = new THREE.PerspectiveCamera(48,1,.1,1000);
+  scene.add(new THREE.AmbientLight(0xffffff,.66));
+  const sun=new THREE.DirectionalLight(0xfff0d0,.8); sun.position.set(1,2.2,1.4); scene.add(sun);
+  const rim=new THREE.DirectionalLight(0x6fa79a,.35); rim.position.set(-1.4,.6,-1); scene.add(rim);
+
+  // 白ベース＋枠のテクスチャ（instanceColor で役割色に着色＝縁線が残る）
+  const c=document.createElement('canvas'); c.width=c.height=16; const g=c.getContext('2d');
+  g.fillStyle='#ffffff'; g.fillRect(0,0,16,16);
+  g.fillStyle='#dcdcdc'; g.fillRect(0,0,16,1); g.fillRect(0,0,1,16);   // 上/左＝明るい縁
+  g.fillStyle='#6f6f6f'; g.fillRect(0,15,16,1); g.fillRect(15,0,1,16); // 下/右＝暗い縁
+  const tex=new THREE.CanvasTexture(c); tex.magFilter=THREE.NearestFilter; tex.minFilter=THREE.NearestFilter;
+  mat = new THREE.MeshLambertMaterial({map:tex});
+  ghostMat = new THREE.MeshLambertMaterial({map:tex, transparent:true, opacity:0.12, depthWrite:false});   // 選択層より上（v4.88 0.22→0.12）
+  dimMat      = new THREE.MeshLambertMaterial({map:tex, transparent:true, opacity:0.13, depthWrite:false});  // form強調：非該当（作業面下）
+  ghostDimMat = new THREE.MeshLambertMaterial({map:tex, transparent:true, opacity:0.05, depthWrite:false});  // form強調：非該当（作業面上）
+  previewMat = new THREE.MeshBasicMaterial({color:0xF0D48C, transparent:true, opacity:0.5, depthWrite:false});
+  previewBreakMat = new THREE.MeshBasicMaterial({color:0xE0604A, transparent:true, opacity:0.5, depthWrite:false});
+  buildGeos();
+  // 単位セル(1×1×1)の外枠エッジ座標（中心原点＝±0.5）。セルごとにオフセットして枠線を描く。
+  const eg=new THREE.EdgesGeometry(new THREE.BoxGeometry(1,1,1));
+  EDGE_POS=eg.attributes.position.array.slice(); eg.dispose();
+  outlineMat      = new THREE.LineBasicMaterial({color:0xffffff, transparent:true, opacity:0.32});
+  inspectMat      = new THREE.LineBasicMaterial({color:0x8ff0ff, transparent:true, opacity:1, depthTest:false});  // 選択（範囲/起点）枠
+  clipSrcMat      = new THREE.LineBasicMaterial({color:0xffd24a, transparent:true, opacity:1, depthTest:false});  // 切取/コピー元
+  clipDstMat      = new THREE.LineBasicMaterial({color:0x7ad79a, transparent:true, opacity:1, depthTest:false});  // 貼り付け先
+  outlineGhostMat = new THREE.LineBasicMaterial({color:0xffffff, transparent:true, opacity:0.06});
+  hingeMat        = new THREE.MeshBasicMaterial({color:0x9aa7b0});                                 // open trapdoor の蝶番(開閉軸)＝棒
+  hingeGhostMat   = new THREE.MeshBasicMaterial({color:0x9aa7b0, transparent:true, opacity:0.16});
+  HINGE_GEO       = new THREE.BoxGeometry(1, 0.12, 0.12);   // 蝶番(開閉軸)＝ドアの蝶番バーと同じ太さ
+  orientMat       = new THREE.LineBasicMaterial({color:0xffd24a, transparent:true, opacity:0.9});  // full の facing＝正面に×
+  orientGhostMat  = new THREE.LineBasicMaterial({color:0xffd24a, transparent:true, opacity:0.16});
+  axisFaceMat      = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.22, depthWrite:false, side:THREE.DoubleSide}); // axis の貫く2面を薄く
+  axisFaceGhostMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.08, depthWrite:false, side:THREE.DoubleSide});
+  target = new THREE.Vector3();
+  sph = {theta:Math.PI*0.72, phi:Math.PI*0.33, r:30};
+
+  const resize=()=>{ const w=mount.clientWidth,h=mount.clientHeight;
+    renderer.setSize(w,h,false); camera.aspect=w/h; camera.updateProjectionMatrix(); dirty=true; };
+  resize(); new ResizeObserver(resize).observe(mount);
+  bindGestures(renderer.domElement);
+  (function loop(){ requestAnimationFrame(loop); if(dirty){ renderer.render(scene,camera); dirty=false; } })();
+}
+
+function updateCam(){
+  const {theta,phi,r}=sph;
+  camera.position.set(
+    target.x + r*Math.sin(phi)*Math.sin(theta),
+    target.y + r*Math.cos(phi),
+    target.z + r*Math.sin(phi)*Math.cos(theta));
+  camera.lookAt(target); dirty=true;
+}
+function frameCamera(){
+  const d=S.dims;
+  target.set(d.x/2, Math.min(d.y,8)/2, d.z/2);
+  sph.theta=Math.PI*0.72; sph.phi=Math.PI*0.33;
+  sph.r = Math.max(d.x,d.y,d.z)*2.1;
+  updateCam();
+}
+function buildFloor(){
+  if(floorObj){ scene.remove(floorObj); floorObj.geometry.dispose(); }
+  const d=S.dims, pos=[];
+  for(let i=0;i<=d.x;i++) pos.push(i,0,0, i,0,d.z);
+  for(let i=0;i<=d.z;i++) pos.push(0,0,i, d.x,0,i);
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  floorObj=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0x2f4a45}));
+  scene.add(floorObj); dirty=true;
+}
+function buildOrigin(){   // MOD 原点(0,0,0)=手前・下・左 をコーナーブラケット(L字枠)で可視化
+  if(originObj){ scene.remove(originObj);
+    originObj.traverse(o=>{ if(o.geometry)o.geometry.dispose(); if(o.material)o.material.dispose(); }); }
+  const g=new THREE.Group();
+  g.position.set(S.dims.x, 0, 0);   // W ミラー後、exported w=0 は内部 x=最大側の角
+  const L=1;        // ブラケットの辺長＝1ブロック分
+  const T=0.14;     // バーの太さ
+  const bar=(w,h,d,cx,cy,cz,col)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),
+      new THREE.MeshBasicMaterial({color:col})); m.position.set(cx,cy,cz); return m; };
+  g.add(bar(L,T,T, -L/2,0,0, 0xff5a5a));  // +W＝内部 -x（赤）
+  g.add(bar(T,L,T, 0,L/2,0, 0x5ad07a));   // +H＝上（緑）
+  g.add(bar(T,T,L, 0,0,L/2, 0x5a86ff));   // +D＝奥（青）
+  originObj=g; scene.add(g); dirty=true;
+}
+function buildPlane(){
+  if(planeObj){ scene.remove(planeObj); planeObj.geometry.dispose(); }
+  const d=S.dims;
+  planeObj=new THREE.Mesh(new THREE.PlaneGeometry(d.x,d.z),
+    new THREE.MeshBasicMaterial({color:0x4f8a7b,transparent:true,opacity:.13,
+      side:THREE.DoubleSide,depthWrite:false}));
+  planeObj.rotation.x=-Math.PI/2;
+  planeObj.position.set(d.x/2, S.layer+0.02, d.z/2);
+  scene.add(planeObj); dirty=true;
+}
+function makeInst(arr, material){   // プレビュー用（full box・単色 material）
+  const im=new THREE.InstancedMesh(GEOS.full,material,Math.max(1,arr.length));
+  im.count=arr.length; const m=new THREE.Matrix4();
+  arr.forEach((p,i)=>{ m.makeTranslation(p[0]+.5,p[1]+.5,p[2]+.5); im.setMatrixAt(i,m); });
+  im.instanceMatrix.needsUpdate=true; return im;
+}
+function makeInstShape(items, geometry, material){
+  const im=new THREE.InstancedMesh(geometry,material,Math.max(1,items.length));
+  im.count=items.length;
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), pos=new THREE.Vector3(),
+        scl=new THREE.Vector3(1,1,1), up=new THREE.Vector3(0,1,0), col=new THREE.Color();
+  items.forEach((o,i)=>{ pos.set(o.p[0]+.5,o.p[1]+.5,o.p[2]+.5);
+    const rot = (typeof FORM_PROPS!=='undefined' && (FORM_PROPS[formOf(o.v)]||{}).facing) ? meshAngle(o.v.f) : 0;   // facing の無い form(VINE等)は回転しない（v4.81 の π 回転で面が反転していた回帰の修正）
+    q.setFromAxisAngle(up,rot);
+    m.compose(pos,q,scl); im.setMatrixAt(i,m);
+    col.setHex(voxColor(o.v)); im.setColorAt(i,col); });
+  im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true;
+  im.userData.items=items; return im;
+}
+function makeOutline(cells, material){   // 各セルの単位立方体エッジをまとめた1本の LineSegments
+  const stride=EDGE_POS.length, arr=new Float32Array(stride*cells.length);
+  cells.forEach((p,i)=>{ const ox=p[0]+0.5, oy=p[1]+0.5, oz=p[2]+0.5, base=stride*i;
+    for(let j=0;j<stride;j+=3){ arr[base+j]=EDGE_POS[j]+ox; arr[base+j+1]=EDGE_POS[j+1]+oy; arr[base+j+2]=EDGE_POS[j+2]+oz; } });
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(arr,3));
+  return new THREE.LineSegments(g, material);
+}
+// メッシュ回転角: f<4 は π−f*90°（ジオメトリ基準向きをプレイヤーフレームの FDIR[f] へ）。UP/DOWN は回転なし
+const meshAngle=(f)=>{ const ff=(f||0)%6; return ff<4 ? Math.PI - ff*Math.PI/2 : 0; };
+const rotY=(px,py,pz,f)=>{ const c=[-1,0,1,0][f&3], s=[0,1,0,-1][f&3];   // +Y 周り π−f*90°（メッシュと同じ）
+  return [px*c+pz*s, py, -px*s+pz*c]; };
+function makeHingeRods(entries, material){   // trapdoor の蝶番(開閉軸)を棒で（開閉問わず／half=bottom→下端 / top→上端、facing で回転）
+  const im=new THREE.InstancedMesh(HINGE_GEO, material, entries.length); im.count=entries.length;
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), pos=new THREE.Vector3(),
+        scl=new THREE.Vector3(1,1,1), up=new THREE.Vector3(0,1,0), col=new THREE.Color();
+  entries.forEach((o,i)=>{ const y=o.v.h==='top'?0.5:-0.5;         // 蝶番の高さ（ジオメトリ+z=facingの反対=蝶番側 の下/上エッジ）
+    const off=rotY(0,y,0.5,o.v.f);
+    pos.set(o.p[0]+0.5+off[0], o.p[1]+0.5+off[1], o.p[2]+0.5+off[2]);
+    q.setFromAxisAngle(up, meshAngle(o.v.f));                       // 幅方向の棒を facing に回す
+    m.compose(pos,q,scl); im.setMatrixAt(i,m);
+    col.setHex(voxColor(o.v)); im.setColorAt(i,col); });
+  im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true; return im;
+}
+// full の facing：正面(=facing方向)の面に× を描く（全方向）
+// プレイヤーフレーム統一(v4.81): FRONT=プレイヤーと同じ向き=奥(+z) / BACK=手前(-z) / RIGHT=見た目の右(-x=画面右) / LEFT=+x。
+// 内部 x はファイル w と mirW で反転しているため RIGHT のベクトルは -x（見た目・in-game の右に一致）。
+const FDIR=[[0,0,1],[-1,0,0],[0,0,-1],[1,0,0],[0,1,0],[0,-1,0]]; // FRONT/RIGHT/BACK/LEFT/UP/DOWN → three.js方向
+const AXV={VERTICAL:[0,1,0],DEPTH:[0,0,1],WIDTH:[1,0,0]};        // 相対軸 → three.js軸(vertical=y, DEPTH=z, WIDTH=x)
+function makeOrient(entries, material){
+  const pos=[];
+  for(const {p,v} of entries){ const cx=p[0]+0.5, cy=p[1]+0.5, cz=p[2]+0.5;
+    const d=FDIR[(v.f||0)%6];                                    // facing の面に×
+    const fx=cx+d[0]*0.502, fy=cy+d[1]*0.502, fz=cz+d[2]*0.502;
+    let u,w;                                                     // 面内2軸（d に直交）
+    if(d[2]!==0){ u=[1,0,0]; w=[0,1,0]; }                       // ±z 面 → x,y
+    else if(d[0]!==0){ u=[0,0,1]; w=[0,1,0]; }                 // ±x 面 → z,y
+    else { u=[1,0,0]; w=[0,0,1]; }                              // ±y 面 → x,z
+    const C=(su,sw)=>[fx+(u[0]*su+w[0]*sw)*0.4, fy+(u[1]*su+w[1]*sw)*0.4, fz+(u[2]*su+w[2]*sw)*0.4];
+    pos.push(...C(1,1),...C(-1,-1), ...C(1,-1),...C(-1,1));      // 2本の対角線＝×
+  }
+  if(!pos.length) return null;
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  return new THREE.LineSegments(g, material);
+}
+// full の axis：軸が貫く2面（軸に直交する上下端の面）を薄い白でオーバーレイ（全 axis）
+function makeAxisFaces(entries, material){
+  const pos=[];
+  for(const {p,v} of entries){ const cx=p[0]+0.5, cy=p[1]+0.5, cz=p[2]+0.5;
+    const A=AXV[v.ax||'VERTICAL'];
+    let u,w;                                                     // A に直交する2軸
+    if(A[1]!==0){ u=[1,0,0]; w=[0,0,1]; }                       // y軸 → x,z 面
+    else if(A[0]!==0){ u=[0,0,1]; w=[0,1,0]; }                 // x軸 → z,y
+    else { u=[1,0,0]; w=[0,1,0]; }                              // z軸 → x,y
+    for(const s of [1,-1]){ const off=0.501*s;                  // ±A の2面
+      const fx=cx+A[0]*off, fy=cy+A[1]*off, fz=cz+A[2]*off;
+      const C=(su,sw)=>[fx+(u[0]*su+w[0]*sw)*0.5, fy+(u[1]*su+w[1]*sw)*0.5, fz+(u[2]*su+w[2]*sw)*0.5];
+      const a=C(1,1),b=C(-1,1),c=C(-1,-1),e=C(1,-1);
+      pos.push(...a,...b,...c, ...a,...c,...e);                  // 四角形=2三角形
+    }
+  }
+  if(!pos.length) return null;
+  const g=new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  return new THREE.Mesh(g, material);
+}
+/* ---- form ラベル（トグル）: 聖典(form_dict)の form 名をそのままブロック上に重畳。FULLBLOCK は多数派なので省略 ---- */
+let labelMeshes=[];
+const rawLabel  = (v)=> v.s==='raw' ? (NAMES_JA[v.raw] || v.raw || 'raw') : '';   // raw は和名(無ければid)
+const labelOf   = (v)=>{ if(v.s==='raw') return rawLabel(v); const f=formOf(v); return (f && f!=='FULLBLOCK') ? f : ''; };              // 2D：FULLBLOCK以外（slab/stairs/trapdoor も四角で見分け不可のため表示）
+const labelOf3D = (v)=>{ if(v.s==='raw') return rawLabel(v); const f=formOf(v); return (f && !PRIMARY_SHAPES.includes(f)) ? f : ''; };   // 3D：others のみ（primary は形で区別・raw は識別のため表示）
+const _labelMat={};
+function labelMat(txt){
+  if(_labelMat[txt]) return _labelMat[txt];
+  const c=document.createElement('canvas'); c.width=224; c.height=64;
+  const g=c.getContext('2d'); let fs=40; const setF=()=>g.font='bold '+fs+'px ui-monospace,monospace';
+  setF(); while(g.measureText(txt).width>c.width-14 && fs>10){ fs-=2; setF(); }   // 長い form 名は自動縮小して収める
+  g.textAlign='center'; g.textBaseline='middle';
+  g.lineWidth=Math.max(4,fs*0.18); g.strokeStyle='rgba(0,0,0,0.85)'; g.strokeText(txt,c.width/2,34);
+  g.fillStyle='#ffe6a8'; g.fillText(txt,c.width/2,34);
+  const t=new THREE.CanvasTexture(c); t.minFilter=THREE.LinearFilter;
+  return _labelMat[txt]=new THREE.SpriteMaterial({map:t, depthTest:false, transparent:true});
+}
+function makeLabels(entries){
+  const arr=[];
+  for(const {p,v} of entries){ const txt=labelOf3D(v); if(!txt) continue;   // 3Dは others のみ（primary は形で区別）
+    const spr=new THREE.Sprite(labelMat(txt)); spr.position.set(p[0]+0.5, p[1]+1.02, p[2]+0.5);
+    spr.scale.set(1.1,0.31,1); arr.push(spr); }
+  return arr;
+}
+const _axLabMat={};
+function axLabMat(txt,col){   // 原点の軸ラベル用（色付き）
+  const key=txt+col; if(_axLabMat[key]) return _axLabMat[key];
+  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  const g=c.getContext('2d'); g.font='bold 46px ui-monospace,monospace'; g.textAlign='center'; g.textBaseline='middle';
+  g.lineWidth=8; g.strokeStyle='rgba(0,0,0,0.9)'; g.strokeText(txt,32,34);
+  g.fillStyle=col; g.fillText(txt,32,34);
+  const t=new THREE.CanvasTexture(c); t.minFilter=THREE.LinearFilter;
+  return _axLabMat[key]=new THREE.SpriteMaterial({map:t, depthTest:false, transparent:true});
+}
+function makeOriginAxisLabels(){   // 原点(0,0,0)=手前下左 の各軸端にラベル。色は原点バーと対応
+  const ox=S.dims.x, arr=[];
+  const mk=(txt,col,x,y,z)=>{ const s=new THREE.Sprite(axLabMat(txt,col)); s.position.set(x,y,z); s.scale.set(0.5,0.5,1); arr.push(s); };
+  mk('W','#ff5a5a', ox-1.35, 0, 0);   // +W＝内部 -x
+  mk('H','#5ad07a', ox, 1.35, 0);     // +H＝上
+  mk('D','#5a86ff', ox, 0, 1.35);     // +D＝奥
+  return arr;
+}
+function syncVox(){
+  editMeshes.forEach(m=>scene.remove(m)); ghostMeshes.forEach(m=>scene.remove(m));
+  outlineMeshes.forEach(m=>{ scene.remove(m); m.geometry.dispose(); });
+  labelMeshes.forEach(m=>scene.remove(m));
+  editMeshes=[]; ghostMeshes=[]; outlineMeshes=[]; labelMeshes=[];
+  const hl=S.hlForm;   // 選択 form×slot を強調・他を減光
+  const below={}, above={}, belowDim={}, aboveDim={}, belowCells=[], aboveCells=[], belowTrap=[], aboveTrap=[], belowFull=[], aboveFull=[], labelSet=[];
+  S.vox.forEach((val,k)=>{ const v=norm(val), p=k.split(',').map(Number), gk=geoKey(v), up=p[1]>S.layer;
+    labelSet.push({p,v});   // ラベルは作業面の上下に関わらず全ブロック対象
+    const match = !hl || hlMatch(v);
+    if(!match){ (up?aboveDim:belowDim)[gk] ??= []; (up?aboveDim:belowDim)[gk].push({p,v}); return; }   // 非該当は減光メッシュのみ（枠/詳細なし）
+    const solid = hl || !up;   // 強調中は該当を層に関わらず常にソリッド／通常は作業面下のみ
+    (solid?below:above)[gk] ??= []; (solid?below:above)[gk].push({p,v});
+    (solid?belowCells:aboveCells).push(p);
+    if(v.s==='trapdoor') (solid?belowTrap:aboveTrap).push({p,v});
+    if(v.s==='fullblock'||v.s==='raw') (solid?belowFull:aboveFull).push({p,v}); });   // raw も cube＝向き×/軸オーバーレイ対象
+  if(S.labels){ makeLabels(labelSet).forEach(s=>{ scene.add(s); labelMeshes.push(s); });
+    makeOriginAxisLabels().forEach(s=>{ scene.add(s); labelMeshes.push(s); }); }
+  for(const gk in below){ const im=makeInstShape(below[gk],geoFor(gk,below[gk][0].v),mat); scene.add(im); editMeshes.push(im); }
+  for(const gk in above){ const im=makeInstShape(above[gk],geoFor(gk,above[gk][0].v),ghostMat); scene.add(im); ghostMeshes.push(im); }
+  for(const gk in belowDim){ const im=makeInstShape(belowDim[gk],geoFor(gk,belowDim[gk][0].v),dimMat); scene.add(im); ghostMeshes.push(im); }
+  for(const gk in aboveDim){ const im=makeInstShape(aboveDim[gk],geoFor(gk,aboveDim[gk][0].v),ghostDimMat); scene.add(im); ghostMeshes.push(im); }
+  if(S.mode==='info' && S.inspect && S.vox.has(S.inspect)){ const ip=S.inspect.split(',').map(Number);   // 選択モード：起点ブロックを強調枠
+    const o=makeOutline([ip],inspectMat); scene.add(o); outlineMeshes.push(o); }
+  if(S.mode==='info' && S.sel && S.sel.plane==='WD'){   // 選択範囲（作業面 WD 上）
+    const a=S.sel.a,b=S.sel.b,L=S.sel.layer,cs=[];
+    for(let h=Math.min(a.h,b.h);h<=Math.max(a.h,b.h);h++) for(let v=Math.min(a.v,b.v);v<=Math.max(a.v,b.v);v++) cs.push([h,L,v]);
+    if(cs.length){ const o=makeOutline(cs,inspectMat); scene.add(o); outlineMeshes.push(o); } }
+  if(S.cellClip && S.cellClip.srcPlane==='WD'){   // 切取/コピー元
+    const r=S.cellClip.rect,L=S.cellClip.srcLayer,cs=[];
+    for(let h=r.x0;h<=r.x1;h++) for(let v=r.z0;v<=r.z1;v++) cs.push([h,L,v]);
+    const o=makeOutline(cs,clipSrcMat); scene.add(o); outlineMeshes.push(o); }
+  if(S.cellClip && S.mode==='info' && S.sel && S.sel.plane==='WD'){   // 貼り付け先プレビュー
+    const a=S.sel.a,L=S.sel.layer,cc=S.cellClip,cs=[];
+    for(let i=0;i<cc.w;i++) for(let j=0;j<cc.h;j++) cs.push([a.h+i,L,a.v+j]);
+    const o=makeOutline(cs,clipDstMat); scene.add(o); outlineMeshes.push(o); }
+  if(belowCells.length){ const o=makeOutline(belowCells,outlineMat); scene.add(o); outlineMeshes.push(o); }
+  if(aboveCells.length){ const o=makeOutline(aboveCells,outlineGhostMat); scene.add(o); outlineMeshes.push(o); }
+  if(belowTrap.length){ const h=makeHingeRods(belowTrap,mat); scene.add(h); editMeshes.push(h); }
+  if(aboveTrap.length){ const h=makeHingeRods(aboveTrap,ghostMat); scene.add(h); ghostMeshes.push(h); }
+  if(belowFull.length){ const o=makeOrient(belowFull,orientMat); if(o){ scene.add(o); outlineMeshes.push(o); }
+    const af=makeAxisFaces(belowFull,axisFaceMat); if(af){ scene.add(af); outlineMeshes.push(af); } }
+  if(aboveFull.length){ const o=makeOrient(aboveFull,orientGhostMat); if(o){ scene.add(o); outlineMeshes.push(o); }
+    const af=makeAxisFaces(aboveFull,axisFaceGhostMat); if(af){ scene.add(af); outlineMeshes.push(af); } }
+  dirty=true;
+}
+/* ---- ドラッグ矩形（dw平面に複数配置）---- */
+function clearPreview(){ if(preview){ scene.remove(preview); preview=null; dirty=true; } }
+function showPreview(a,b,mode){
+  clearPreview();
+  const y=S.layer, cells=[];
+  let x0,x1,z0,z1;
+  if(mode==='select' && S.cellClip){ const cc=S.cellClip; x0=b.x;x1=b.x+cc.w-1;z0=b.z;z1=b.z+cc.h-1; }   // クリップ中は配置位置(クリップサイズ)を追従
+  else { x0=Math.min(a.x,b.x);x1=Math.max(a.x,b.x);z0=Math.min(a.z,b.z);z1=Math.max(a.z,b.z); }
+  for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){ if(inB(x,y,z)) cells.push([x,y,z]); }
+  preview=makeInst(cells, mode==='break'?previewBreakMat:previewMat); scene.add(preview); dirty=true;
+}
+function applyRect(a,b,mode){
+  const y=S.layer, v=cur(), vs=sig(v);
+  const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),z0=Math.min(a.z,b.z),z1=Math.max(a.z,b.z);
+  pushHist(); let ch=false;
+  for(let x=x0;x<=x1;x++)for(let z=z0;z<=z1;z++){
+    if(!inB(x,y,z)) continue; const k=K(x,y,z);
+    if(mode==='break'){ if(S.vox.has(k)){ S.vox.delete(k); ch=true; } }
+    else { if(sig(S.vox.get(k))!==vs){ S.vox.set(k,v); ch=true; } }
+  }
+  if(ch) changed(); else S.hist.pop();
+}
+
+/* ---------- gestures ---------- */
+function bindGestures(el){
+  const pts=new Map(); let tap=null, pinch=0, mid=null, drag=null, lastUp=null, pendingPlace=null;
+  const dist=()=>{ const [a,b]=[...pts.values()]; return Math.hypot(a.x-b.x,a.y-b.y); };
+  const midp=()=>{ const [a,b]=[...pts.values()]; return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; };
+  const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+  function panBy(dx,dy){ const f=sph.r*0.0022;
+    const right=new THREE.Vector3().setFromMatrixColumn(camera.matrix,0);
+    const upv=new THREE.Vector3().setFromMatrixColumn(camera.matrix,1);
+    target.addScaledVector(right,-dx*f).addScaledVector(upv,dy*f); updateCam(); }
+
+  function planeCell(cx,cy){          // 作業面（緑）のセル {x,z} or null
+    const r=el.getBoundingClientRect();
+    ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+    const hit = planeObj ? ray.intersectObject(planeObj,false)[0] : null;
+    if(!hit) return null;
+    const x=Math.floor(hit.point.x), z=Math.floor(hit.point.z);
+    if(x<0||z<0||x>=S.dims.x||z>=S.dims.z) return null;
+    return {x,z};
+  }
+
+  el.addEventListener('pointerdown',e=>{
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY,btn:e.button,type:e.pointerType});
+    if(pts.size===1){
+      const now=Date.now();
+      const isDbl = lastUp && now-lastUp.t<130 && Math.hypot(e.clientX-lastUp.x,e.clientY-lastUp.y)<22;
+      if(S.mode==='info' && S.cellClip && isDbl){ cancelCellClip(); tap=null; drag=null; }   // クリップ中ダブルタップ=取消
+      else {
+      const gmode = (S.mode==='info') ? 'select' : (isDbl ? 'break' : S.mode);   // 選択モードは範囲選択
+      tap={id:e.pointerId,x:e.clientX,y:e.clientY,t:now,mode:gmode,dbl:!!isDbl};
+      drag=null;
+      // 編集/選択ドラッグ開始（マウスは左のみ／タッチは1本指）。作業面上で始めたら矩形/範囲。
+      if(!(e.pointerType==='mouse' && e.button!==0)){
+        const c=planeCell(e.clientX,e.clientY);
+        if(c) drag={mode:gmode,a:c,b:c};           // ダブル時は削除範囲・選択時は選択範囲
+      }
+      if(isDbl){ clearTimeout(pendingPlace); pendingPlace=null; lastUp=null; }  // 1回目の配置を取消
+      }
+    } else { tap=null; drag=null; clearPreview();
+      if(pts.size===2){ pinch=dist(); mid=midp(); } }
+  });
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+  addEventListener('pointermove',e=>{
+    const p=pts.get(e.pointerId); if(!p) return;
+    const dx=e.clientX-p.x, dy=e.clientY-p.y; p.x=e.clientX; p.y=e.clientY;
+    if(pts.size===1){
+      if(tap && Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8) tap=null;
+      if(drag){                       // 矩形編集ドラッグ（半透明プレビュー・削除は赤）
+        const c=planeCell(e.clientX,e.clientY); if(c){ drag.b=c; showPreview(drag.a,drag.b,drag.mode); }
+        return;
+      }
+      if(p.type==='mouse'){           // マウス：左(空間)=回転 / 右=パン
+        if(p.btn===0){ sph.theta-=dx*0.008; sph.phi=clamp(sph.phi-dy*0.008,0.06,Math.PI*0.495); updateCam(); }
+        else panBy(dx,dy);
+      } else panBy(dx,dy);            // タッチ1本指・作業面外＝移動(パン)
+    } else if(pts.size===2){          // 2本指＝拡大＋回転（パンは1本指へ）
+      const d=dist(); if(pinch) sph.r=clamp(sph.r*(pinch/d),3,400); pinch=d;
+      const m=midp();
+      if(mid){ sph.theta-=(m.x-mid.x)*0.008; sph.phi=clamp(sph.phi-(m.y-mid.y)*0.008,0.06,Math.PI*0.495); }
+      mid=m; updateCam();
+    }
+  });
+  function set3DSel(a,b){   // a,b:{x,z}作業面上 → S.sel(WD基準)。情報は起点セルのみ
+    S.sel={a:{h:a.x,v:a.z}, b:{h:b.x,v:b.z}, layer:S.layer, plane:'WD'};
+    const k=K(a.x,S.layer,a.z), val=S.vox.get(k);
+    if(val) showInfo(norm(val), k); else $('#inspect').classList.remove('on');
+    S.inspect = val ? k : null; updatePickBtns(); syncVox(); }
+  function pickBlockAt(cx,cy){   // 表示中ソリッド（選択層以下＋強調中）へ raycast（break/place と同じ到達範囲・v4.87）
+    const r=el.getBoundingClientRect();
+    ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+    const hit=ray.intersectObjects(editMeshes.filter(m=>m.count),false)[0];
+    if(!hit) return null;
+    const o=hit.object.userData.items && hit.object.userData.items[hit.instanceId];
+    return o ? o : null; }
+  function sel3DBlock(o){   // 任意層のブロックを直接選択（選択枠・S.sel の層もそのブロックに合わせる）
+    const p=o.p;
+    S.sel={a:{h:p[0],v:p[2]}, b:{h:p[0],v:p[2]}, layer:p[1], plane:'WD'};
+    S.inspect=K(p[0],p[1],p[2]); showInfo(norm(o.v), S.inspect); updatePickBtns(); syncVox(); }
+  const up=e=>{
+    const was=pts.get(e.pointerId); pts.delete(e.pointerId);
+    if(pts.size<2){ pinch=0; mid=null; }
+    if(tap && tap.id===e.pointerId && was && Date.now()-tap.t<600){
+      const x=was.x, y=was.y;
+      if(tap.mode==='break'){
+        doTap(x,y,'break'); lastUp=null;    // 削除は即時（ダブル/壊すモード）
+      } else if(tap.mode==='select'){
+        if(S.cellClip){ const c=planeCell(x,y); if(c) set3DSel(c,c); }   // クリップ中＝作業面上の貼り付け位置指定（従来どおり）
+        else { const o=pickBlockAt(x,y);                                  // 通常選択＝置く/壊すと同様、選択層以下のブロックへ直接タップ
+          if(o) sel3DBlock(o);
+          else { const c=planeCell(x,y);
+            if(c) set3DSel(c,c);
+            else { S.sel=null; $('#inspect').classList.remove('on'); S.inspect=null; syncVox(); } } }
+        lastUp={x,y,t:Date.now()};   // lastUp=ダブルタップ取消用
+      } else {                              // 置く単発はダブル判定のため遅延（ダブルなら次のdownで取消）
+        lastUp={x,y,t:Date.now()};
+        clearTimeout(pendingPlace);
+        pendingPlace=setTimeout(()=>{ doTap(x,y,'place'); pendingPlace=null; }, 130);
+      }
+    } else if(drag){
+      clearTimeout(pendingPlace); pendingPlace=null;
+      if(drag.mode==='select'){ if(S.cellClip) set3DSel(drag.b,drag.b); else set3DSel(drag.a,drag.b); lastUp=was?{x:was.x,y:was.y,t:Date.now()}:null; }   // クリップ中は配置位置・そうでなければ範囲選択
+      else { if(drag.a.x!==drag.b.x || drag.a.z!==drag.b.z) applyRect(drag.a,drag.b,drag.mode); lastUp=null; }   // 1ブロックのみはキャンセル
+    }
+    clearPreview();
+    if(pts.size===0){ tap=null; drag=null; }
+  };
+  addEventListener('pointerup',up); addEventListener('pointercancel',up);
+  el.addEventListener('wheel',e=>{ e.preventDefault();
+    sph.r=clamp(sph.r*(1+Math.sign(e.deltaY)*0.12),3,400); updateCam(); },{passive:false});
+
+  function doTap(cx,cy,mode){
+    mode = mode || S.mode;
+    const r=el.getBoundingClientRect();
+    ndc.set(((cx-r.left)/r.width)*2-1, -((cy-r.top)/r.height)*2+1);
+    ray.setFromCamera(ndc,camera);
+    const targets=editMeshes.filter(m=>m.count).slice(); if(planeObj) targets.push(planeObj);
+    const hit=ray.intersectObjects(targets,false)[0]; if(!hit) return;
+    if(hit.object!==planeObj){
+      const im=hit.object, o=im.userData.items[hit.instanceId]; if(!o) return; const p=o.p;
+      if(mode==='break') remove(p[0],p[1],p[2]);
+      else if(mode==='info'){ S.inspect=K(p[0],p[1],p[2]); showInfo(o.v, S.inspect); updatePickBtns(); syncVox(); }   // 選択中ブロックを強調
+      else { const m4=new THREE.Matrix4(); im.getMatrixAt(hit.instanceId,m4);
+        const nm=new THREE.Matrix3().getNormalMatrix(m4);
+        const n=hit.face.normal.clone().applyMatrix3(nm).normalize();
+        place(p[0]+Math.round(n.x),p[1]+Math.round(n.y),p[2]+Math.round(n.z)); }
+    } else {                                   // 作業面
+      const x=Math.floor(hit.point.x), z=Math.floor(hit.point.z);
+      if(mode==='break') remove(x,S.layer,z);  // 平面セルの削除（ダブルタップ削除）
+      else if(mode!=='info') place(x,S.layer,z);   // 情報モードは空セルタップで置かない
+    }
+  }
+}
+
+/* ---------- plan view ---------- */
+// 3面：WD(上面 横W×縦D 層H) / WH(正面 横W×縦H 層D) / DH(側面 横D×縦H 層W)。色 W=赤 D=青 H=緑。
+const PLANES = {
+  WD:{h:'x',v:'z',l:'y',llab:'H',hcol:'#ff8a8a',vcol:'#8aa8ff'},
+  WH:{h:'x',v:'y',l:'z',llab:'D',hcol:'#ff8a8a',vcol:'#7ad79a'},
+  DH:{h:'z',v:'y',l:'x',llab:'W',hcol:'#8aa8ff',vcol:'#7ad79a'},
+};
+const AXI = {x:0,y:1,z:2};
+const AXLAB = {x:'W',y:'H',z:'D'};   // 内部軸→表示ラベル
+const curLayer = ()=>{ const l=PLANES[S.plane].l; return l==='y'?S.layer:(S.lay[l]||0); };
+function planeKeyAt(h,v,layer){ const P=PLANES[S.plane], c={}; c[P.h]=h; c[P.v]=v; c[P.l]=layer; return K(c.x,c.y,c.z); }
+function planeKeyP(plane,h,v,layer){ const P=PLANES[plane], c={}; c[P.h]=h; c[P.v]=v; c[P.l]=layer; return K(c.x,c.y,c.z); }   // 面指定版（3D=WD / 2D=S.plane 両対応）
+const planeKey = (h,v)=> planeKeyAt(h,v,curLayer());
+function setPlanLayer(v){ const P=PLANES[S.plane], n=S.dims[P.l]; v=clamp(v,0,n-1);
+  if(P.l==='y') setLayer(v);                        // H は立体の作業面と共有
+  else { S.lay[P.l]=v; renderGrid(); renderSpine(); } }
+function layerCounts(){ const P=PLANES[S.plane], n=S.dims[P.l], c=new Array(n).fill(0), idx=AXI[P.l];
+  S.vox.forEach((val,k)=>{ const a=+k.split(',')[idx]; if(a<n) c[a]++; }); return c; }   // 現平面の層軸ごとの数
+function setPlane(p){ S.plane=p; S.manualZoom=false;
+  ['WD','WH','DH'].forEach(n=>{ const b=$('#pt-'+n); if(b) b.setAttribute('aria-selected', n===p); });
+  renderGrid(); renderSpine(); }
+function counts(){   // ※ H(y) 基準（buildJson の layers 用）。スパインは layerCounts を使う。
+  const c=new Array(S.dims.y).fill(0);
+  S.vox.forEach((role,k)=>{ const y=+k.split(',')[1]; if(y<S.dims.y) c[y]++; });
+  return c;
+}
+function renderSpine(){
+  const P=PLANES[S.plane], n=S.dims[P.l], layer=curLayer();
+  const c=layerCounts(), mx=Math.max(1,...c), sp=$('#spine'); sp.innerHTML='';
+  for(let i=0;i<n;i++){
+    const d=document.createElement('div');
+    d.className='seg'; d.dataset.cur = i===layer?1:0;
+    d.dataset.clip = (S.clipMode && S.clip && S.clipPlane===S.plane && i===S.clipLayer) ? S.clipMode : '';   // 切取/コピー元の層
+    const f=document.createElement('span'); f.className='f';
+    f.style.opacity = c[i] ? (0.18+0.72*(c[i]/mx)) : 0;
+    d.appendChild(f);
+    if(i%4===0||i===layer){ const nn=document.createElement('span'); nn.className='n'; nn.textContent=i; d.appendChild(nn); }
+    sp.appendChild(d);
+  }
+  $('#cnt').textContent = 'この層 '+(c[layer]||0)+' · 合計 '+S.vox.size;
+  const y=$('#y2'); if(y) y.textContent = P.llab+String(layer).padStart(2,'0');
+  const ym=$('#ymax'); if(ym) ym.textContent = '/ '+(n-1);
+}
+function fitCells(){
+  const w=$('#gridwrap').clientWidth-14;
+  S.cell = clamp(Math.floor(w/S.dims[PLANES[S.plane].h]),6,34);
+}
+function renderGrid(){
+  if(!S.manualZoom) fitCells();
+  const P=PLANES[S.plane], g=$('#grid'), f=document.createDocumentFragment();
+  const dimH=S.dims[P.h], dimV=S.dims[P.v], layer=curLayer();
+  const nr=(a,b)=>({x0:Math.min(a.h,b.h),x1:Math.max(a.h,b.h),z0:Math.min(a.v,b.v),z1:Math.max(a.v,b.v)});
+  const selR=(S.mode==='info'&&S.sel&&S.sel.plane===S.plane&&S.sel.layer===layer)?nr(S.sel.a,S.sel.b):null;   // 選択範囲
+  const cc=S.cellClip;
+  const srcR=(cc&&cc.srcPlane===S.plane&&cc.srcLayer===layer)?cc.rect:null;                                   // 切取/コピー元
+  const dstR=(cc&&S.mode==='info'&&S.sel&&S.sel.plane===S.plane&&S.sel.layer===layer)?{x0:S.sel.a.h,x1:S.sel.a.h+cc.w-1,z0:S.sel.a.v,z1:S.sel.a.v+cc.h-1}:null;  // 移動先
+  const inR=(R,h,v)=>R&&h>=R.x0&&h<=R.x1&&v>=R.z0&&v<=R.z1;
+  const hlF = S.hlForm;   // 選択 form×slot 以外を減光
+  g.style.gridTemplateColumns='repeat('+dimH+','+S.cell+'px)';
+  g.style.setProperty('--hcol',P.hcol); g.style.setProperty('--vcol',P.vcol);   // 原点マーカーの軸色
+  g.innerHTML='';
+  const hFlip = P.h==='x';                                    // 内部 x はファイル w の反転（mirW）→ x 面は逆順に描き、画面右=W+（見た目＝in-game）
+  const oh = hFlip ? dimH-1 : 0;                              // ファイル原点（w0/d0）にあたる横 index
+  for(let vv=dimV-1;vv>=0;vv--) for(let ih=0;ih<dimH;ih++){   // 縦軸を逆順で並べ原点を下端に（立体と同じ向き）
+    const hh = hFlip ? dimH-1-ih : ih;
+    const c=document.createElement('div');
+    c.className='cell'; c.dataset.x=hh; c.dataset.z=vv;       // x=横index h, z=縦index v
+    const key=planeKeyAt(hh,vv,layer), v=S.vox.get(key);
+    c.dataset.on = v?1:0;
+    if(v) c.style.background = v.s==='raw' ? '#9a8f7a' : roleHex(v.r);   // 役割色でセル表示（raw は固定色）
+    if(S.mode==='info' && S.inspect===key) c.dataset.inspect=1;   // 選択の起点セル（情報表示元）
+    if(inR(selR,hh,vv)) c.dataset.sel=1;                          // 選択範囲
+    if(inR(srcR,hh,vv)) c.dataset.clipsrc=cc.mode;                // 切取/コピー元
+    if(inR(dstR,hh,vv)) c.dataset.clipdst=1;                      // 貼り付け先プレビュー
+    if(S.labels && v && S.cell>=9){ const lab=labelOf(v); if(lab){ c.textContent=lab; c.style.fontSize=Math.max(6,Math.min(9,Math.floor(S.cell*0.5)))+'px'; } }   // 聖典 form 名（FULLBLOCK除外）
+    if(hlF && v && !hlMatch(v)) c.dataset.dim=1;   // 選択 form×slot 以外を減光
+    c.dataset.below = (layer>0 && S.vox.has(planeKeyAt(hh,vv,layer-1)) && !v)?1:0;
+    c.dataset.cx=(hh+1)%4===0?1:0; c.dataset.cz=(vv+1)%4===0?1:0;
+    c.dataset.origin=(hh===oh&&vv===0)?1:0;    // 原点(手前左=ファイル w0/d0)にしるし（左=縦軸色・下=横軸色）
+    if(hh===oh&&vv===0&&S.labels){             // 原点マークの横に軸ラベル（縦=左上/横=右下）
+      const fs=Math.max(6,Math.min(10,Math.floor(S.cell*0.5)))+'px';
+      const mkax=(cls,txt,col)=>{ const s=document.createElement('span'); s.className='axlab '+cls; s.textContent=txt; s.style.color=col; s.style.fontSize=fs; c.appendChild(s); };
+      mkax('axlab-v', AXLAB[P.v], P.vcol); mkax('axlab-h', AXLAB[P.h], P.hcol);
+    }
+    c.style.width=c.style.height=S.cell+'px';
+    f.appendChild(c);
+  }
+  g.appendChild(f);
+  g.dataset.clip = (S.clipMode && S.clip && S.clipPlane===S.plane && layer===S.clipLayer) ? S.clipMode : '';   // 切取/コピー元を表示中なら枠
+}
+(function bindPlan(){   // 立体と同じ操作感：タップ=単発 / ドラッグ=矩形(プレビュー) / ダブルタップ(+ドラッグ)=削除(範囲) / 2本指=ズーム+パン
+  const wrap=$('#gridwrap');
+  const pts=new Map(); let tap=null, drag=null, pinch=0, mid=null, lastUp=null, pendingPlace=null;
+  const cellAt=(x,y)=>{ const el=document.elementFromPoint(x,y);
+    return (el&&el.dataset&&el.dataset.x!==undefined)?{x:+el.dataset.x,z:+el.dataset.z}:null; };
+  const dist=()=>{ const a=[...pts.values()]; return Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y); };
+  const midp=()=>{ const a=[...pts.values()]; return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2}; };
+  function preview(a,b,mode){   // 矩形プレビュー（セルに data-preview）。クリップ中の select は配置位置(クリップサイズ)を指先に追従
+    let x0,x1,z0,z1,kind;
+    if(mode==='select' && S.cellClip){ const cc=S.cellClip; x0=b.x; x1=b.x+cc.w-1; z0=b.z; z1=b.z+cc.h-1; kind='dst'; }
+    else { x0=Math.min(a.x,b.x); x1=Math.max(a.x,b.x); z0=Math.min(a.z,b.z); z1=Math.max(a.z,b.z); kind=mode==='break'?'break':mode==='select'?'select':'draw'; }
+    for(const c of $('#grid').children){ const h=+c.dataset.x, v=+c.dataset.z;
+      c.dataset.preview=(h>=x0&&h<=x1&&v>=z0&&v<=z1)?kind:''; } }
+  function selectRange(a,b){   // 範囲選択。情報は開始セル(a=ドラッグ開始)のみ表示
+    S.sel={a:{h:a.x,v:a.z}, b:{h:b.x,v:b.z}, layer:curLayer(), plane:S.plane};
+    const k=planeKey(a.x,a.z), val=S.vox.get(k), pi=$('#pinspect');
+    if(val){ pi.innerHTML=dhwLine(k)+'<br>'+infoPartsOf(val).join('<br>'); pi.classList.add('on'); S.inspect=k; }
+    else { pi.classList.remove('on'); S.inspect=null; }
+    updatePickBtns(); renderGrid(); }
+  function setDest(c){ S.sel={a:{h:c.x,v:c.z}, b:{h:c.x,v:c.z}, layer:curLayer(), plane:S.plane}; renderGrid(); }   // クリップ中の貼付先アンカー
+  const clearPrev=()=>{ for(const c of $('#grid').children) c.dataset.preview=''; };
+  function rect(a,b,mode){   // 矩形を確定
+    const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x),z0=Math.min(a.z,b.z),z1=Math.max(a.z,b.z);
+    pushHist(); const v=cur(), vs=sig(v); let ch=false;
+    for(let h=x0;h<=x1;h++) for(let vv=z0;vv<=z1;vv++){ const k=planeKey(h,vv);
+      if(mode==='break'){ if(S.vox.has(k)){ S.vox.delete(k); ch=true; } }
+      else { if(sig(S.vox.get(k))!==vs){ S.vox.set(k,v); ch=true; } } }
+    if(ch) changed(); else S.hist.pop(); renderGrid(); renderSpine(); }
+  function single(c,mode){   // 単発（tap）
+    const k=planeKey(c.x,c.z);
+    if(mode==='break'){ if(S.vox.has(k)){ pushHist(); S.vox.delete(k); changed(); renderGrid(); renderSpine(); } }
+    else if(mode==='info'){ const val=S.vox.get(k), pi=$('#pinspect');
+      if(val){ pi.innerHTML=dhwLine(k)+'<br>'+infoPartsOf(val).join('<br>'); pi.classList.add('on'); S.inspect=k; }
+      else { pi.classList.remove('on'); S.inspect=null; }
+      updatePickBtns(); renderGrid(); }   // 選択セルを強調
+    else { const v=cur(); if(sig(S.vox.get(k))!==sig(v)){ pushHist(); S.vox.set(k,v); changed(); renderGrid(); renderSpine(); } } }
+  document.addEventListener('pointerdown',e=>{
+    if(S.view!=='plan' || !wrap.contains(e.target)) return;
+    if(e.target.releasePointerCapture){ try{ e.target.releasePointerCapture(e.pointerId); }catch(_){} }  // 再描画でセルが消えても move/up が届くように
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===1){
+      const now=Date.now();
+      const isDbl = lastUp && now-lastUp.t<300 && Math.hypot(e.clientX-lastUp.x,e.clientY-lastUp.y)<22;
+      const c=cellAt(e.clientX,e.clientY);
+      if(S.mode==='info' && S.cellClip && isDbl){ cancelCellClip(); lastUp=null; tap=null; drag=null; e.preventDefault(); }   // クリップ中ダブルタップ=取消
+      else {
+        const gmode = (S.mode==='info')?'select':(isDbl?'break':S.mode);
+        tap  = c ? {x:e.clientX,y:e.clientY,cell:c,mode:gmode,t:now} : null;
+        drag = c ? {mode:gmode,a:c,b:c} : null;   // select も範囲ドラッグ可
+        if(isDbl){ clearTimeout(pendingPlace); pendingPlace=null; lastUp=null; }   // 1回目の配置を取消
+        e.preventDefault();
+      }
+    } else { tap=null; drag=null; clearPrev(); if(pts.size===2){ pinch=dist(); mid=midp(); } }
+  });
+  addEventListener('pointermove',e=>{
+    const p=pts.get(e.pointerId); if(!p) return; p.x=e.clientX; p.y=e.clientY;
+    if(pts.size===1){
+      if(tap && Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8) tap=null;
+      if(drag){ e.preventDefault(); const c=cellAt(e.clientX,e.clientY); if(c){ drag.b=c; preview(drag.a,drag.b,drag.mode); } }
+    } else if(pts.size===2){
+      const d=dist(); if(pinch){ const ns=clamp(Math.round(S.cell*(d/pinch)),6,40); if(ns!==S.cell){ S.cell=ns; S.manualZoom=true; renderGrid(); } } pinch=d;
+      const m=midp(); if(mid){ wrap.scrollLeft-=(m.x-mid.x); wrap.scrollTop-=(m.y-mid.y); } mid=m;
+    }
+  });
+  const up=e=>{ const was=pts.get(e.pointerId); pts.delete(e.pointerId);
+    if(pts.size<2){ pinch=0; mid=null; }
+    if(tap && was && Date.now()-tap.t<600){
+      const c=tap.cell, mode=tap.mode;
+      if(mode==='break'){ single(c,'break'); lastUp=null; }
+      else if(mode==='select'){ if(S.cellClip) setDest(c); else selectRange(c,c); lastUp={x:tap.x,y:tap.y,t:Date.now()}; }   // クリップ中は配置位置・そうでなければ選択。lastUp記録(ダブルタップ取消用)
+      else { lastUp={x:tap.x,y:tap.y,t:Date.now()}; clearTimeout(pendingPlace);   // 置く単発はダブル判定のため遅延
+        pendingPlace=setTimeout(()=>{ single(c,'place'); pendingPlace=null; },130); }
+    } else if(drag && (drag.a.x!==drag.b.x||drag.a.z!==drag.b.z)){   // 1セルのみの範囲はキャンセル
+      clearTimeout(pendingPlace); pendingPlace=null;
+      if(drag.mode==='select'){ if(S.cellClip) setDest(drag.b); else selectRange(drag.a,drag.b); lastUp=was?{x:was.x,y:was.y,t:Date.now()}:null; }
+      else { rect(drag.a,drag.b,drag.mode); lastUp=null; }
+    }
+    clearPrev();
+    if(pts.size===0){ tap=null; drag=null; } };
+  addEventListener('pointerup',up); addEventListener('pointercancel',up);
+
+  let scrub=false;
+  $('#spine').addEventListener('pointerdown',e=>{ scrub=true; scrubTo(e.clientY); e.preventDefault(); });
+  addEventListener('pointermove',e=>{ if(scrub) scrubTo(e.clientY); });
+  addEventListener('pointerup',()=>scrub=false);
+  function scrubTo(cy){ const P=PLANES[S.plane], n=S.dims[P.l], r=$('#spine').getBoundingClientRect();
+    setPlanLayer(Math.floor((1-(cy-r.top)/r.height)*n)); }
+})();
+
+/* ---------- json ---------- */
+function blockRecs(fieldFn){   // S.vox を structure レコード(1行文字列)配列へ。fieldFn(slot)=slot/mat 等のフィールドを付与
+  const W=S.dims.x;
+  const arr=[...S.vox.entries()].map(([k,v])=>({p:k.split(',').map(Number),v:norm(v)}))
+    .sort((a,b)=>a.p[2]-b.p[2]||a.p[1]-b.p[1]||b.p[0]-a.p[0]); // d(z) → h(y) → 出力W昇順(=x降順)
+  return arr.map(o=>{ const p=o.p, v=o.v, rec={pos:{d:p[2],h:p[1],w:mirW(p[0],W)}};
+    if(v.s==='raw'){                                                   // raw＝block=id 直指定（form/mat なし）
+      rec.block = (v.raw.indexOf(':')<0 ? 'minecraft:'+v.raw : v.raw);
+      for(const {name} of shownPropsRaw(v.raw)){ const val=v.props[name];
+        rec[(RD&&RD.faceApp[name])||name]=val; }   // 値は無変換（プレイヤーフレーム統一）。面は相対キー(front/…)で書く＝MOD が build 方位で回せる
+      return '  '+JSON.stringify(rec);
+    }
+    const form=formOf({s:v.s,ot:v.ot}); rec.form=form;                 // form 先（dict と統一・2026-08-15）
+    Object.assign(rec, fieldFn(v.r));                                  // slot（place）または mat（structure）
+    for(const {name} of shownProps(form)){ const val=v.props[name];    // 汎用: 出すプロパティを素直に書く（値は無変換）
+      rec[(RD&&RD.faceApp[name])||name]=val; }   // 面は相対キー(front/…)で書く
+    if(isMultiHalf(form)){ rec.half='lower';                           // upper/lower の form（ドア等）は2レコードに展開
+      const up={pos:{d:p[2],h:p[1]+1,w:mirW(p[0],W)},form:form}; Object.assign(up, fieldFn(v.r)); up.half='upper';
+      if(rec.facing) up.facing=rec.facing; if(rec.hinge) up.hinge=rec.hinge;
+      return '  '+JSON.stringify(rec)+',\n  '+JSON.stringify(up); }
+    return '  '+JSON.stringify(rec); });
+}
+function structJson(name, recs){ const d=S.dims;   // structure(size=[D,H,W]) の外枠
+  return '{\n "name": '+JSON.stringify(name)+',\n "size": ['+d.z+', '+d.y+', '+d.x+'],\n'
+    +' "blocks": [\n'+recs.join(',\n')+(recs.length?'\n':'')+' ]\n}';
+}
+function buildJson(mode){
+  mode = mode || S.jsonMode;
+  const d=S.dims, name=$('#name').value;
+  if(mode==='blocks') return structJson(name, blockRecs(slot=>({slot})));   // slot（palette 側で mat 解決）
+  const c=counts(), layers={};
+  for(let y=0;y<d.y;y++){
+    if(!c[y]) continue;
+    const rows=[];
+    for(let z=0;z<d.z;z++){ let r='';
+      for(let x=d.x-1;x>=0;x--) r += S.vox.has(K(x,y,z))?'#':'.'; // W ミラー（x を降順で並べる）
+      rows.push(r); }
+    layers[y]=rows;
+  }
+  return JSON.stringify({name,size:[d.z,d.y,d.x],format:'layers',layers},null,1);
+}
+function renderJson(){
+  $('#json').value = buildJson();
+  const layers = S.jsonMode==='layers';               // 層グリッド(layers)は表示専用＝編集/反映不可
+  $('#json').readOnly = layers;
+  const ap=$('#j-apply'); if(ap){ ap.disabled = layers; ap.style.opacity = layers?'.4':''; ap.title = layers?'層グリッドは表示専用（編集不可）':''; }
+}
+
+/* ---------- view switching ---------- */
+function setView(v){
+  S.view=v;
+  ['space','plan','json'].forEach(n=>{
+    $('#v-'+n).classList.toggle('hidden', n!==v);
+    $('#t-'+n).setAttribute('aria-selected', n===v);
+  });
+  if(v==='plan'){ renderGrid(); renderSpine(); }
+  if(v==='json') renderJson();
+  if(v==='space') dirty=true;
+}
+
+/* ---------- wiring ---------- */
+['space','plan','json'].forEach(n=>$('#t-'+n).onclick=()=>setView(n));
+$('#modal').onclick=e=>{ if(e.target.id==='modal') closeModal(); };   // 背景タップで閉じる
+$('#propmodal').onclick=e=>{ if(e.target.id==='propmodal') closePropPicker(); };   // 背景タップで閉じる（値はその場で確定済み）
+$('#matmodal').onclick=e=>{ if(e.target.id==='matmodal') closeMatPicker(); };
+
+$('#name').oninput = save;
+['dx','dy','dz'].forEach(id=>$('#'+id).onchange=e=>{
+  const nd={...S.dims};
+  nd[id[1]] = clamp(parseInt(e.target.value,10)||1,1,64);
+  e.target.value = nd[id[1]];
+  setDims(nd);
+});
+
+$('#plane').oninput = e=>setLayer(+e.target.value);
+$('#b-up').onclick = ()=>setLayer(S.layer+1);
+$('#b-down').onclick = ()=>setLayer(S.layer-1);
+$('#b-fit').onclick = frameCamera;
+function setLabels(v){ S.labels=v;   // 3D/2D 共通のラベル表示
+  ['#b-label','#pl-label'].forEach(id=>{ const b=$(id); if(b) b.setAttribute('aria-pressed', v); });
+  syncVox(); if(S.view==='plan') renderGrid(); }
+$('#b-label').onclick = ()=>setLabels(!S.labels);
+$('#pl-label').onclick = ()=>setLabels(!S.labels);
+function hlMatch(val){ const n=norm(val);   // 強調対象＝form×slot 一致（FIXED は同一ブロック id）・v5.04
+  if(S.shape==='raw') return n.s==='raw' && n.raw===S.raw;
+  return n.s!=='raw' && formOf(n)===formOf({s:S.shape,ot:S.other}) && n.r===S.role; }
+function setHl(v){ S.hlForm=v;   // 選択中 form×slot を強調・他を減光（3D/2D 共通）
+  ['#b-hl','#pl-hl'].forEach(id=>{ const b=$(id); if(b) b.setAttribute('aria-pressed', v); });
+  syncVox(); if(S.view==='plan') renderGrid(); }
+$('#b-hl').onclick = ()=>setHl(!S.hlForm);
+$('#pl-hl').onclick = ()=>setHl(!S.hlForm);
+$('#b-undo').onclick = undo;
+$('#b-redo').onclick = redo;
+$('#b-clear').onclick = ()=>{ pushHist(); S.vox=new Map(); changed(); renderGrid(); renderSpine(); };
+$('#b-place').onclick = ()=>setMode('place');
+$('#b-break').onclick = ()=>setMode('break');
+$('#b-info').onclick = ()=>setMode('info');   // モードボタン（置く/壊す/情報）
+const HELP_BLOCK = `<div class="hgrp">
+    <div class="hrow"><b>置くブロック</b>（下部の <b>form</b> / <b>property</b> / <b>slot</b> の各行）</div>
+    <div class="hrow">・<b>form</b> の行 ＝ 種類：FULLBLOCK / SLAB / STAIRS / TRAPDOOR / others / <b>FIXED</b>（具体ブロックを検索して直接指定）。</div>
+    <div class="hrow">・<b>property</b> の行 ＝ facing / axis 等の向き。<b>slot</b> の行 ＝ 役割（色）。スロット名は<b>ダブルクリックで別名</b>。</div>
+    <div class="hrow">・スポイト（左下）＝ 選択中ブロックの設定を「置くブロック」へ反映。</div>
+  </div>`;
+const HELP_SAVE = `<div class="hgrp">
+    <div class="hrow"><b>保存 / 読込</b>（タイトル右の 保存 / 読込 アイコン）</div>
+    <div class="hrow">・<b>place</b>＝形＋slot。<b>palette</b>＝slot→mat（別名も保存）。<b>structure</b>＝両者を合成した完成データ。</div>
+    <div class="hrow">・一括保存 ＝ place + palette + structure をまとめて。対応端末は保存先フォルダへ同名上書き。</div>
+  </div>`;
+const HELP_HTML = {
+  space:`<div class="hgrp">
+    <div class="hrow"><b>モード</b>（描画エリア上のタブ 選択 / 置く / 壊す）</div>
+    <div class="hrow">・<b>選択</b> … ドラッグで範囲選択 → 下部 <b>action</b> の行で コピー / 切取 / 貼付 / ↻回転、選択内へ一括で 置く / 壊す。タップで1マスの情報。</div>
+    <div class="hrow">・<b>置く / 壊す</b> … タップで1マス、ドラッグで矩形。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>指操作</b></div>
+    <div class="hrow">・1本指（面の上）＝ 操作 ／（面の外）＝ 視点回転</div>
+    <div class="hrow">・2本指 ＝ ズーム / 移動　・ダブルタップ ＝ 削除（選択/コピー中は取消）</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>層（作業面）</b>（▼下の層 / ▲上の層 / 視点をリセット）</div>
+    <div class="hrow">・緑の作業面の層を編集。上の層は半透明で編集不可。</div>
+  </div>
+  ${HELP_BLOCK}
+  <div class="hgrp">
+    <div class="hrow"><b>強調 / ラベル</b>（描画エリア右上のトグル）</div>
+    <div class="hrow">・<b>強調</b> ＝ 選択中 form を強調・他を減光。<b>ラベル</b> ＝ others の form 名を表示。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>reset</b>（すべて消去）＝ 全ブロックを削除。</div>
+  </div>
+  ${HELP_SAVE}`,
+  plan:`<div class="hgrp">
+    <div class="hrow"><b>面</b>（上のタブ 上面 W×D / 正面 W×H / 側面 D×H）</div>
+    <div class="hrow">・原点(0,0)は左下＝3Dと同じ向き。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>モード</b>（選択 / 置く / 壊す）</div>
+    <div class="hrow">・<b>選択</b> … ドラッグで範囲 → 下部 <b>action</b> の行で コピー / 切取 / 貼付 / ↻回転、一括で 置く / 壊す。タップで情報。</div>
+    <div class="hrow">・<b>置く / 壊す</b> … タップで1マス、ドラッグで矩形。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>指操作</b></div>
+    <div class="hrow">・タップ=単発 / ドラッグ=矩形 / ダブルタップ(+ドラッグ)=削除 / 2本指=ズーム・移動。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>層</b>（▼下 / ▲上 で層送り）</div>
+    <div class="hrow">・左の帯 ＝ 各層のブロック量。ドラッグで層移動。</div>
+    <div class="hrow">・<b>layer action</b> の行 ＝ 層をコピー / 貼付 / 追加 / 切取 / 挿入 / 削除。</div>
+    <div class="hnote">・<b>追加</b>＝常に最上段へ空層。<b>挿入</b>＝選択層の位置へ（コピー/切取中はその内容）。</div>
+  </div>
+  ${HELP_BLOCK}
+  <div class="hgrp">
+    <div class="hrow"><b>色・ラベル</b>（描画エリア右上のトグル）</div>
+    <div class="hrow">・色 ＝ 役割(slot)。<b>ラベル</b> ON で form 名(others / slab / stairs / trapdoor)を表示。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>reset</b>（すべて消去）＝ 全ブロックを削除。</div>
+  </div>
+  ${HELP_SAVE}`,
+  json:`<div class="hgrp">
+    <div class="hrow"><b>レコード</b>（推奨）</div>
+    <div class="hrow">・各ブロックを pos / slot / form / 向き で保持。テキストを編集して <b>✓ 反映</b> で取り込み（undo 可）。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>層グリッド</b></div>
+    <div class="hrow">・各層を # / . の位置だけで表す（form / mat / 向きは持たない）。<b>表示専用＝編集不可</b>・コピーのみ。</div>
+    <div class="hrow">・読込で全て fullblock になるため、形を保つなら <b>レコード</b> を使う。</div>
+  </div>
+  <div class="hgrp">
+    <div class="hrow"><b>✓ 反映 / コピー</b></div>
+    <div class="hrow">・<b>✓ 反映</b>＝レコードのテキストを取り込み。<b>コピー</b>＝クリップボードへ。</div>
+  </div>
+  ${HELP_SAVE}`,
+};
+function renderHelp(v){ const b=$('#hmodal-body'); if(b) b.innerHTML = (HELP_HTML[v] || HELP_HTML.space) + KEYS_HELP;
+  $('#help-tabs').querySelectorAll('button').forEach(x=>x.setAttribute('aria-selected', String(x.dataset.v===v))); }
+$('#help-tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>renderHelp(b.dataset.v));
+$('#b-help').onclick = ()=>{ renderHelp(['space','plan','json'].includes(S.view)?S.view:'space'); $('#hmodal').classList.add('on'); };   // 現在のタブに合わせて開く
+$('#hmodal').onclick = e=>{ if(e.target.id==='hmodal') $('#hmodal').classList.remove('on'); };
+
+/* ---------- キーボード操作（PC・v4.92。物理キーボードがある環境でのみ発火） ---------- */
+const KEYS_HELP = `
+  <div class="hgrp">
+    <div class="hrow"><b>キーボード（PC）</b></div>
+    <div class="hrow">・<b>1</b>=選択 / <b>2</b>=置く / <b>3</b>=壊す　・<b>V</b>=3D⇄2D　・<b>P</b>=2D面切替</div>
+    <div class="hrow">・<b>矢印</b>=ボタン選択（フォーカス移動）/ <b>Enter</b>=押下　・<b>PgUp/PgDn</b>=層を上下</div>
+    <div class="hrow">・<b>Ctrl+Z</b>=元に戻す / <b>Ctrl+Shift+Z</b>・<b>Ctrl+Y</b>=進む</div>
+    <div class="hrow">・<b>Ctrl+C/X</b>=選択範囲をコピー/切取　・<b>Ctrl+V</b>=貼り付け　・<b>R</b>=クリップ回転</div>
+    <div class="hrow">・<b>F</b>=選択範囲に配置　・<b>Delete</b>=選択範囲を消去　・<b>Esc</b>=モーダル閉→クリップ取消→選択解除</div>
+    <div class="hrow">・<b>W/A/S/D</b>=選択枠を奥/左/手前/右へ移動　・<b>Space</b>=上 / <b>Shift</b>=下（選択モード・選択層以下まで。クリップ中は貼り付け位置）</div>
+    <div class="hrow">・ブロックの移動＝<b>Ctrl+X</b>（切取）→ 枠を移動 → <b>Ctrl+V</b>（貼付）</div>
+  </div>`;
+/* 選択の移動キー（W/A/S/D=奥/左/手前/右・Space=上・Shift=下・選択モードのみ）
+   動くのは選択枠（セル選択）だけ＝ブロックは付いてこない（v4.96。ブロック移動は 切取Ctrl+X→枠移動→貼付Ctrl+V で行う）。
+   クリップ中は貼り付け位置の移動。到達範囲はマウス操作と同じ「選択層以下」（Hが選択層を超える移動は停止）。 */
+function moveSel(dx,dy,dz){   // 引数は内部軸(x,y,z)の増分（A=左=w−1=内部x+1・D=右=w+1=内部x−1）
+  if(S.mode!=='info') return;
+  if(!S.sel){ status('セルを選択してください'); return; }
+  const P=PLANES[S.sel.plane], d={x:dx,y:dy,z:dz};
+  const nh=[S.sel.a.h+d[P.h], S.sel.b.h+d[P.h]], nv=[S.sel.a.v+d[P.v], S.sel.b.v+d[P.v]], nl=S.sel.layer+d[P.l];
+  const dh=S.dims[P.h], dv=S.dims[P.v], dl=S.dims[P.l];
+  if(Math.min(...nh)<0||Math.max(...nh)>=dh||Math.min(...nv)<0||Math.max(...nv)>=dv||nl<0||nl>=dl){ status('端に当たるため移動できません'); return; }
+  const yMax = P.l==='y' ? nl : (P.v==='y' ? Math.max(...nv) : (P.h==='y' ? Math.max(...nh) : 0));
+  if(yMax>S.layer){ status('選択層より上へは移動できません'); return; }   // マウス操作と同じ到達範囲（選択層以下）
+  S.sel.a.h=nh[0]; S.sel.b.h=nh[1]; S.sel.a.v=nv[0]; S.sel.b.v=nv[1]; S.sel.layer=nl;
+  if(!S.cellClip){   // 枠が乗ったセルの情報を追随表示（クリップ中は貼り付け位置なので情報は触らない）
+    const k=planeKeyP(S.sel.plane, S.sel.a.h, S.sel.a.v, S.sel.layer), val=S.vox.get(k);
+    S.inspect = val ? k : null;
+    const pi=$('#pinspect');
+    if(val){ if(S.view==='plan' && pi){ pi.innerHTML=dhwLine(k)+'<br>'+infoPartsOf(val).join('<br>'); pi.classList.add('on'); }
+             else showInfo(norm(val), k); }
+    else { $('#inspect').classList.remove('on'); if(pi) pi.classList.remove('on'); }
+    updatePickBtns();
+  }
+  redrawSel();
+}
+const MODAL_IDS=['modal','propmodal','rawmodal','matmodal','hmodal','vmodal','pmodal','smodal','savemodal','loadmodal'];
+function escAction(){
+  for(const id of MODAL_IDS){ const m=document.getElementById(id); if(m && m.classList.contains('on')){
+    if(id==='propmodal') closePropPicker(); else m.classList.remove('on');
+    if(kbCur) setTimeout(()=>kbResolveRef(kbPrevRef),0);   // 閉じたら入る前のボタンへ復帰
+    return; } }
+  if(S.cellClip){ cancelCellClip(); return; }
+  S.sel=null; S.inspect=null; $('#inspect').classList.remove('on'); const pi=$('#pinspect'); if(pi) pi.classList.remove('on');
+  updatePickBtns(); syncVox(); if(S.view==='plan') renderGrid();
+}
+addEventListener('keydown', e=>{
+  const t=e.target;
+  if(t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;   // 入力中は素通し
+  const mod=e.ctrlKey||e.metaKey, k=e.key;
+  if(k==='Enter' && !mod){
+    const el0=kbLive(document) || (t&&t.tagName==='BUTTON'&&t.offsetParent?t:null);   // 押下対象＝ナビカーソル優先
+    if(el0){
+      e.preventDefault();
+      const txt=el0.textContent, r=el0.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+      const wasModal=kbInModal(el0);   // click でモーダルが閉じる前に判定（後だと常に false）
+      el0.click();
+      const restore=()=>{
+        if(wasModal && !kbOpenModal()){ kbResolveRef(kbPrevRef); return; }   // モーダルが閉じた → 入る前のボタンへ復帰
+        if(!el0.isConnected || !el0.offsetParent){ kbResolveRef({txt,cx,cy}); return; }   // 再生成 → 同ラベル最寄りへ
+        kbMark(el0);
+      };
+      setTimeout(restore,0); setTimeout(restore,180);   // 非同期再描画にも追随
+      return;
+    }
+  }
+  if(mod && (k==='z'||k==='Z')){ e.preventDefault(); (e.shiftKey?redo:undo)(); return; }
+  if(mod && (k==='y'||k==='Y')){ e.preventDefault(); redo(); return; }
+  if(mod && (k==='c'||k==='C')){ e.preventDefault(); if(S.cellClip&&S.cellClip.mode==='copy') cancelCellClip(); else grabCells('copy'); return; }   // ボタンと同じトグル挙動
+  if(mod && (k==='x'||k==='X')){ e.preventDefault(); if(S.cellClip&&S.cellClip.mode==='cut') cancelCellClip(); else grabCells('cut'); return; }
+  if(mod && (k==='v'||k==='V')){ e.preventDefault(); doPaste(); return; }
+  if(mod||e.altKey) return;
+  if(k==='1') setMode('info');
+  else if(k==='2') setMode('place');
+  else if(k==='3') setMode('break');
+  else if(k==='v'||k==='V') setView(S.view==='space'?'plan':'space');
+  else if(k==='w'||k==='W'){ e.preventDefault(); moveSel(0,0,1); }
+  else if(k==='s'||k==='S'){ e.preventDefault(); moveSel(0,0,-1); }
+  else if(k==='a'||k==='A'){ e.preventDefault(); moveSel(1,0,0); }
+  else if(k==='d'||k==='D'){ e.preventDefault(); moveSel(-1,0,0); }
+  else if(k===' '){ e.preventDefault(); moveSel(0,1,0); }
+  else if(k==='Shift'){ moveSel(0,-1,0); }
+  else if(k==='r'||k==='R'){ if(S.cellClip) rotateClip(); }
+  else if(k==='f'||k==='F') fillSel();
+  else if(k==='Delete'||k==='Backspace'){ e.preventDefault(); if(S.sel) clearSel(); }
+  else if(k==='p'||k==='P'){ if(S.view==='plan'){ const o=['WD','WH','DH']; setPlane(o[(o.indexOf(S.plane)+1)%3]); } }
+  else if(k==='PageUp'||k==='PageDown'){ e.preventDefault(); const d=(k==='PageUp')?1:-1;
+    if(S.view==='plan') setPlanLayer(curLayer()+d); else setLayer(S.layer+d); }
+  else if(k.startsWith('Arrow')){ e.preventDefault();
+    navFocus(k==='ArrowLeft'?{x:-1,y:0}:k==='ArrowRight'?{x:1,y:0}:k==='ArrowUp'?{x:0,y:-1}:{x:0,y:1}); }
+  else if(k==='Escape') escAction();
+});
+/* 矢印キーのボタン空間ナビ（v5.00: 選択カーソルはフォーカスでなく kbCur で自前管理＝押下後の再生成でも迷子にならない。
+   行判定は過半重なり＝背の高いボタンが隣の行に混ざらない。←→=行内のみ・↑↓=列優先→無ければ最寄り） */
+let kbCur=null, kbPrevRef=null;   // kbPrevRef=モーダル外で最後に選択していたボタンの記憶（閉時の復帰先）
+const kbOpenModal=()=>MODAL_IDS.map(id=>document.getElementById(id)).find(m=>m&&m.classList.contains('on'))||null;
+const kbInModal=(el)=>{ const m=kbOpenModal(); return !!(m&&el&&m.contains(el)); };
+function kbLive(root){ return (kbCur && kbCur.isConnected && kbCur.offsetParent && !kbCur.disabled && root.contains(kbCur)) ? kbCur : null; }
+function kbMark(t){ kbCur=t; document.querySelectorAll('.kbfocus').forEach(x=>x.classList.remove('kbfocus'));
+  t.classList.add('kbfocus'); t.focus(); t.scrollIntoView({block:'nearest'});
+  if(!kbInModal(t)){ const r=t.getBoundingClientRect(); kbPrevRef={txt:t.textContent, cx:r.left+r.width/2, cy:r.top+r.height/2}; } }
+function kbResolveRef(ref){ if(!ref) return null; let best=null,bd=1e9;
+  for(const b of document.querySelectorAll('button')){ if(!b.offsetParent||b.disabled) continue;
+    const rr=b.getBoundingClientRect();
+    const d=Math.hypot(rr.left+rr.width/2-ref.cx, rr.top+rr.height/2-ref.cy)+(b.textContent===ref.txt?0:300);
+    if(d<bd){ bd=d; best=b; } }
+  if(best) kbMark(best); return best; }
+function navFocus(dir){
+  let root=document;
+  for(const id of MODAL_IDS){ const m=document.getElementById(id); if(m&&m.classList.contains('on')){ root=m; break; } }
+  const btns=[...root.querySelectorAll('button')].filter(b=>b.offsetParent&&!b.disabled);
+  if(!btns.length) return;
+  const ae=document.activeElement;
+  const cur=kbLive(root) || ((ae&&ae.tagName==='BUTTON'&&ae.offsetParent&&root.contains(ae))?ae:null);
+  if(!cur){ kbMark(btns[0]); return; }
+  const c=cur.getBoundingClientRect(), cx=c.left+c.width/2, cy=c.top+c.height/2;
+  const cand=[];
+  for(const b of btns){ if(b===cur) continue; const r=b.getBoundingClientRect();
+    const dx=(r.left+r.width/2)-cx, dy=(r.top+r.height/2)-cy;
+    const fwd=dir.x?dx*dir.x:dy*dir.y;
+    if(fwd<=1) continue;
+    const lat=dir.x?Math.abs(dy):Math.abs(dx);
+    const ovl=dir.x ? Math.min(c.bottom,r.bottom)-Math.max(c.top,r.top)     // 横移動＝縦の重なり
+                    : Math.min(c.right,r.right)-Math.max(c.left,r.left);    // 縦移動＝横の重なり
+    const need=dir.x ? Math.min(c.height,r.height)*0.55                     // 過半重なりで「同じ行」
+                     : Math.min(c.width,r.width)*0.35;
+    cand.push({b,fwd,lat,inLine:ovl>=need}); }
+  if(!cand.length){ kbMark(cur); return; }
+  const line=cand.filter(x=>x.inLine);
+  if(dir.x){ if(!line.length){ kbMark(cur); return; }                       // ←→は行内のみ（行替えは↑↓）
+    line.sort((a,b2)=>(a.fwd-b2.fwd)||(a.lat-b2.lat)); kbMark(line[0].b); return; }
+  const pool=line.length?line:cand;                                         // ↑↓は列優先→無ければ最寄り（斜め許容）
+  pool.sort(line.length ? (a,b2)=>(a.fwd-b2.fwd)||(a.lat-b2.lat)
+                        : (a,b2)=>(a.fwd+a.lat*3)-(b2.fwd+b2.lat*3));
+  kbMark(pool[0].b);
+}
+addEventListener('pointerdown',()=>{ kbCur=null; document.querySelectorAll('.kbfocus').forEach(x=>x.classList.remove('kbfocus')); },true);
+function setMode(m){ S.mode=m;   // 立体・平面 共通のモード（置く/壊す/情報）
+  ['place','break','info'].forEach(n=>{ const a=$('#b-'+n), b=$('#pm-'+n);
+    if(a) a.setAttribute('aria-pressed', n===m); if(b) b.setAttribute('aria-pressed', n===m); });
+  const hm=$('#hud-mode'); if(hm) hm.textContent = m==='break'?'壊す':(m==='info'?'情報モード':'置く');
+  document.querySelectorAll('.cellclip-bar').forEach(b=>b.classList.toggle('hidden', m!=='info'));   // 選択モードのみコピー/切取/貼付
+  if(m!=='info'){ $('#inspect').classList.remove('on'); const pi=$('#pinspect'); if(pi) pi.classList.remove('on');
+    const had=S.inspect||S.sel||S.cellClip; S.inspect=null; S.sel=null; S.cellClip=null; updateCellClipUI();
+    if(had){ syncVox(); if(S.view==='plan') renderGrid(); } }
+  updatePickBtns(); }
+$('#pm-place').onclick=()=>setMode('place');
+$('#pm-break').onclick=()=>setMode('break');
+$('#pm-info').onclick=()=>setMode('info');
+
+// 反映（スポイト）：選択中ブロックの form/プロパティ/slot をボタン群の状態へ載せる
+function updatePickBtns(){ const info = S.mode==='info', ok = info && S.inspect && S.vox.has(S.inspect);
+  ['#b-pick','#pm-pick'].forEach(id=>{ const b=$(id); if(!b) return; b.disabled=!ok;
+    const w=b.closest('.vpick'); if(w) w.style.display = info ? '' : 'none'; }); }   // スポイトは選択モードのみ表示
+function pickFrom(v){ const n=norm(v);
+  if(n.s==='raw'){ S.shape='raw'; S.raw=n.raw; S.props={...S.props, ...n.props}; save(); renderShapeBar(); return; }   // raw を反映
+  const form=formOf(n); if(!form) return;
+  const shape=SHAPES.find(s=>SHAPE_FORM[s]===form);
+  if(shape){ S.shape=shape; } else { S.shape='others'; S.other=form; }   // 形バー or others
+  S.props={...S.props, ...n.props};                                      // プロパティ
+  S.role=n.r;                                                            // slot（役割）
+  const num=parseInt(String(n.r).split('_').pop(),10)||1;
+  if(num>roleCountFor(form)) S.roleCount[form]=Math.min(MAX_ROLES,num);  // slot が既定数を超えるなら拡張して表示
+  save(); renderShapeBar(); }                                           // renderShapeBar が renderRoles も呼ぶ
+function flashPick(){ ['#b-pick','#pm-pick'].forEach(id=>{ const b=$(id); if(!b) return;
+  b.classList.remove('picked'); void b.offsetWidth; b.classList.add('picked'); }); }   // 反映成功のポップ発光（再クリックで再生）
+function pickSelected(){ if(!(S.mode==='info' && S.inspect)) return;
+  const v=S.vox.get(S.inspect); if(!v){ status('ブロックが選択されていません'); return; }
+  pickFrom(v); flashPick(); status('選択ブロックの設定を反映しました'); }
+$('#b-pick').onclick=pickSelected; $('#pm-pick').onclick=pickSelected;
+function infoPartsOf(v){   // 選択情報の行配列（raw は block/和名、他は form/slot）
+  const n=norm(v);
+  if(n.s==='raw'){ const parts=['block='+n.raw]; const ja=NAMES_JA[n.raw]; if(ja) parts.push(ja);
+    for(const {name} of shownPropsRaw(n.raw)) if(n.props[name]!=null) parts.push(dispProp(name)+'='+n.props[name]); return parts; }
+  const form=formOf(n), pm=(S.pal&&S.pal.map&&S.pal.map[n.r])||'';
+  const pb=pm ? (DICT_ENTRIES.find(e=>e.form===form&&e.mat===pm)||{}).block : '';   // palette の mat → dict でブロック名へ解決
+  const parts=['form='+form, 'slot='+n.r+'（'+(pb||'未割当')+'）'];
+  for(const {name} of shownProps(form)) if(n.props[name]!=null) parts.push(dispProp(name)+'='+n.props[name]); return parts; }
+const dhwLine=(key)=>{ const a=String(key).split(',').map(Number); return '(d,h,w)=('+a[2]+','+a[1]+','+((S.dims.x-1)-a[0])+')'; };   // 構造原点基準の RelPos（JSON 出力の値と同一）
+function showInfo(v,key){   // タップしたブロックの情報を右下に表示
+  $('#inspect').innerHTML=(key?dhwLine(key)+'<br>':'')+infoPartsOf(v).join('<br>'); $('#inspect').classList.add('on'); }
+
+$('#pl-undo').onclick=undo; $('#pl-redo').onclick=redo;   // 盤内の 元に戻す/進む
+
+function renderShapeBar(){   // 形（行1・full/slab/stairs/trapdoor/その他）／ 方向系（行2・種類に適したもののみ）
+  const isOther = (S.shape==='others');
+  const form    = formOf({s:S.shape, ot:S.other});
+  [['form-space','dir-space'],['form-plan','dir-plan']].forEach(([fid,did])=>{
+    const fel=$('#'+fid), del=$('#'+did); if(!fel||!del) return;
+    fel.innerHTML=''; del.innerHTML='';
+    const mkform=(label,pressed,onclick)=>{ const b=document.createElement('button'); b.className='btn'; b.innerHTML=label;
+      b.setAttribute('aria-pressed', pressed); b.onclick=onclick; fel.appendChild(b); };
+    SHAPES.forEach(s=>mkform(SHAPE_FORM[s], S.shape===s, ()=>{ S.shape=s; save(); renderShapeBar(); }));  // 聖典 form（大文字）で表示
+    mkform(isOther?('others<br><small>'+S.other+'</small>'):'others', isOther,
+      ()=>{ S.shape='others'; openModal(); save(); renderShapeBar(); });   // クリックでモーダル→種類選択
+    mkform(S.shape==='raw'?('FIXED<br><small>'+(NAMES_JA[S.raw]||S.raw)+'</small>'):'FIXED', S.shape==='raw',
+      ()=>{ openRawPicker(); });   // 具体ブロック直指定（固定）
+    const mk=(label,onclick)=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=label; b.onclick=onclick; del.appendChild(b); };
+    for(const {name,values} of curShownProps()){          // 汎用: form_dict/raw の値を巡回する1ループ
+      if(!values.includes(S.props[name])) S.props[name]=values[0];
+      mk(dispProp(name)+':'+S.props[name], ()=>{
+        if(values.length>PROP_PICK_TH){ openPropPicker(name, values); return; }   // 多値(>6)＝ピッカー（数値=スライダー/他=リスト）
+        const i=values.indexOf(S.props[name]), next=values[(i+1)%values.length];
+        if(form==='VINE' && VINE_FACES.includes(name) && next==='false'   // つたは最低1面必要＝最後の1面はオフ不可
+           && !VINE_FACES.some(f=>f!==name && S.props[f]==='true')){ status('つたは最低1面必要です'); return; }
+        S.props[name]=next; save(); renderShapeBar(); });
+    }
+  });
+  renderRoles();   // 材質なし種類では役割バーを隠す
+  if(S.hlForm){ syncVox(); if(S.view==='plan') renderGrid(); }   // 強調中は form 切替で対象を更新
+}
+/* 多値プロパティのピッカー（v4.82）: values.length>PROP_PICK_TH で巡回の代わりに開く。
+   値が全て整数(=IntegerProperty)ならスライダー＋ステッパー、そうでなければ値リスト。判定は values 参照のみ（block_class_all 由来・単一ソース） */
+const PROP_PICK_TH = 6;
+function openPropPicker(name, values){
+  const t=$('#propmodal-title'), body=$('#propmodal-body'); if(!t||!body) return;
+  t.textContent = dispProp(name);
+  body.innerHTML = '';
+  const numeric = values.every(v=>/^\d+$/.test(v));
+  if(numeric){
+    const nums = values.map(Number), min = Math.min(...nums), max = Math.max(...nums);
+    const pv=document.createElement('div'); pv.className='pv';
+    const mkBtn=(label,d)=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=label;
+      b.onclick=()=>{ const v=Math.min(max, Math.max(min, (+S.props[name]||0)+d)); S.props[name]=String(v); rng.value=v; val.textContent=v; save(); }; return b; };
+    const val=document.createElement('span'); val.className='val'; val.textContent=S.props[name];
+    const rng=document.createElement('input'); rng.type='range'; rng.min=min; rng.max=max; rng.step=1; rng.value=+S.props[name]||min;
+    rng.oninput=()=>{ S.props[name]=String(rng.value); val.textContent=rng.value; save(); };
+    pv.append(mkBtn('−',-1), val, mkBtn('＋',+1));
+    body.append(pv, rng);
+  } else {
+    const g=document.createElement('div'); g.className='grid';
+    values.forEach(v=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=v;
+      b.setAttribute('aria-pressed', S.props[name]===v);
+      b.onclick=()=>{ S.props[name]=v; save(); closePropPicker(); }; g.appendChild(b); });
+    body.append(g);
+  }
+  $('#propmodal').classList.add('on');
+}
+function closePropPicker(){ $('#propmodal').classList.remove('on'); renderShapeBar(); }
+function openModal(){ const g=$('#modal-grid'); if(!g) return; g.innerHTML='';
+  FORM_LIST.filter(f=>!PRIMARY_SHAPES.includes(f)).forEach(f=>{ const b=document.createElement('button'); b.className='btn'; b.textContent=f;
+    b.setAttribute('aria-pressed', S.shape==='others'&&S.other===f);
+    b.onclick=()=>{ S.other=f; S.shape='others'; closeModal(); save(); renderShapeBar(); }; g.appendChild(b); });
+  $('#modal').classList.add('on');
+}
+function closeModal(){ $('#modal').classList.remove('on'); }
+const defaultRoleCount = (form)=> PRIMARY_SHAPES.includes(form)?2:1;   // 既定 others=1 / 主要形=2
+function roleCountFor(form){ return S.roleCount[form] || defaultRoleCount(form); }
+function usedRoleMax(form){ let mx=0; S.vox.forEach(v=>{ const r=norm(v).r; if(roleForm(r)===form){ const num=parseInt(String(r).split('_').pop(),10)||0; if(num>mx) mx=num; } }); return mx; }  // その form で使用中の最大役割番号
+function cleanupRoles(form){ S.roleCount[form] = Math.max(defaultRoleCount(form), usedRoleMax(form)); }  // 未使用（末尾）を整理・既定数は下回らない
+function editAlias(slot){   // スロット別名の登録/編集（ダブルクリック）
+  const a=prompt('スロット別名（'+slot+'）', S.aliases[slot]||'');
+  if(a===null) return;   // キャンセル
+  const t=a.trim(); if(t) S.aliases[slot]=t; else delete S.aliases[slot];
+  save(); renderRoles(); renderPalList();
+}
+function addAlias(el, slot){   // 要素の下に別名を小さく表示（あれば）
+  const al=S.aliases[slot]; if(!al) return;
+  el.appendChild(document.createElement('br'));
+  const sm=document.createElement('small'); sm.className='alias'; sm.textContent=al; el.appendChild(sm);
+}
+function renderRoles(){   // 役割バー：現在 form の役割 FORM_1.. のみ表示。＋で MAX_ROLES(16) まで。form/番号から動的生成
+  if(S.shape==='raw'){ ['roles-space','roles-plan'].forEach(id=>{ const el=$('#'+id); if(el){ el.innerHTML=''; el.style.display='none'; } }); return; }  // raw はスロット無し
+  const form = formOf({s:S.shape, ot:S.other});
+  if(roleForm(S.role)!==form) S.role = form+'_1';                 // form 切替時は既定役割へ
+  const n = Math.min(MAX_ROLES, roleCountFor(form));
+  ['roles-space','roles-plan'].forEach(id=>{ const el=$('#'+id); if(!el) return; el.innerHTML=''; el.style.display='';
+    for(let i=1;i<=n;i++){ const role=form+'_'+i, on=S.role===role;
+      const b=document.createElement('button'); b.className='btn'; b.textContent=role; addAlias(b, role);   // 別名を下に小さく
+      b.style.borderColor=roleHex(role); b.style.background=on?roleHex(role):''; b.style.color=on?'#10171A':'';
+      b.setAttribute('aria-pressed',on);
+      b.onclick=()=>{ S.role=role; save(); renderRoles(); if(S.hlForm){ syncVox(); if(S.view==='plan') renderGrid(); } };
+      b.ondblclick=()=>editAlias(role);   // ダブルクリックで別名登録
+      el.appendChild(b);
+    }
+    if(n<MAX_ROLES){ const p=document.createElement('button'); p.className='btn'; p.textContent='＋'; p.title='スロットを追加';
+      p.onclick=()=>{ S.roleCount[form]=Math.min(MAX_ROLES, roleCountFor(form)+1); save(); renderRoles(); };
+      el.appendChild(p);
+    }
+    { const c=document.createElement('button'); c.className='btn'; c.textContent='↻'; c.title='未使用のスロットを整理（既定数まで）';
+      c.onclick=()=>{ cleanupRoles(form); save(); renderRoles(); }; el.appendChild(c); }
+  });
+}
+
+$('#pt-WD').onclick=()=>setPlane('WD');
+$('#pt-WH').onclick=()=>setPlane('WH');
+$('#pt-DH').onclick=()=>setPlane('DH');
+$('#p-up').onclick=()=>setPlanLayer(curLayer()+1);
+$('#p-down').onclick=()=>setPlanLayer(curLayer()-1);
+$('#p-zi').onclick=()=>{ S.manualZoom=true; S.cell=clamp(S.cell+4,6,44); renderGrid(); };
+$('#p-zo').onclick=()=>{ S.manualZoom=true; S.cell=clamp(S.cell-4,6,44); renderGrid(); };
+/* ---- 2D 層操作（Excel 的：コピー/切取/貼付/挿入/追加/削除。現平面の層軸に沿って） ---- */
+function applyDims(nd){ setDims(nd); $('#dz').value=nd.z; $('#dy').value=nd.y; $('#dx').value=nd.x; }
+function layerClear(L){ const P=PLANES[S.plane], dh=S.dims[P.h], dv=S.dims[P.v];
+  for(let h=0;h<dh;h++) for(let v=0;v<dv;v++) S.vox.delete(planeKeyAt(h,v,L)); }
+function grabLayer(){ const P=PLANES[S.plane], dh=S.dims[P.h], dv=S.dims[P.v], L=curLayer(), a=[];
+  for(let h=0;h<dh;h++) for(let v=0;v<dv;v++){ const val=S.vox.get(planeKeyAt(h,v,L)); if(val) a.push({h,v,val}); } return a; }
+function fillLayer(L,cells){ const P=PLANES[S.plane], dh=S.dims[P.h], dv=S.dims[P.v];
+  for(const c of cells) if(c.h<dh&&c.v<dv) S.vox.set(planeKeyAt(c.h,c.v,L),c.val); }
+function _shift(from,delta){ const idx=AXI[PLANES[S.plane].l], next=new Map();
+  S.vox.forEach((val,k)=>{ const b=k.split(',').map(Number); if(b[idx]>=from) b[idx]+=delta; next.set(b.join(','),val); }); S.vox=next; }
+function _remove(L){ const idx=AXI[PLANES[S.plane].l], next=new Map();
+  S.vox.forEach((val,k)=>{ const b=k.split(',').map(Number); if(b[idx]===L) return; if(b[idx]>L) b[idx]-=1; next.set(b.join(','),val); }); S.vox=next; }
+function _bump(d){ const P=PLANES[S.plane]; S.dims={...S.dims,[P.l]:clamp(S.dims[P.l]+d,1,64)}; }
+function clipActive(){ return !!(S.clipMode && S.clip); }
+function updateClipUI(){ $('#p-lcopy').setAttribute('aria-pressed',S.clipMode==='copy'); $('#p-lcut').setAttribute('aria-pressed',S.clipMode==='cut');
+  renderSpine(); if(S.view==='plan') renderGrid(); }
+function clearClip(){ S.clip=null; S.clipMode=null; S.clipPlane=null; updateClipUI(); }
+$('#p-lcopy').onclick=()=>{ S.clip=grabLayer(); S.clipMode='copy'; S.clipPlane=S.plane; S.clipLayer=curLayer(); updateClipUI(); status('層をコピー（'+S.clip.length+'）'); };
+$('#p-lcut').onclick =()=>{ S.clip=grabLayer(); S.clipMode='cut';  S.clipPlane=S.plane; S.clipLayer=curLayer(); updateClipUI(); status('層を切り取り（貼付/挿入で確定）'); };
+$('#p-lpaste').onclick=()=>{ if(!clipActive()){ status('クリップボードが空です'); return; }
+  if(S.clipPlane!==S.plane){ status('別の面のクリップボードです'); return; } pushHist();
+  const cut=S.clipMode==='cut', src=S.clipLayer, L=curLayer();
+  layerClear(L); fillLayer(L,S.clip);
+  if(cut && src!==L){ _remove(src); _bump(-1); applyDims(S.dims); setPlanLayer(src<L?L-1:L); }   // 切取元の層を削除＋カレント補正
+  else { applyDims(S.dims); }
+  clearClip(); status('層を貼り付け'+(cut?'（切取元を削除）':'')); };
+$('#p-lins').onclick=()=>{ const P=PLANES[S.plane]; if(S.dims[P.l]>=64){ status('これ以上増やせません'); return; }
+  const useClip=clipActive()&&S.clipPlane===S.plane, cut=useClip&&S.clipMode==='cut', src=S.clipLayer, L=curLayer(); pushHist();
+  _shift(L,1); _bump(1); if(useClip) fillLayer(L,S.clip);
+  if(cut){ const s=src>=L?src+1:src; _remove(s); _bump(-1); }
+  applyDims(S.dims); if(useClip) clearClip();
+  status('層を挿入'+(cut?'（切取元を削除）':useClip?'（クリップボード）':'（空）')); };
+$('#p-ladd').onclick=()=>{ const P=PLANES[S.plane]; if(S.dims[P.l]>=64){ status('これ以上増やせません'); return; } pushHist();
+  _bump(1); applyDims(S.dims); setPlanLayer(S.dims[P.l]-1); status('層を追加（最上段に空層）'); };   // 常に最上段へ append（選択位置に依らない）
+$('#p-ldel').onclick=()=>{ const P=PLANES[S.plane]; if(S.dims[P.l]<=1){ status('これ以上減らせません'); return; } pushHist();
+  const L=curLayer(); _remove(L); _bump(-1); applyDims(S.dims); setPlanLayer(Math.min(L,S.dims[P.l]-1)); status('層を削除'); };
+
+/* ---- 選択モードのセル範囲クリップボード（コピー/切取/貼付） ---- */
+function redrawSel(){ if(S.view==='plan') renderGrid(); else syncVox(); }   // 選択/クリップの再描画（2D/3D）
+function updateCellClipUI(){ const m=S.cellClip&&S.cellClip.mode;   // コピー/切取ボタンをキャンセルに変える・貼付ボタンの準備完了（両ビュー）
+  document.querySelectorAll('.c-copy').forEach(b=>{ b.setAttribute('aria-pressed', m==='copy'); b.textContent = m==='copy'?'キャンセル':'コピー'; });
+  document.querySelectorAll('.c-cut').forEach(b=>{ b.setAttribute('aria-pressed', m==='cut'); b.textContent = m==='cut'?'キャンセル':'切り取り'; });
+  document.querySelectorAll('.c-paste').forEach(b=>b.setAttribute('aria-pressed', !!S.cellClip));
+  document.querySelectorAll('.c-rot').forEach(b=>b.disabled = !S.cellClip); }
+function cancelCellClip(){ if(!S.cellClip) return; S.cellClip=null; updateCellClipUI(); redrawSel(); status('コピー/切り取りをキャンセル'); }
+function grabCells(mode){ if(!S.sel){ status('セルを選択してください'); return; }
+  const pl=S.sel.plane, layer=S.sel.layer, a=S.sel.a, b=S.sel.b;
+  const r={x0:Math.min(a.h,b.h),x1:Math.max(a.h,b.h),z0:Math.min(a.v,b.v),z1:Math.max(a.v,b.v)}, cells=[];
+  for(let h=r.x0;h<=r.x1;h++) for(let v=r.z0;v<=r.z1;v++){ const val=S.vox.get(planeKeyP(pl,h,v,layer)); if(val) cells.push({dh:h-r.x0,dv:v-r.z0,val}); }
+  S.cellClip={mode, cells, w:r.x1-r.x0+1, h:r.z1-r.z0+1, rect:r, srcLayer:layer, srcPlane:pl};
+  updateCellClipUI(); redrawSel(); status((mode==='cut'?'切り取り':'コピー')+'（'+cells.length+'）→ ドラッグで配置位置・貼り付けで確定・ダブルタップで取消'); }
+function selRange(){ if(!S.sel) return null; const a=S.sel.a,b=S.sel.b;
+  return {pl:S.sel.plane, layer:S.sel.layer, x0:Math.min(a.h,b.h),x1:Math.max(a.h,b.h),z0:Math.min(a.v,b.v),z1:Math.max(a.v,b.v)}; }
+function fillSel(){ const r=selRange(); if(!r){ status('セルを選択してください'); return; } pushHist(); const v=cur();
+  for(let h=r.x0;h<=r.x1;h++) for(let z=r.z0;z<=r.z1;z++) S.vox.set(planeKeyP(r.pl,h,z,r.layer),v);   // 選択範囲へ現在ブロックを配置
+  changed(); redrawSel(); renderSpine(); status('選択範囲に配置'); }
+function clearSel(){ const r=selRange(); if(!r){ status('セルを選択してください'); return; } pushHist();
+  for(let h=r.x0;h<=r.x1;h++) for(let z=r.z0;z<=r.z1;z++) S.vox.delete(planeKeyP(r.pl,h,z,r.layer));   // 選択範囲を空に
+  changed(); redrawSel(); renderSpine(); status('選択範囲を消去'); }
+document.querySelectorAll('.c-fill').forEach(b=>b.onclick=fillSel);
+document.querySelectorAll('.c-clear').forEach(b=>b.onclick=clearSel);
+document.querySelectorAll('.c-copy').forEach(b=>b.onclick=()=>{ if(S.cellClip&&S.cellClip.mode==='copy') cancelCellClip(); else grabCells('copy'); });   // コピー状態ならキャンセル
+document.querySelectorAll('.c-cut').forEach(b=>b.onclick=()=>{ if(S.cellClip&&S.cellClip.mode==='cut') cancelCellClip(); else grabCells('cut'); });      // 切取状態ならキャンセル
+/* ---- クリップボードの90°回転（面の法線＝層軸まわり・時計回り）。位置と向き(facing/axis)を同時に回す ---- */
+function rotVec90(vec, plane){ const P=PLANES[plane], ih=AXI[P.h], iv=AXI[P.v], il=AXI[P.l];   // 面内(h,v)→(v,-h)、層軸lは不変
+  const out=[0,0,0]; out[ih]=vec[iv]; out[iv]=-vec[ih]; out[il]=vec[il]; return out; }
+function rotFacingIdx(fi, plane){ const nd=rotVec90(FDIR[fi%6], plane);
+  for(let i=0;i<6;i++){ const e=FDIR[i]; if(e[0]===nd[0]&&e[1]===nd[1]&&e[2]===nd[2]) return i; } return fi; }
+function rotAxisTok(ax, plane){ const nA=rotVec90(AXV[ax]||AXV.VERTICAL, plane);   // 軸は無向：絶対値で照合
+  for(const k in AXV){ const e=AXV[k]; if(Math.abs(e[0])===Math.abs(nA[0])&&Math.abs(e[1])===Math.abs(nA[1])&&Math.abs(e[2])===Math.abs(nA[2])) return k; } return ax; }
+function rotVineFaces(props, plane){   // つたの付く面（north/south/east/west/up）を回転
+  const res={up:'false',north:'false',south:'false',east:'false',west:'false'};
+  for(const f in FACE_DIR){ if(props[f]!=='true') continue;
+    const nf=faceOfVec(rotVec90(FACE_DIR[f], plane)); if(nf) res[nf]='true'; }   // 縦回転で down になる面は消える（vine に down 無し）
+  return res; }
+/* ---- rel 種別（rot16/rail/orientation）の回転・ミラー。語彙・角度・妥当性は rel_defs.json（RD）から構築 ----
+   RD 未ロード時は変換をスキップ（値据え置き）。幾何（どの向きに回るか）はアプリのベクトル(FDIR)、語彙は rel_defs が単一ソース。 */
+let RD = null;   // {fac:{FRONT:0..}, facInv:{0:'FRONT'..}, rot16:{'0':0..}, rot16Inv:{0:'0'..}, rail:{tok:{set|ascend}}, ori:{tok:{front,top}}}
+function buildRelDefs(j){
+  try{
+    const rows={}; for(const r of (j.rels||[])) rows[r.rel]=r;
+    const fac={}, facInv={};
+    for(const [t,a] of Object.entries((rows.facing||{}).values||{})){ if(typeof a==='number'){ fac[t]=a; facInv[a]=t; } }
+    const rot16={}, rot16Inv={};
+    for(const [t,a] of Object.entries((rows.rot16||{}).values||{})){ rot16[t]=a; rot16Inv[a]=t; }
+    const rail={};
+    for(const [t,d] of Object.entries((rows.rail||{}).values||{})){
+      rail[t] = Array.isArray(d) ? {set:[...d].sort((x,y)=>x-y)} : {ascend:d.ascend}; }
+    const ori={};
+    for(const [t,d] of Object.entries((rows.orientation||{}).values||{})) ori[t]={front:d.front, top:d.top};
+    RD={fac, facInv, rot16, rot16Inv, rail, ori, faceApp:{}, faceRel:{}};
+    // アプリ内部の面名（north 等）⇔ 相対面キー（front 等）の対応を機械導出（FACE_DIR/FDIR のベクトル一致 → FAC トークン小文字 → rel_defs face で実在確認）
+    const FV = Object.assign({down:[0,-1,0]}, FACE_DIR);
+    const faceKeys = (rows.face||{}).keys || {};
+    for(const name in FV){ const v=FV[name];
+      for(let i=0;i<FDIR.length;i++){ const e=FDIR[i];
+        if(e[0]===v[0]&&e[1]===v[1]&&e[2]===v[2]){ const rk=FAC[i].toLowerCase();
+          if(rk in faceKeys){ RD.faceApp[name]=rk; RD.faceRel[rk]=name; } break; } } }
+  }catch(_){ RD=null; }
+}
+function rotWordTok(tok, plane){ return FAC[ rotFacingIdx(FAC_I[tok]||0, plane) ]; }   // FDIR 語をベクトル回転（全平面対応）
+function rotDelta(plane){ if(!RD) return null; const t=rotWordTok('FRONT',plane); return (t in RD.fac) ? RD.fac[t] : null; }   // 水平回転の角度差（縦回転は null）
+const railKey=(s)=>[...s].sort((x,y)=>x-y).join(',');
+function railTok(def){ if(!RD) return null;   // {set}|{ascend} → トークン（rel_defs から逆引き）
+  for(const t in RD.rail){ const d=RD.rail[t];
+    if(def.ascend!=null){ if(d.ascend===def.ascend) return t; }
+    else if(d.set && railKey(d.set)===railKey(def.set)) return t; }
+  return null; }
+function oriTok(front, top){ if(!RD) return null;
+  for(const t in RD.ori){ const d=RD.ori[t]; if(d.front===front && d.top===top) return t; } return null; }
+function wordAngle(w){ return (RD && typeof RD.fac[w]==='number') ? RD.fac[w] : (w==='UP'?'up':w==='DOWN'?'down':null); }   // FDIR語→角度 or 'up'/'down'
+function rotRel(kind, val, plane){
+  if(!RD) return val;
+  if(kind==='rot16'){ const d=rotDelta(plane); if(d==null) return val;                          // 縦回転は据え置き
+    const a=RD.rot16[String(val)]; return a==null ? val : (RD.rot16Inv[(a+d)%16] ?? val); }
+  if(kind==='rail'){ const def=RD.rail[val]; if(!def) return val; const d=rotDelta(plane); if(d==null) return val;
+    const nd = def.ascend!=null ? {ascend:(def.ascend+d)%16} : {set:def.set.map(a=>(a+d)%16)};
+    return railTok(nd) ?? val; }
+  if(kind==='orientation'){ const p=val.split('_'); if(p.length!==2) return val;
+    const f=wordAngle(rotWordTok(p[0],plane)), t=wordAngle(rotWordTok(p[1],plane));            // ベクトル回転→角度/up/down
+    return (f==null||t==null) ? val : (oriTok(f,t) ?? val); }                                  // 実在トークンのみ（妥当性も rel_defs）
+  return val; }
+function relKinds(n){ return n.s==='raw' ? relMapOf(blockProps(n.raw)) : (FORM_PROP_REL[formOf(n)] || {}); }   // name→rel（raw/form 共通）
+function rotVal(val, plane){ const n=norm(val), props={...n.props};   // 向き系プロパティを回転（half/hinge 等はそのまま＝水平回転で不変）
+  const fp = n.s==='raw' ? propsMapOf(blockProps(n.raw)) : (FORM_PROPS[formOf(n)] || {});   // その form/ブロックが実際に持つ向きだけ回す
+  if(fp.facing) props.facing = FAC[ rotFacingIdx(FAC_I[props.facing]||0, plane) ];
+  if(fp.axis)   props.axis   = rotAxisTok(props.axis, plane);
+  if(fp.north){ const nf=rotVineFaces(props, plane); if(vineAny(nf)) Object.assign(props, nf); }   // つた面（0面になる回転は据え置き）
+  const rk=relKinds(n);                                                                            // rot16/rail/orientation（rel タグで機械適用）
+  for(const name in rk){ const k=rk[name];
+    if((k==='rot16'||k==='rail'||k==='orientation') && props[name]!=null) props[name]=rotRel(k, String(props[name]), plane); }
+  return n.s==='raw' ? {s:'raw', raw:n.raw, props} : {r:n.r, s:n.s, ot:n.ot, props}; }
+function rotateClip(){ const cc=S.cellClip; if(!cc){ status('コピー / 切り取り中に回転できます'); return; }
+  const w=cc.w;
+  cc.cells = cc.cells.map(c=>({ dh:c.dv, dv:(w-1)-c.dh, val:rotVal(c.val, cc.srcPlane) }));   // CW：(dh,dv)→(dv, w-1-dh)
+  const t=cc.w; cc.w=cc.h; cc.h=t;
+  redrawSel(); status('90°回転（'+cc.w+'×'+cc.h+'）'); }
+document.querySelectorAll('.c-rot').forEach(b=>b.onclick=rotateClip);
+const doPaste=()=>{ const cc=S.cellClip;
+  if(!cc){ status('クリップボードが空です'); return; }
+  if(!S.sel){ status('貼り付け先を選択してください'); return; }
+  if(cc.srcPlane!==S.sel.plane){ status('別の面のクリップボードです'); return; }
+  pushHist(); const pl=S.sel.plane, layer=S.sel.layer, a=S.sel.a, P=PLANES[pl], dh=S.dims[P.h], dv=S.dims[P.v];
+  if(cc.mode==='cut') for(let h=cc.rect.x0;h<=cc.rect.x1;h++) for(let v=cc.rect.z0;v<=cc.rect.z1;v++) S.vox.delete(planeKeyP(pl,h,v,cc.srcLayer));  // 切取元を消去
+  for(let i=0;i<cc.w;i++) for(let j=0;j<cc.h;j++){ const h=a.h+i,v=a.v+j; if(h<dh&&v<dv) S.vox.delete(planeKeyP(pl,h,v,layer)); }  // 貼付先を一旦クリア
+  for(const c of cc.cells){ const h=a.h+c.dh,v=a.v+c.dv; if(h<dh&&v<dv) S.vox.set(planeKeyP(pl,h,v,layer),c.val); }
+  S.cellClip=null; updateCellClipUI(); changed(); redrawSel(); renderSpine(); status('貼り付けました'); };
+document.querySelectorAll('.c-paste').forEach(b=>b.onclick=doPaste);
+
+$('#j-layers').onclick=()=>{ S.jsonMode='layers';
+  $('#j-layers').setAttribute('aria-selected',true); $('#j-voxels').setAttribute('aria-selected',false); renderJson(); };
+$('#j-voxels').onclick=()=>{ S.jsonMode='blocks';
+  $('#j-layers').setAttribute('aria-selected',false); $('#j-voxels').setAttribute('aria-selected',true); renderJson(); };
+$('#j-apply').onclick=()=>{ if(S.jsonMode==='layers') return; importJson($('#json').value); };   // レコード(blocks)のみ反映可。層グリッド(layers)は表示専用
+$('#j-copy').onclick=async()=>{
+  try{ await navigator.clipboard.writeText(buildJson()); status('JSONをコピーしました'); }
+  catch(e){ $('#json').select(); status('テキストを選択しました。長押しでコピーしてください'); }
+};
+/* ---------- 保存先（File System Access API・IndexedDB でフォルダを記憶） ---------- */
+const FS_OK = !!(window.showDirectoryPicker);
+function idb(mode, fn){
+  return new Promise((res,rej)=>{
+    const r=indexedDB.open('bp',1);
+    r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv'); };
+    r.onsuccess=()=>{ const tx=r.result.transaction('kv',mode); const out=fn(tx.objectStore('kv'));
+      tx.oncomplete=()=>res(out&&out.result); tx.onerror=()=>rej(tx.error); };
+    r.onerror=()=>rej(r.error);
+  });
+}
+const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k));
+const idbGet=(k)=>idb('readonly',s=>s.get(k));
+async function ensurePerm(h){
+  const o={mode:'readwrite'};
+  if(await h.queryPermission(o)==='granted') return true;
+  return (await h.requestPermission(o))==='granted';
+}
+const DIR_KINDS=['place','palette','structure'];               // 保存先はこの3種を個別に持つ
+function updateDirLabels(){
+  const note=$('#fs-note'), rows=$('#fs-rows');   // 非対応端末はフォルダ選択UIを隠し、説明を1行に集約
+  if(note) note.style.display = FS_OK ? 'none' : '';
+  if(rows) rows.style.display = FS_OK ? '' : 'none';
+  if(!FS_OK) return;
+  for(const k of DIR_KINDS){ const el=$('#dirlabel-'+k); if(!el) continue; const h=S.dirs[k];
+    el.textContent = h ? (k+' → '+h.name+'/ に上書き保存') : (k+' → 未設定（ダウンロード）'); }
+}
+async function pickDir(kind){
+  if(!FS_OK){ status('この端末は保存先指定に非対応'); return; }
+  try{
+    const h=await window.showDirectoryPicker({mode:'readwrite',id:'bp-'+kind});
+    S.dirs[kind]=h; try{ await idbSet('dir_'+kind,h); }catch(e){}
+    updateDirLabels(); status(kind+' 保存先を設定: '+h.name);
+  }catch(e){ /* ユーザーがキャンセル */ }
+}
+$('#s-dir-place').onclick=()=>pickDir('place');
+$('#s-dir-palette').onclick=()=>pickDir('palette');
+$('#s-dir-structure').onclick=()=>pickDir('structure');
+$('#s-open').onclick=()=>{ updateDirLabels(); $('#smodal').classList.add('on'); };   // タイトル横 ⚙
+$('#smodal').onclick=e=>{ if(e.target.id==='smodal') $('#smodal').classList.remove('on'); };
+
+async function saveFile(text, fname, okMsg, kind){   // kind の保存先フォルダがあれば同名上書き、無ければダウンロード
+  const h=S.dirs[kind];
+  if(h){
+    try{
+      if(await ensurePerm(h)){
+        const fh=await h.getFileHandle(fname,{create:true});   // 同名は上書き
+        const w=await fh.createWritable(); await w.write(text); await w.close();
+        status((okMsg||'保存しました')+': '+h.name+'/'+fname); return;
+      }
+      status('保存先の権限がありません。ダウンロードします');
+    }catch(e){ status('保存先に書けませんでした。ダウンロードします'); }
+  }
+  const b=new Blob([text],{type:'application/json'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=fname; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000); status((okMsg||'保存しました')+'（ダウンロード）');
+}
+async function savePlace(){
+  const text=buildJson('blocks'), fname=($('#name').value||'blueprint')+'.json';   // 保存は常に blocks（形/mat/向きを保持）
+  await saveFile(text, fname, '保存しました', 'place');
+}
+$('#j-dl').onclick=savePlace;
+function importJson(text){
+  try{
+    const d=JSON.parse(text);
+    const set=new Map();
+    if(Array.isArray(d.blocks)){       // structure 準拠。mat=役割・form→shape を取り込む
+      // W ミラーを戻すための幅（size[2]=W。無ければ最大 w+1）。
+      const impW = (d.size && d.size[2]) ? d.size[2]
+        : d.blocks.reduce((m,b)=>Math.max(m,(b.pos?b.pos.w:0)+1),1);
+      d.blocks.forEach(b=>{ const p=b.pos; if(!p) return;
+        if(b.half==='upper') return;   // 複数ブロック上半分は下半分(app 1セル)に集約
+        if(b.block){                   // raw＝block=id 直指定（form/mat なし）
+          const raw=String(b.block).replace(/^minecraft:/,'');
+          const props={facing:'FRONT',half:'bottom',type:'bottom',axis:'VERTICAL',hinge:'left',open:'false',hanging:'false',face:'wall'};
+          for(const {name} of shownPropsRaw(raw)){
+            let val=b[name]; if(val==null && RD && RD.faceApp[name]!=null) val=b[RD.faceApp[name]];   // 相対面キー(front/…)も受理
+            if(val==null) continue;
+            props[name]=String(val); }   // 値は無変換（プレイヤーフレーム統一）
+          set.set(K(mirW(p.w,impW),p.h,p.d), {s:'raw', raw, props}); return;
+        }
+        const fm=(b.form||'').toUpperCase();
+        const SF={FULLBLOCK:'fullblock',SLAB:'slab',STAIRS:'stairs',TRAPDOOR:'trapdoor'};
+        const s = SF[fm] || 'others', ot = SF[fm] ? 'DOOR' : fm;
+        const props = {facing:'FRONT',half:'bottom',type:'bottom',axis:'VERTICAL',hinge:'left',open:'false',hanging:'false',face:'wall'};
+        for(const {name} of shownProps(fm)){   // 汎用: 出すプロパティを素直に読む（値は無変換）
+          let val=b[name]; if(val==null && RD && RD.faceApp[name]!=null) val=b[RD.faceApp[name]];   // 相対面キー(front/…)も受理
+          if(val==null) continue;
+          props[name]=String(val); }
+        set.set(K(mirW(p.w,impW),p.h,p.d), {r:b.slot||b.mat||(fm||'FULLBLOCK')+'_1', s, ot, props}); });   // slot 優先・旧 mat も後方互換
+    }
+    else if(Array.isArray(d.voxels))   // 旧形式（後方互換・ミラー前のアプリ内部座標）
+      d.voxels.forEach(p=>set.set(K(p[0],p[1],p[2]),{r:'wall_main',s:'fullblock',f:0,h:'bottom'}));
+    else if(d.layers)
+      Object.keys(d.layers).forEach(y=>d.layers[y].forEach((row,z)=>{
+        [...row].forEach((ch,x)=>{ if(ch!=='.') set.set(K(mirW(x,row.length),+y,z),{r:'wall_main',s:'fullblock',f:0,h:'bottom'}); }); }));
+    let nd = null;
+    if(d.size) nd = Array.isArray(d.voxels)     // 旧 voxels は [x,y,z]、新(blocks/layers)は [d,h,w]
+      ? {x:d.size[0], y:d.size[1], z:d.size[2]}
+      : {x:d.size[2], y:d.size[1], z:d.size[0]};
+    if(!nd){ let mx=1,my=1,mz=1;   // size 無し（MOD 直の structure 等）は最大座標から復元
+      set.forEach((role,k)=>{ const a=k.split(',').map(Number);
+        mx=Math.max(mx,a[0]+1); my=Math.max(my,a[1]+1); mz=Math.max(mz,a[2]+1); });
+      nd={x:mx,y:my,z:mz}; }
+    pushHist(); S.dims=nd; S.vox=set;
+    if(d.name) $('#name').value=d.name;
+    setDims(nd); status('読み込みました');
+  }catch(err){ status('このファイルは読み込めません'); }
+}
+// 保存/読み込みモーダル（タイトル右の 💾 / 📂）。place/palette 両タブ共通。
+$('#sv-open').onclick=()=>$('#savemodal').classList.add('on');
+$('#savemodal').onclick=e=>{ if(e.target.id==='savemodal') $('#savemodal').classList.remove('on'); };
+$('#ld-open').onclick=()=>$('#loadmodal').classList.add('on');
+$('#loadmodal').onclick=e=>{ if(e.target.id==='loadmodal') $('#loadmodal').classList.remove('on'); };
+
+addEventListener('resize',()=>{ if(S.view==='plan'&&!S.manualZoom) renderGrid(); });
+
+/* iOS Safari は user-scalable=no を無視するため、ページ全体のピンチ拡大を個別に止める */
+['gesturestart','gesturechange','gestureend'].forEach(ev=>
+  document.addEventListener(ev, e=>e.preventDefault(), {passive:false}));
+document.addEventListener('dblclick', e=>e.preventDefault(), {passive:false});
+
+/* ---------- 最上位モード place / palette ---------- */
+function setTop(mode){ S.top=mode;
+  $('#place-root').classList.toggle('hidden', mode!=='place');
+  $('#palette-root').classList.toggle('hidden', mode!=='palette');
+  $('#m-place').setAttribute('aria-pressed', mode==='place');
+  $('#m-palette').setAttribute('aria-pressed', mode==='palette');
+  if(mode==='palette'){ palSyncFromVox(); renderPalList(); }
+}
+$('#m-place').onclick=()=>setTop('place');
+$('#m-palette').onclick=()=>setTop('palette');
+
+/* ---------- palette モード：スロット→mat 対応表 ---------- */
+function formMats(form){ const set=new Set(); for(const e of DICT_ENTRIES){ if(e.form===form && e.mat) set.add(e.mat); } return [...set].sort(); }  // dict からその form の mat 一覧
+const matKey = (form, mat)=> mat ? (BLOCK_BY_FORMMAT[form+'|'+mat] || '') : '';   // form+mat -> block_id（画像/和名キー）
+const matJa  = (key)=> (key && NAMES_JA && NAMES_JA[key]) || '';                  // 和名（無ければ空）
+function matThumb(key){ const d=document.createElement('span'); d.className='matthumb';   // 参考画像（block id・無ければプレースホルダ）
+  if(key){ const img=new Image(); img.loading='lazy'; img.alt=''; img.src='assets/blocks/'+key+'.png';
+    img.onerror=()=>{ img.remove(); d.classList.add('noimg'); }; d.appendChild(img); }
+  else d.classList.add('noimg');
+  return d; }
+let matPickSlot=null, matPickForm=null;
+function matRow(mat){   // 1行：物理名・block・和名・イメージ
+  const slot=matPickSlot, form=matPickForm;
+  const r=document.createElement('button'); r.className='matrow'+((S.pal.map[slot]||'')===mat?' on':'');
+  const key=matKey(form, mat);
+  r.appendChild(matThumb(key));
+  const p=document.createElement('span'); p.className='matphys'; p.textContent=mat||'(未割当)'; if(mat) tipIfTrunc(p, mat); r.appendChild(p);  // 左: mat物理名
+  const col=document.createElement('span'); col.className='matbcol';                                    // 右: block物理名 + その下に和名
+  if(key){ const bl=document.createElement('span'); bl.className='matblock'; bl.textContent=key; tipIfTrunc(bl, key); col.appendChild(bl); }
+  const j=document.createElement('span'); j.className='matja'; j.textContent=matJa(key); col.appendChild(j);
+  r.appendChild(col);
+  const lm=(BLOCKS_ALL[key]&&BLOCKS_ALL[key].lightMax)||0;   // 光源なら 💡+レベル
+  if(lm>0){ const L=document.createElement('span'); L.className='matlight'; L.textContent='💡'+lm; r.appendChild(L); }
+  r.onclick=()=>{ S.pal.map[slot]=mat; closeMatPicker(); renderPalList(); };
+  return r;
+}
+/* ---------- 並び替えキー（blocks_all の suffix を利用。接尾辞順=suffix→prefix / 接頭辞順=prefix(末尾トークン優先)→suffix） ---------- */
+function blkSuffix(id){ const b=BLOCKS_ALL[id]; return (b&&b.suffix) || (id?('_'+id):''); }             // block の suffix（無ければ _id）
+function blkPrefix(id){ const s=blkSuffix(id); return (id && id.endsWith(s)) ? id.slice(0,-s.length) : ''; }  // 接頭辞（素材部分・単語ブロックは空）
+function prefixKey(pre){ return pre ? pre.split('_').reverse().join(' ') : ''; }                    // 末尾トークン優先で比較（oak 系をまとめる）
+let _fulltip=null;
+function hideTip(){ if(_fulltip) _fulltip.style.display='none'; }
+function showTip(anchorEl, text){   // 全文をツールチップ表示（iOSで効かない title の代替。タップで開く・他タップ/スクロールで閉じる）
+  if(!text) return;
+  if(!_fulltip){ _fulltip=document.createElement('div'); _fulltip.className='fulltip'; document.body.appendChild(_fulltip);
+    _fulltip.onclick=e=>{ e.stopPropagation(); hideTip(); }; }
+  _fulltip.textContent=text; _fulltip.style.display='block'; _fulltip.style.left='0px'; _fulltip.style.top='0px';
+  const r=anchorEl.getBoundingClientRect(), tw=_fulltip.offsetWidth, th=_fulltip.offsetHeight;
+  const left=Math.min(Math.max(6, r.left+r.width/2-tw/2), window.innerWidth-tw-6);
+  const top=(r.top-th-6>=6) ? (r.top-th-6) : (r.bottom+6);
+  _fulltip.style.left=left+'px'; _fulltip.style.top=top+'px'; }
+document.addEventListener('click', hideTip, true);
+document.addEventListener('scroll', hideTip, true);
+function tipIfTrunc(nameEl, full){ nameEl.title=full||'';   // 名前が切れている(…表示)行だけ、その名前タップで全文ツールチップ。切れてなければ行選択に委ねる
+  nameEl.onclick=e=>{ if(nameEl.scrollWidth > nameEl.clientWidth+1){ e.stopPropagation(); showTip(nameEl, full); } }; return nameEl; }
+function markTrunc(container){ if(!container) return;   // 描画後に実測し、切れている名前の末尾へ強調「…」(真鍮色)を付ける
+  requestAnimationFrame(()=>{
+    const els=[...container.querySelectorAll('.matphys')];
+    for(const el of els){ const nx=el.nextElementSibling; if(nx && nx.classList.contains('moretip')) nx.remove(); }  // 旧マーカー除去
+    const trunc=els.map(el=> el.scrollWidth > el.clientWidth+1);   // 読み取りをまとめる(reflow 1回)
+    els.forEach((el,i)=>{ el.classList.toggle('clip', trunc[i]);   // 書き込みをまとめる
+      if(trunc[i]){ const m=document.createElement('span'); m.className='moretip'; m.textContent='…';
+        m.onclick=e=>{ e.stopPropagation(); showTip(el, el.title); }; el.after(m); } });
+  }); }
+function cmpBlockSort(mode, a, b){   // suffix順 / prefix順。form(既定)は 0 を返し呼び側の tiebreak に任せる
+  if(mode==='suffix'){ const sa=blkSuffix(a), sb=blkSuffix(b); if(sa!==sb) return sa<sb?-1:1; const pa=blkPrefix(a), pb=blkPrefix(b); return pa<pb?-1:pa>pb?1:0; }
+  if(mode==='prefix'){ const pa=prefixKey(blkPrefix(a)), pb=prefixKey(blkPrefix(b)); if(pa!==pb) return pa<pb?-1:1; const sa=blkSuffix(a), sb=blkSuffix(b); return sa<sb?-1:sa>sb?1:0; }
+  return 0;
+}
+function renderMatList(){   // 検索/光源でフィルタ＋並び替え（既定=mat名 / prefix / suffix）。(未割当) は常に先頭
+  const list=$('#matmodal-list'); if(!list) return; list.innerHTML='';
+  const q=($('#mat-search').value||'').trim().toLowerCase(); const lf=($('#mat-light')&&$('#mat-light').value)||'all';
+  const sort=($('#mat-sort')&&$('#mat-sort').value)||'form'; const CAP=100000;
+  list.appendChild(matRow(''));
+  const mats=[];
+  for(const m of formMats(matPickForm)){
+    const key=matKey(matPickForm, m);
+    if(lf!=='all'){ const lm=(BLOCKS_ALL[key]&&BLOCKS_ALL[key].lightMax)||0; if(lf==='light' ? !(lm>0) : (lm>0)) continue; }   // 光源フィルタ（block の lightMax>0）
+    if(q && !(m.toLowerCase().includes(q) || key.includes(q) || (matJa(key)||'').toLowerCase().includes(q))) continue;
+    mats.push(m);
+  }
+  mats.sort((x,y)=> cmpBlockSort(sort, matKey(matPickForm,x), matKey(matPickForm,y)) || (x<y?-1:x>y?1:0));
+  const more = mats.length>CAP;
+  for(const m of mats.slice(0,CAP)) list.appendChild(matRow(m));
+  markTrunc(list);
+  if(more){ const e=document.createElement('div'); e.className='matja'; e.style.padding='8px'; e.textContent='上位'+CAP+' / '+mats.length+' 件（検索で絞り込み）'; list.appendChild(e); }
+}
+function openMatPicker(slot, form){   // mat 選択モーダル：検索＋物理名・和名・イメージ一覧。押下で選択
+  matPickSlot=slot; matPickForm=form;
+  $('#matmodal-title').textContent=slot+' の mat を選択';
+  $('#mat-search').value=''; if($('#mat-light'))$('#mat-light').value='all'; if($('#mat-sort'))$('#mat-sort').value='form'; setFilts('mat-filttog','mat-filts',false); renderMatList();
+  $('#matmodal').classList.add('on'); setTimeout(()=>{ try{$('#mat-search').focus();}catch(_){} markTrunc($('#matmodal-list')); },60);
+}
+$('#mat-search').oninput=renderMatList;
+if($('#mat-light')) $('#mat-light').onchange=renderMatList;
+if($('#mat-sort')) $('#mat-sort').onchange=renderMatList;
+function closeMatPicker(){ $('#matmodal').classList.remove('on'); }
+
+/* ---------- raw ブロック指定ピッカー（全 vanilla を物理名/和名で検索・form 別に絞り込み/ソート） ---------- */
+function fillRawForm(){   // form セレクトの選択肢：すべて / form登録あり / form登録なし / 各 form
+  const sel=$('#raw-form'); if(!sel) return; const keep=sel.value; sel.innerHTML='';
+  const add=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; sel.appendChild(o); };
+  add('all','form: すべて'); add('none','form: 登録なし'); add('form','form: 登録あり');   // なし→あり→form別
+  for(const f of FORM_LIST) add(f, 'form: '+f);   // 各 form
+  sel.value = [...sel.options].some(o=>o.value===keep) ? keep : 'all';
+}
+function openRawPicker(){ $('#raw-search').value=''; fillRawForm(); $('#raw-form').value='all'; if($('#raw-light'))$('#raw-light').value='all'; if($('#raw-sort'))$('#raw-sort').value='form'; setFilts('raw-filttog','raw-filts',false);
+  renderRawList(); $('#rawmodal').classList.add('on'); startRawPin(); setTimeout(()=>{ try{$('#raw-search').focus();}catch(_){} markTrunc($('#rawmodal-list')); },60); }
+function renderRawList(){ const list=$('#rawmodal-list'); if(!list) return; list.innerHTML='';
+  const q=($('#raw-search').value||'').trim().toLowerCase(); const sel=$('#raw-form').value||'all'; const lf=($('#raw-light')&&$('#raw-light').value)||'all'; const sort=($('#raw-sort')&&$('#raw-sort').value)||'form'; const CAP=100000;
+  const items=[];
+  for(const b of BLOCKS_ALL_ARR){
+    const d=DICT_BY_BLOCK[b.block], form=(d&&d.form)||'';
+    if(sel==='form' && !form) continue;
+    if(sel==='none' && form) continue;
+    if(sel!=='all' && sel!=='form' && sel!=='none' && form!==sel) continue;   // 特定 form
+    if(lf!=='all'){ const lm=b.lightMax||0; if(lf==='light' ? !(lm>0) : (lm>0)) continue; }   // 光源フィルタ（lightMax>0）
+    if(q && !(b.block.includes(q) || (b.ja||'').toLowerCase().includes(q))) continue;
+    items.push({b, form});
+  }
+  items.sort((x,y)=>{
+    if(sort!=='form') return cmpBlockSort(sort, x.b.block, y.b.block) || x.b.block.localeCompare(y.b.block);
+    const fi=x.form?FORM_LIST.indexOf(x.form):9999, fj=y.form?FORM_LIST.indexOf(y.form):9999;   // form 別ソート（form順→物理名）
+    return fi!==fj ? fi-fj : x.b.block.localeCompare(y.b.block); });
+  let lastForm=' ';
+  const grouped=(sort==='form'); for(const it of items.slice(0,CAP)){
+    if(grouped && it.form!==lastForm){ lastForm=it.form;   // form が変わったら見出し（タイトル）で仕切る
+      const h=document.createElement('div'); h.className='rawhdr'; h.textContent=it.form||'（form なし）'; list.appendChild(h); }
+    list.appendChild(rawRow(it.b));
+  }
+  markTrunc(list);
+  RAW_HDRS=[...list.querySelectorAll('.rawhdr')]; updateRawPin();
+  const note=document.createElement('div'); note.className='matja'; note.style.padding='8px';
+  note.textContent = items.length===0 ? '該当なし' : items.length>CAP ? ('上位'+CAP+' / '+items.length+' 件（検索で絞り込み）') : (items.length+' 件');
+  list.appendChild(note);
+}
+function rawRow(b){
+  const r=document.createElement('button'); r.className='matrow'+((S.shape==='raw'&&S.raw===b.block)?' on':'');
+  r.appendChild(matThumb(b.block));
+  const p=document.createElement('span'); p.className='matphys'; p.textContent=b.block; tipIfTrunc(p, b.block); r.appendChild(p);
+  const j=document.createElement('span'); j.className='matja'; j.textContent=b.ja||''; r.appendChild(j);   // 和名（form は見出しで表示）
+  if(b.lightMax>0){ const L=document.createElement('span'); L.className='matlight'; L.textContent='💡'+b.lightMax; r.appendChild(L); }   // 光源
+  r.onclick=()=>pickRaw(b.block);
+  return r;
+}
+function pickRaw(blockId){ S.shape='raw'; S.raw=blockId;
+  for(const {name,values} of shownPropsRaw(blockId)) if(!values.includes(S.props[name])) S.props[name]=values[0];  // 既定プロパティ
+  $('#rawmodal').classList.remove('on'); save(); renderShapeBar(); status('ブロック指定: '+(NAMES_JA[blockId]||blockId));
+}
+$('#rawmodal').onclick=e=>{ if(e.target.id==='rawmodal') $('#rawmodal').classList.remove('on'); };
+let RAW_HDRS=[];   // form 見出し（ピン用）。ピンは iOS の sticky 追従遅れを覆うオーバーレイ（PC では sticky と同一表示が重なるだけ）
+function updateRawPin(){ const list=$('#rawmodal-list'), pin=$('#raw-pin'); if(!list||!pin) return;
+  let cur=null; const st=list.scrollTop;
+  for(const h of RAW_HDRS){ if(h.offsetTop<=st+1) cur=h; else break; }
+  if(cur && st>0){ const t=cur.firstChild ? cur.firstChild.textContent : cur.textContent;
+    if(pin.textContent!==t) pin.textContent=t; pin.style.display='block'; }
+  else pin.style.display='none'; }
+let rawPinRaf=0;
+function rawPinLoop(){ if(!$('#rawmodal').classList.contains('on')){ rawPinRaf=0; return; }
+  updateRawPin(); rawPinRaf=requestAnimationFrame(rawPinLoop); }
+function startRawPin(){ if(!rawPinRaf) rawPinRaf=requestAnimationFrame(rawPinLoop); }
+$('#raw-search').oninput=renderRawList;
+$('#raw-form').onchange=renderRawList;
+if($('#raw-light')) $('#raw-light').onchange=renderRawList;
+if($('#raw-sort')) $('#raw-sort').onchange=renderRawList;
+function setFilts(togId, wrapId, on){ const t=$('#'+togId), w=$('#'+wrapId); if(!t||!w) return;   // 折りたたみ（名前検索以外）
+  w.classList.toggle('on', on); t.setAttribute('aria-expanded', on?'true':'false'); t.textContent='絞り込み・並び替え '+(on?'▾':'▸'); }
+if($('#raw-filttog')) $('#raw-filttog').onclick=()=>setFilts('raw-filttog','raw-filts', !$('#raw-filts').classList.contains('on'));
+if($('#mat-filttog')) $('#mat-filttog').onclick=()=>setFilts('mat-filttog','mat-filts', !$('#mat-filts').classList.contains('on'));
+function renderPalList(){
+  const el=$('#pal-list'); if(!el) return; el.innerHTML='';
+  const formRank=f=>{ const i=FORM_LIST.indexOf(f); return i<0?9999:i; };   // form_dict の並び順
+  const slots=Object.keys(S.pal.map).sort((a,b)=>{ const fa=roleForm(a),fb=roleForm(b);
+    if(fa!==fb) return (formRank(fa)-formRank(fb)) || (fa<fb?-1:1);
+    return (parseInt(a.split('_').pop())||0)-(parseInt(b.split('_').pop())||0); });   // form内は番号順
+  if(!slots.length){ el.innerHTML='<p class="note">（place を読み込むとスロットが並びます）</p>'; return; }
+  let curForm=null;
+  for(const slot of slots){ const form=roleForm(slot);
+    if(form!==curForm){ curForm=form; const h=document.createElement('div'); h.className='pal-form'; h.textContent=form; el.appendChild(h); }
+    const row=document.createElement('div'); row.className='pal-row';
+    const sw=document.createElement('span'); sw.className='pal-sw'; sw.style.background=roleHex(slot); row.appendChild(sw);
+    const lab=document.createElement('span'); lab.className='pal-slot'; lab.textContent=slot; addAlias(lab, slot);
+    lab.ondblclick=()=>editAlias(slot); lab.title='ダブルクリックで別名'; row.appendChild(lab);
+    const cur=S.pal.map[slot];
+    const curKey=matKey(form, cur);
+    const pick=document.createElement('button'); pick.className='pal-pick';
+    pick.appendChild(matThumb(curKey));
+    const t=document.createElement('span'); t.className='pal-pick-t';
+    if(cur){ const ph=document.createElement('span'); ph.className='mp-phys'; ph.textContent=curKey||cur; t.appendChild(ph);  // block物理名
+      const ja=matJa(curKey); if(ja){ const js=document.createElement('span'); js.className='mp-ja'; js.textContent=ja; t.appendChild(js); } }  // その下に和名
+    else { const nn=document.createElement('span'); nn.className='mp-none'; nn.textContent='(未割当)'; t.appendChild(nn); }
+    pick.appendChild(t);
+    pick.onclick=()=>openMatPicker(slot, form);
+    row.appendChild(pick); el.appendChild(row);
+  }
+}
+function palSyncFromVox(){   // 現在の place(S.vox) の使用スロットを pal に反映。既存割当は保持・place に無いスロットは place優先で除去
+  const used=new Set(); for(const [,v] of S.vox) used.add(norm(v).r);
+  for(const s of used) if(!(s in S.pal.map)) S.pal.map[s]='';
+  for(const s of Object.keys(S.pal.map)) if(!used.has(s)) delete S.pal.map[s];
+}
+function palImport(text){   // place を本体(S.vox)へ読み込み、使用スロットを pal-list へ（place が単一ソース）
+  importJson(text); palSyncFromVox(); renderPalList();
+  status('place を読み込みました（スロット '+Object.keys(S.pal.map).length+' 種）');
+}
+function buildStructure(){   // place(S.vox の slot) + palette(slot→mat) を合成した structure。未割当スロットは missing に集約
+  const pal=S.pal.map||{}, missing=new Set();
+  const recs=blockRecs(slot=>{ const m=pal[slot]; if(!m) missing.add(slot); return {mat:m||slot}; });
+  const nm=($('#struct-name').value.trim())||'structure';
+  return {json:structJson(nm, recs), missing:[...missing]};
+}
+function importStructure(text){   // structure(mat 済み) → place(slot) + palette(slot→mat) に分解して取り込む（保存の逆）
+  try{ const d=JSON.parse(text);
+    if(!Array.isArray(d.blocks)){ status('structure ではありません（blocks が必要）'); return; }
+    const matSlot={}, formCount={}, pal={};        // form 毎に distinct mat を FORM_1.. へ採番
+    for(const b of d.blocks){
+      const form=(b.form||'FULLBLOCK').toUpperCase();
+      const mat=(b.mat!=null?b.mat:(b.slot!=null?b.slot:form+'_1'));
+      const key=form+'|'+mat;
+      if(!(key in matSlot)){ const n=(formCount[form]=(formCount[form]||0)+1); const slot=form+'_'+n;
+        matSlot[key]=slot;
+        const looksSlot=/_\d+$/.test(String(mat)) && FORM_LIST.includes(roleForm(mat));  // mat が slot 名(未割当)なら空に
+        pal[slot]= looksSlot ? '' : mat; }
+      b.slot=matSlot[key];                          // importJson が slot を優先採用するよう書換え
+    }
+    importJson(JSON.stringify(d));                   // 本体(S.vox)へ slot ベースで取り込み（dims/name も処理）
+    S.pal.map=pal; renderPalList();
+    if(d.name) $('#struct-name').value=d.name;
+    const overflow=Object.values(formCount).some(c=>c>10);
+    status('structure を読み込みました（スロット '+Object.keys(pal).length+' 種・palette 復元）'+(overflow?' ※一部 form でスロット10超':''));
+  }catch(e){ status('このファイルは読み込めません'); }
+}
+function palImportPalette(text){   // 既存 palette を任意で復元。place 未読込なら全採用、読込済みなら place のスロットのみ採用（place優先）
+  try{ const d=JSON.parse(text); const pal=(d&&d.palette&&typeof d.palette==='object')?d.palette:{};
+    const placeLoaded=Object.keys(S.pal.map).length>0; const extra=[];
+    for(const slot in pal){
+      if(placeLoaded){ if(slot in S.pal.map) S.pal.map[slot]=pal[slot]; else extra.push(slot); }
+      else S.pal.map[slot]=pal[slot];
+    }
+    if(d.aliases && typeof d.aliases==='object') for(const slot in d.aliases){ if(d.aliases[slot]) S.aliases[slot]=String(d.aliases[slot]); }   // 別名を復元
+    if(d.name) $('#pal-name').value=d.name;
+    renderPalList(); renderRoles();
+    if(extra.length) status('⚠ palette に place へ無いスロット '+extra.length+' 件（'+extra.slice(0,3).join(', ')+(extra.length>3?'…':'')+'）→ place 優先で無視');
+    else status('palette を読み込みました（割当 '+Object.keys(pal).length+' 件）');
+  }catch(e){ status('このファイルは読み込めません'); }
+}
+// 読み込んだファイル名を表示。place/palette は structure を無効化、structure は place+palette を上書き（表示解除）
+function setLoaded(kind, name){
+  S.files[kind]=name;
+  if(kind==='structure'){ S.files.place=null; S.files.palette=null; }
+  else S.files.structure=null;   // place/palette を読むと structure(合成物)は無効
+  renderLoaded();
+}
+function renderLoaded(){   // 各ボタン右にファイル名（無ければ空欄）
+  const set=(id,v)=>{ const el=$(id); if(el) el.textContent=v||''; };
+  set('#fn-place', S.files.place); set('#fn-palette', S.files.palette); set('#fn-structure', S.files.structure);
+}
+// 保存先フォルダ（S.dirs[kind]）から開く。対応端末は showOpenFilePicker(startIn=フォルダ)、非対応は <input type=file> にフォールバック
+async function pickAndLoad(kind, pickerId, importFn, fallbackSel){
+  if(FS_OK && window.showOpenFilePicker){
+    try{ const opt={types:[{description:'JSON',accept:{'application/json':['.json']}}], id:pickerId};
+      if(S.dirs[kind]) opt.startIn=S.dirs[kind];   // 設定した保存先フォルダで開く
+      const [fh]=await window.showOpenFilePicker(opt);
+      importFn(await (await fh.getFile()).text()); setLoaded(kind, fh.name); return;
+    }catch(e){ if(e && e.name==='AbortError') return; }
+  }
+  $(fallbackSel).click();
+}
+$('#pal-load').onclick       = ()=>pickAndLoad('place',     'bp-place',     palImport,        '#pal-file');   // place → 本体(S.vox)
+$('#pal-load-pal').onclick   = ()=>pickAndLoad('palette',   'bp-palette',   palImportPalette, '#pal-file2');  // palette
+$('#pal-loadstruct').onclick = ()=>pickAndLoad('structure', 'bp-structure', importStructure,  '#pal-file3');  // structure
+$('#pal-file').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ palImport(r.result); setLoaded('place', f.name); e.target.value=''; }; r.readAsText(f); };
+$('#pal-file2').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ palImportPalette(r.result); setLoaded('palette', f.name); e.target.value=''; }; r.readAsText(f); };
+$('#pal-file3').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ importStructure(r.result); setLoaded('structure', f.name); e.target.value=''; }; r.readAsText(f); };
+function updateLdMode(){   // ラジオ：place・palette / structure のどちらか一方のみ読込ボタンを活性
+  const st=(document.querySelector('input[name=ldmode]:checked')||{}).value==='st';
+  $('#pal-load').disabled=st; $('#pal-load-pal').disabled=st; $('#pal-loadstruct').disabled=!st;
+}
+document.querySelectorAll('input[name=ldmode]').forEach(r=>r.onchange=updateLdMode);
+updateLdMode();
+
+// palette の 一覧 / JSON タブ（place の JSON ビューと同様）
+function renderPalJson(){
+  const map={}; for(const k of Object.keys(S.pal.map)) if(S.pal.map[k]) map[k]=S.pal.map[k];
+  const aliases={}; for(const k in S.aliases) if(S.aliases[k]) aliases[k]=S.aliases[k];   // 設定済みの別名すべて
+  const obj={name:$('#pal-name').value, palette:map}; if(Object.keys(aliases).length) obj.aliases=aliases;
+  $('#pal-json').value = JSON.stringify(obj, null, 1);
+}
+function setPalView(v){
+  $('#pv-list-sec').classList.toggle('hidden', v!=='list');
+  $('#pv-json-sec').classList.toggle('hidden', v!=='json');
+  $('#pv-list').setAttribute('aria-selected', v==='list');
+  $('#pv-json').setAttribute('aria-selected', v==='json');
+  if(v==='json') renderPalJson(); else renderPalList();
+}
+$('#pv-list').onclick=()=>setPalView('list');
+$('#pv-json').onclick=()=>setPalView('json');
+$('#pal-apply').onclick=()=>{   // テキスト編集を S.pal.map へ反映
+  try{ const d=JSON.parse($('#pal-json').value); const pal=(d&&d.palette&&typeof d.palette==='object')?d.palette:(d||{});
+    S.pal.map={}; for(const k in pal) if(pal[k]!=null) S.pal.map[k]=String(pal[k]);
+    if(d && d.aliases && typeof d.aliases==='object') for(const slot in d.aliases){ if(d.aliases[slot]) S.aliases[slot]=String(d.aliases[slot]); }   // 別名も反映
+    if(d && d.name) $('#pal-name').value=d.name;
+    renderRoles();
+    status('palette JSON を反映しました（'+Object.keys(S.pal.map).length+' 件）');
+  }catch(e){ status('JSON を解釈できません'); }
+};
+$('#pal-copy').onclick=async()=>{ renderPalJson();
+  try{ await navigator.clipboard.writeText($('#pal-json').value); status('palette JSON をコピーしました'); }
+  catch(e){ $('#pal-json').select(); status('テキストを選択しました。長押しでコピー'); }
+};
+function palJsonText(){   // palette JSON 文字列（map＋設定済みの別名 aliases）
+  const map={}; for(const k of Object.keys(S.pal.map)) if(S.pal.map[k]) map[k]=S.pal.map[k];   // 未割当は除外
+  const aliases={}; for(const k in S.aliases) if(S.aliases[k]) aliases[k]=S.aliases[k];   // 設定済みの別名すべて
+  const obj={name:$('#pal-name').value, palette:map}; if(Object.keys(aliases).length) obj.aliases=aliases;
+  return JSON.stringify(obj, null, 1);
+}
+async function savePalette(){
+  await saveFile(palJsonText(), ($('#pal-name').value||'palette')+'.json',
+    'palette を保存（'+Object.keys(S.pal.map).filter(k=>S.pal.map[k]).length+' 件）', 'palette');
+}
+$('#pal-save').onclick=savePalette;
+async function saveStructure(){   // place(S.vox) + palette(S.pal.map) を合成して structure を保存
+  if(!S.vox.size){ status('place が空です（先に place を作成/読み込み）'); return false; }
+  const {json,missing}=buildStructure();
+  const fname=(($('#struct-name').value.trim())||'structure')+'.json';
+  await saveFile(json, fname, (missing.length
+    ? '⚠ structure 保存: 未割当 '+missing.length+' 件（'+missing.slice(0,3).join(', ')+(missing.length>3?'…':'')+'）は slot 名のまま'
+    : 'structure を保存（place+palette 合成）'), 'structure');
+  return true;
+}
+$('#pal-struct').onclick=saveStructure;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function downloadText(text, fname){ const b=new Blob([text],{type:'application/json'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000); }
+async function saveAll(){   // place + palette (+ structure) を一括保存。iOS 等ダウンロード端末は Web Share でまとめて
+  const items=[
+    {text:buildJson('blocks'), fname:($('#name').value||'blueprint')+'.json', kind:'place'},
+    {text:palJsonText(),       fname:($('#pal-name').value||'palette')+'.json', kind:'palette'},
+  ];
+  if(S.vox.size){ const {json}=buildStructure(); items.push({text:json, fname:(($('#struct-name').value.trim())||'structure')+'.json', kind:'structure'}); }
+  // 保存先フォルダがある kind は個別に上書き。残り（ダウンロード対象）は後でまとめて。
+  const dl=[];
+  for(const it of items){
+    const h=S.dirs[it.kind];
+    if(h){ try{ if(await ensurePerm(h)){ const fh=await h.getFileHandle(it.fname,{create:true}); const w=await fh.createWritable(); await w.write(it.text); await w.close(); continue; } }catch(_){ } }
+    dl.push(it);
+  }
+  if(!dl.length){ status('一括保存しました（'+items.length+'ファイル）'); return; }
+  // ダウンロード端末：Web Share で複数ファイルをまとめて（iOS→共有シート→「ファイルに保存」）
+  try{
+    const files=dl.map(it=>new File([it.text], it.fname, {type:'application/json'}));
+    if(navigator.canShare && navigator.canShare({files})){
+      await navigator.share({files, title:'mc-blueprint'});
+      status('共有シートから保存してください（'+dl.length+'ファイル）'); return;
+    }
+  }catch(e){ if(e && e.name==='AbortError'){ status('保存をキャンセルしました'); return; } }
+  // フォールバック：順にダウンロード（間隔を空ける）
+  for(let i=0;i<dl.length;i++){ downloadText(dl[i].text, dl[i].fname); if(i<dl.length-1) await sleep(800); }
+  status('一括保存しました（'+dl.length+'ファイル・ダウンロード）');
+}
+$('#save-all').onclick=saveAll;
+
+/* ---------- boot ---------- */
+function fillVer(){ $('#vmodal-body').innerHTML =                     // ? バッジ→モーダルで各版を縦表示
+  '<div class="vrow">app v'+APP_VERSION+'</div>'+
+  '<div class="vrow">dict v'+(DICT_VERSION??'?')+'</div>'+
+  '<div class="vrow">blocks_all v'+(BLOCKS_ALL_VERSION??'?')+'</div>'+
+    '<div class="vrow">block_class_all v'+(BLOCK_CLASS_VERSION??'?')+'</div>'+
+    '<div class="vrow">rel_defs v'+(REL_DEFS_VERSION??'?')+'</div>'+
+  '<div class="vrow">blocktex v'+(BLOCKTEX_VERSION??'?')+'</div>'; }
+fillVer();
+$('#ver').onclick = ()=> $('#vmodal').classList.add('on');
+$('#vmodal').onclick = e=>{ if(e.target.id==='vmodal') $('#vmodal').classList.remove('on'); };  // 背景タップで閉じる
+$('#pal-help').onclick = ()=> $('#pmodal').classList.add('on');
+$('#pmodal').onclick = e=>{ if(e.target.id==='pmodal') $('#pmodal').classList.remove('on'); };
+load();
+$('#dx').value=S.dims.x; $('#dy').value=S.dims.y; $('#dz').value=S.dims.z;
+$('#plane').max=S.dims.y-1; $('#ymax').textContent='/ '+(S.dims.y-1);
+initThree(); buildFloor(); buildOrigin(); buildPlane(); frameCamera();
+loadDict().then(()=>{
+  fillVer();
+  syncVox();
+  $('#tot').textContent=S.vox.size; setLayer(0); setView('space'); setMode('info'); renderRoles(); renderShapeBar();
+}).catch(err=>{ console.error(err); status('dict.json を読み込めません（初回はオンライン必須）'); });
+
+updateDirLabels();
+if(FS_OK) for(const k of DIR_KINDS){ idbGet('dir_'+k).then(h=>{ if(h){ S.dirs[k]=h; updateDirLabels(); } }).catch(()=>{}); }
+
+if('serviceWorker' in navigator){
+  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
