@@ -1,15 +1,16 @@
-const CACHE = 'blueprint-v5.04';
+const CACHE = 'city-blueprint-v0.1';
 const ASSETS = [
   './',
   './index.html',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',
+  './schema.json',
+  './presets.json',
   './dict.json',
   './blocks_all.json',
   './block_class_all.json',
-  './rel_defs.json',
-  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
+  './rel_defs.json'
 ];
 
 self.addEventListener('install', (e) => {
@@ -44,7 +45,7 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   // dict / blocks_all / blocktex は network-first（MOD から sync した最新を常に反映。オフラインのみキャッシュ）
-  if (/\/(dict|blocks_all|block_class_all|rel_defs|form_dict|names_ja|blocktex)\.json$/.test(new URL(req.url).pathname)) {
+  if (/\/(schema|presets|dict|blocks_all|block_class_all|rel_defs|form_dict|names_ja|blocktex)\.json$/.test(new URL(req.url).pathname)) {
     e.respondWith(
       fetch(new Request(req.url, {cache: 'no-store'})).then((res) => {
         const copy = res.clone();
