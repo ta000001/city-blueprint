@@ -330,9 +330,7 @@ function importPlan(text){
 
 /* ---------- wire ---------- */
 function boot(){
-  // add-type select
-  $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join('');
-  $('#add').onclick=()=>{ plan.entries.push(newEntry($('#addtype').value)); sel=plan.entries.length-1; persist(); renderEntries(); renderEditor(); };
+  $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} plan.entries.push(newEntry($('#addtype').value)); sel=plan.entries.length-1; persist(); renderEntries(); renderEditor(); };
   $('#save').onclick=()=>{ const n=($('#name').value||'my_plan').replace(/\.json$/,''); saveFile(buildPlanJson(), n+'.json'); };
   $('#open').onclick=()=>$('#file').click();
   $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>importPlan(r.result); r.readAsText(f); ev.target.value=''; };
@@ -356,7 +354,7 @@ function boot(){
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
-loadData().then(()=>{ fillVer(); renderEntries(); renderEditor(); renderJson(); fitCam(); status('schema/presets 読込 OK'); })
+loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); fillVer(); renderEntries(); renderEditor(); renderJson(); fitCam(); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 updateDirLabel();
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
