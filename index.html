@@ -267,6 +267,12 @@ function reservedRegion(e){
     return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
   return {kind:'circle', cd:sh.center.d, cw:sh.center.w, r:sh.rr};
 }
+function bodyRegion(e){
+  const sh=worldShape(e); if(!sh) return null; // marker は対象外
+  if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
+    return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
+  return {kind:'circle', cd:sh.center.d, cw:sh.center.w, r:sh.r};
+}
 function regOverlap(a,b){
   if(!a||!b) return false;
   if(a.kind==='rect'&&b.kind==='rect') return a.d0<=b.d1 && b.d0<=a.d1 && a.w0<=b.w1 && b.w0<=a.w1; // 整数ブロックの包含判定
@@ -276,9 +282,13 @@ function regOverlap(a,b){
   return Math.hypot(c.cd-nd,c.cw-nw) < c.r;
 }
 function computeOverlaps(){
-  const regs=plan.entries.map(reservedRegion); const bad=new Set();
-  for(let i=0;i<regs.length;i++) for(let j=i+1;j<regs.length;j++){ if(regOverlap(regs[i],regs[j])){ bad.add(i); bad.add(j); } }
-  return bad;
+  const bodies=plan.entries.map(bodyRegion), reserved=plan.entries.map(reservedRegion);
+  const bodyBad=new Set(), marginBad=new Set(); let bodyPairs=0, marginPairs=0;
+  for(let i=0;i<plan.entries.length;i++) for(let j=i+1;j<plan.entries.length;j++){
+    if(regOverlap(bodies[i],bodies[j])){ bodyBad.add(i); bodyBad.add(j); bodyPairs++; }               // 本体(footprint)が重なる=物理的衝突
+    else if(regOverlap(reserved[i],reserved[j])){ marginBad.add(i); marginBad.add(j); marginPairs++; } // 本体は離れているがマージン(確保領域)だけ重なる
+  }
+  return {bodyBad, marginBad, bodyPairs, marginPairs};
 }
 // クリック位置にある全エントリ（面積が小さい順）→ 完全に重なっても小さい方を掴める
 function entryArea(e){
@@ -321,7 +331,7 @@ function render(){
   ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5;
   ctx.beginPath();ctx.moveTo(ox-8,oy);ctx.lineTo(ox+8,oy);ctx.moveTo(ox,oy-8);ctx.lineTo(ox,oy+8);ctx.stroke();
   // entries
-  const bad=computeOverlaps();
+  const ovl=computeOverlaps();
   plan.entries.forEach((e,i)=>{
     const sh=worldShape(e); const on=(i===sel);
     if(!sh){ // plan/structure marker
@@ -330,28 +340,31 @@ function render(){
       ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.fillText(e.type,x+8,y-6);
       return;
     }
-    const ov=bad.has(i);
+    const ov=ovl.bodyBad.has(i)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり=赤 / マージンのみ重なり=橙
+    const ovCol=ov==='body'?'#D24B4B':ov==='margin'?'#D9902B':null;
+    const ovFill=ov==='body'?'rgba(210,75,75,.16)':ov==='margin'?'rgba(217,144,43,.16)':null;
     if(sh.shape==='RECT'){
-      // 確保領域(reserved): 重なり=赤 / ground有=緑 / それ以外=枠のみ
-      if(ov){ ctx.fillStyle='rgba(210,75,75,.16)'; poly(sh.reserved); ctx.fill(); }
+      // 確保領域(reserved): 本体重なり=赤 / マージン重なり=橙 / ground有=緑 / それ以外=枠のみ
+      if(ov){ ctx.fillStyle=ovFill; poly(sh.reserved); ctx.fill(); }
       else if(sh.ground){ ctx.fillStyle='rgba(79,138,123,.18)'; poly(sh.reserved); ctx.fill(); }
-      ctx.setLineDash([5,4]); ctx.strokeStyle=ov?'#D24B4B':'#6E5820'; ctx.lineWidth=ov?1.6:1; poly(sh.reserved); ctx.stroke(); ctx.setLineDash([]);
-      // body
-      ctx.fillStyle=on?'rgba(212,169,60,.22)':'rgba(220,229,226,.10)';
-      ctx.strokeStyle=on?'#D4A93C':'#9fb0ac'; ctx.lineWidth=on?2:1.2; poly(sh.body); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([5,4]); ctx.strokeStyle=ovCol||'#6E5820'; ctx.lineWidth=ov?1.6:1; poly(sh.reserved); ctx.stroke(); ctx.setLineDash([]);
+      // body（本体重なりは赤で強調）
+      ctx.fillStyle=ov==='body'?'rgba(210,75,75,.24)':(on?'rgba(212,169,60,.22)':'rgba(220,229,226,.10)');
+      ctx.strokeStyle=on?'#D4A93C':(ov==='body'?'#D24B4B':'#9fb0ac'); ctx.lineWidth=on?2:1.2; poly(sh.body); ctx.fill(); ctx.stroke();
     } else {
       const [cx,cy]=w2c(sh.center.d,sh.center.w);
-      if(ov){ ctx.fillStyle='rgba(210,75,75,.16)'; ctx.beginPath();ctx.arc(cx,cy,sh.rr*camo.scale,0,7);ctx.fill(); }
+      if(ov){ ctx.fillStyle=ovFill; ctx.beginPath();ctx.arc(cx,cy,sh.rr*camo.scale,0,7);ctx.fill(); }
       else if(sh.ground){ ctx.fillStyle='rgba(79,138,123,.18)'; ctx.beginPath();ctx.arc(cx,cy,sh.rr*camo.scale,0,7);ctx.fill(); }
-      ctx.setLineDash([5,4]); ctx.strokeStyle=ov?'#D24B4B':'#6E5820'; ctx.lineWidth=ov?1.6:1; ctx.beginPath();ctx.arc(cx,cy,sh.rr*camo.scale,0,7);ctx.stroke(); ctx.setLineDash([]);
-      ctx.fillStyle=on?'rgba(212,169,60,.22)':'rgba(220,229,226,.10)';
-      ctx.strokeStyle=on?'#D4A93C':'#9fb0ac'; ctx.lineWidth=on?2:1.2;
+      ctx.setLineDash([5,4]); ctx.strokeStyle=ovCol||'#6E5820'; ctx.lineWidth=ov?1.6:1; ctx.beginPath();ctx.arc(cx,cy,sh.rr*camo.scale,0,7);ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle=ov==='body'?'rgba(210,75,75,.24)':(on?'rgba(212,169,60,.22)':'rgba(220,229,226,.10)');
+      ctx.strokeStyle=on?'#D4A93C':(ov==='body'?'#D24B4B':'#9fb0ac'); ctx.lineWidth=on?2:1.2;
       ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke();
     }
     const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0);
     ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.fillText(e.type,c0[0]+4,c0[1]-4);
   });
-  if(bad.size){ ctx.fillStyle='#D24B4B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('⚠ 重なり '+bad.size+' 件', 8*devicePixelRatio, 20*devicePixelRatio); }
+  { const parts=[]; if(ovl.bodyPairs) parts.push('本体重なり '+ovl.bodyPairs+'件'); if(ovl.marginPairs) parts.push('マージン重なり '+ovl.marginPairs+'件');
+    if(parts.length){ ctx.fillStyle=ovl.bodyPairs?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('⚠ '+parts.join(' / '), 8*devicePixelRatio, 20*devicePixelRatio); } }
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
 }
 
