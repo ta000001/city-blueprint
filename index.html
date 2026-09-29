@@ -280,16 +280,31 @@ function computeOverlaps(){
   for(let i=0;i<regs.length;i++) for(let j=i+1;j<regs.length;j++){ if(regOverlap(regs[i],regs[j])){ bad.add(i); bad.add(j); } }
   return bad;
 }
-// クリック位置(world d,w / device px)にあるエントリを最前面から探す
-function hitEntry(d,w,px,py){
-  for(let i=plan.entries.length-1;i>=0;i--){
-    const e=plan.entries[i], sh=worldShape(e);
-    if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w); if(Math.hypot(px-x,py-y)<=10*devicePixelRatio) return i; continue; }
-    if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
-      if(d>=Math.min(...ds)&&d<=Math.max(...ds)&&w>=Math.min(...ws)&&w<=Math.max(...ws)) return i; }
-    else if(Math.hypot(d-sh.center.d,w-sh.center.w)<=sh.r) return i;
-  }
-  return -1;
+// クリック位置にある全エントリ（面積が小さい順）→ 完全に重なっても小さい方を掴める
+function entryArea(e){
+  const sh=worldShape(e); if(!sh) return 0; // plan/structure marker は最小扱い
+  if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d),ws=sh.body.map(p=>p.w); return (Math.max(...ds)-Math.min(...ds)+1)*(Math.max(...ws)-Math.min(...ws)+1); }
+  return Math.PI*sh.r*sh.r;
+}
+function candidatesAt(d,w,px,py){
+  const list=[];
+  plan.entries.forEach((e,i)=>{
+    const sh=worldShape(e);
+    if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w); if(Math.hypot(px-x,py-y)<=10*devicePixelRatio) list.push(i); return; }
+    if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d),ws=sh.body.map(p=>p.w); if(d>=Math.min(...ds)&&d<=Math.max(...ds)&&w>=Math.min(...ws)&&w<=Math.max(...ws)) list.push(i); }
+    else if(Math.hypot(d-sh.center.d,w-sh.center.w)<=sh.r) list.push(i);
+  });
+  list.sort((a,b)=>(entryArea(plan.entries[a])-entryArea(plan.entries[b]))||(b-a)); // 面積昇順・同面積は前面(後勝ち)優先
+  return list;
+}
+let hitSig='', hitIdx=0;
+function pickAt(d,w,px,py){
+  const cands=candidatesAt(d,w,px,py);
+  if(!cands.length){ hitSig=''; hitIdx=0; return -1; }
+  const sig=cands.join(',');                 // 同じ重なり集合を再クリック→下の要素へ周回
+  if(sig===hitSig) hitIdx=(hitIdx+1)%cands.length; else { hitSig=sig; hitIdx=0; }
+  if(cands.length>1) status('重なり'+cands.length+'件 — '+(hitIdx+1)+'/'+cands.length+'（'+plan.entries[cands[hitIdx]].type+'）選択・同じ場所を再クリックで切替');
+  return cands[hitIdx];
 }
 function syncEditorPos(){ const e=plan.entries[sel]; if(!e||!e.relPos) return; const dd=$('#e-d'), dw=$('#e-w'); if(dd) dd.value=e.relPos.d||0; if(dw) dw.value=e.relPos.w||0; }
 function render(){
@@ -393,12 +408,12 @@ function boot(){
   let drag=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
   cv.onpointerdown=e=>{
-    const p=ptWorld(e), hit=hitEntry(p.d,p.w,p.px,p.py); cv.setPointerCapture(e.pointerId);
+    const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); cv.setPointerCapture(e.pointerId);
     if(hit>=0){ sel=hit; const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0)}; renderEntries(); renderEditor(); render(); }
     else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y};
   };
   cv.onpointermove=e=>{
-    if(!drag){ const p=ptWorld(e); cv.style.cursor=hitEntry(p.d,p.w,p.px,p.py)>=0?'grab':'default'; return; }
+    if(!drag){ const p=ptWorld(e); cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
     if(drag.mode==='pan'){ camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
     const p=ptWorld(e), rp=plan.entries[sel].relPos; rp.d=Math.round(p.d-drag.gd); rp.w=Math.round(p.w-drag.gw); cv.style.cursor='grabbing'; render(); syncEditorPos();
   };
