@@ -332,7 +332,18 @@ function importPlan(text){
 function boot(){
   $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} plan.entries.push(newEntry($('#addtype').value)); sel=plan.entries.length-1; persist(); renderEntries(); renderEditor(); };
   $('#save').onclick=()=>{ const n=($('#name').value||'my_plan').replace(/\.json$/,''); saveFile(buildPlanJson(), n+'.json'); };
-  $('#open').onclick=()=>$('#file').click();
+  $('#open').onclick=async ()=>{
+    if(FS_OK){
+      try{
+        const opts={types:[{description:'plan.json',accept:{'application/json':['.json']}}]};
+        if(DIR) opts.startIn=DIR;                 // 設定した保存先フォルダから開く
+        const [fh]=await window.showOpenFilePicker(opts);
+        const f=await fh.getFile(); importPlan(await f.text());
+      }catch(err){ if(err && err.name!=='AbortError') status('開けません: '+err.message); }
+      return;
+    }
+    $('#file').click(); // 非対応環境はファイル選択にフォールバック
+  };
   $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>importPlan(r.result); r.readAsText(f); ev.target.value=''; };
   $('#fit').onclick=fitCam;
   $('#zin').onclick=()=>{camo.scale*=1.25;render();};
