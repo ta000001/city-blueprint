@@ -59,6 +59,15 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
 .modal h3{margin:0 0 10px;font-size:13px;color:var(--brass)}
 .vrow{font-size:12px;color:var(--brass);line-height:1.9}
 .muted{color:var(--dim);font-size:11px}
+.modal .m.wide{min-width:340px;max-width:min(560px,94vw);width:560px;max-height:86vh;overflow:auto}
+.pfhdr{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.pf{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:5px 2px;border-bottom:1px solid var(--rule)}
+.pf .k{min-width:100px;color:var(--chalk);font-size:11px}
+.pf .tag{font-size:9px;color:var(--dim);border:1px solid var(--rule);border-radius:4px;padding:0 3px}
+.pf .mode{width:66px}
+.pf .ped{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.chk{display:inline-flex;align-items:center;gap:2px;font-size:10px;color:var(--dim);white-space:nowrap}
+.bcrow{display:flex;gap:4px;margin-bottom:3px;align-items:center;flex-basis:100%}
 </style>
 </head>
 <body>
@@ -110,6 +119,12 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
   <div class="muted" id="fs-note" style="display:none">この端末はフォルダ保存に非対応（ダウンロードになります）</div>
 </div></div>
 
+<div class="modal" id="pmodal"><div class="m wide">
+  <div class="pfhdr" style="position:sticky;top:0;background:var(--panel2);padding:2px 0 6px;z-index:1">
+    <h3 id="ptitle" style="margin:0;flex:1">パラメータ</h3><button id="p-close">閉じる</button></div>
+  <div id="pbody"></div>
+</div></div>
+
 <script>
 const APP_VERSION='0.1';
 const $=s=>document.querySelector(s);
@@ -127,8 +142,14 @@ const allTypes=()=>['plan','structure',...builderTypes()];
 const defaultsOf=t=>((PRESETS.presets[t]&&PRESETS.presets[t].DEFAULTS)||{});
 const presetNames=t=>Object.keys(PRESETS.presets[t]||{}).filter(n=>n!=='DEFAULTS');
 
+/* ---------- パラメータ実効値（DEFAULTS→preset→明示・mod Params.resolve と同順） ---------- */
+function presetOf(e,t){ const p=e.params||{}; let pn=p.preset; if(pn&&typeof pn==='object') pn=(pn.choice||[])[0]; return (pn&&(PRESETS.presets[t]||{})[pn])||null; }
+function effElem(e,t,f){ const p=e.params||{}; if(f in p) return p[f]; const pr=presetOf(e,t); if(pr&&f in pr) return pr[f]; return defaultsOf(t)[f]; }
+function specOrValStr(v){ if(v==null) return '—'; if(typeof v==='object'){ if(Array.isArray(v.range)) return 'range '+v.range[0]+'..'+v.range[1]; if(Array.isArray(v.choice)) return 'choice['+v.choice.map(specOrValStr).join(', ')+']'; if(v.form) return v.form+(v.mat?(' '+v.mat):''); return JSON.stringify(v); } return String(v); }
+function effDisplay(e,t,f){ return specOrValStr(effElem(e,t,f)); }
+// footprint/when 用の代表値（range→min, choice→先頭）
+function fieldVal(e,t,f){ let v=effElem(e,t,f); if(v&&typeof v==='object'){ if(Array.isArray(v.range)) return v.range[0]; if(Array.isArray(v.choice)) return v.choice[0]; return undefined; } return v; }
 /* ---------- footprint 解決（mod の BuilderSchema を JS で写す） ---------- */
-function fieldVal(e,t,f){ const p=e.params||{}; if(f in p && p[f]!=null && typeof p[f]!=='object') return p[f]; const d=defaultsOf(t); return d[f]; }
 function footprintFor(e){
   const t=e.type, b=SCHEMA.builders[t]; if(!b) return null;
   let fp=b.footprint, row;
@@ -203,12 +224,95 @@ function renderEditor(){
   $('#e-dir').onchange=ev=>{e.relDir=ev.target.value; upd();};
   if($('#e-ref')) $('#e-ref').oninput=ev=>{ if(e.type==='plan') e.plan=ev.target.value; else e.structure=ev.target.value; upd(); };
   if($('#e-preset')) $('#e-preset').onchange=ev=>{ e.params=e.params||{}; if(ev.target.value) e.params.preset=ev.target.value; else delete e.params.preset; upd(); };
-  if($('#e-params')) $('#e-params').onclick=()=>status('パラメータ編集モーダルは機能2で実装予定');
+  if($('#e-params')) $('#e-params').onclick=()=>openParams(sel);
   $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
   $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; persist(); };
   $('#e-up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; sel--; persist(); renderEntries(); } };
   $('#e-down').onclick=()=>{ if(sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; sel++; persist(); renderEntries(); } };
   $('#e-del').onclick=()=>{ plan.entries.splice(sel,1); sel=-1; persist(); renderEntries(); renderEditor(); };
+}
+
+/* ---------- 機能2: パラメータモーダル（schema fields から自動生成・値は固定/範囲/選択） ---------- */
+const FORMS=()=>[...new Set(DICT.map(d=>d.form))];
+const matsFor=f=>[...new Set(DICT.filter(d=>d.form===f&&d.mat!=null).map(d=>d.mat))];
+function asSpec(v){ if(v&&typeof v==='object'&&v.form) return {form:v.form, mat:v.mat}; const f=FORMS()[0]||'FULLBLOCK'; return {form:f, mat:matsFor(f)[0]}; }
+let pIdx=-1;
+function pE(){ return plan.entries[pIdx]; }
+function openParams(i){
+  if(i<0||i>=plan.entries.length) return;
+  const e=plan.entries[i]; if(!(e.type in SCHEMA.builders)){ status('plan/structure にパラメータはありません'); return; }
+  e.params=e.params||{}; pIdx=i; renderParams(); $('#pmodal').classList.add('on');
+}
+function curMode(f,val){ if(val===undefined) return 'unset'; if(val&&typeof val==='object'){ if('range' in val) return 'range'; if('choice' in val) return f.type==='bool'?'random':'choice'; } return 'fixed'; }
+function modesFor(ft){ if(ft==='int') return [['unset','未設定'],['fixed','固定'],['range','範囲'],['choice','選択']]; if(ft==='bool') return [['unset','未設定'],['fixed','固定'],['random','ランダム']]; return [['unset','未設定'],['fixed','固定'],['choice','選択']]; }
+function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
+  return 'form <select id="pbf-'+k+'">'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'">'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
+function blockspecChoiceEditor(k,arr){ let h='';
+  arr.forEach((s,idx)=>{ const sp=asSpec(s), mats=matsFor(sp.form);
+    h+='<div class="bcrow"><select data-bcf="'+k+'" data-i="'+idx+'">'+FORMS().map(f=>'<option'+(f===sp.form?' selected':'')+'>'+f+'</option>').join('')+'</select><select data-bcm="'+k+'" data-i="'+idx+'">'+mats.map(m=>'<option'+(m===sp.mat?' selected':'')+'>'+m+'</option>').join('')+'</select><button data-bcx="'+k+'" data-i="'+idx+'">×</button></div>'; });
+  h+='<button data-bca="'+k+'">＋候補</button>'; return h; }
+function valueEditor(e,t,k,f,mode,val){ const ft=f.type;
+  if(mode==='fixed'){
+    if(ft==='int'){ const v=(typeof val==='number')?val:(fieldVal(e,t,k)||0); return '<input type="number" id="pv-'+k+'" value="'+v+'">'; }
+    if(ft==='bool'){ const v=(val===true); return '<select id="pv-'+k+'"><option value="true"'+(v?' selected':'')+'>true</option><option value="false"'+(!v?' selected':'')+'>false</option></select>'; }
+    if(ft==='enum'){ const cur=(typeof val==='string')?val:effElem(e,t,k); return '<select id="pv-'+k+'">'+f.values.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
+    if(ft==='blockspec') return blockspecEditor(k, (val&&val.form)?val:asSpec(effElem(e,t,k)));
+  }
+  if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(val&&val.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'">'; }
+  if(mode==='random') return '<span class="muted">true / false からランダム</span>';
+  if(mode==='choice'){ const arr=(val&&val.choice)||[];
+    if(ft==='enum') return f.values.map(o=>'<label class="chk"><input type="checkbox" data-c="'+k+'" value="'+o+'"'+(arr.includes(o)?' checked':'')+'>'+o+'</label>').join(' ');
+    if(ft==='int') return '<input type="text" id="pv-'+k+'" placeholder="1,2,3" value="'+arr.join(',')+'">';
+    if(ft==='blockspec') return blockspecChoiceEditor(k,arr);
+  }
+  return '';
+}
+function paramRow(e,t,k,f){ const val=e.params[k], mode=curMode(f,val);
+  const modeSel='<select class="mode" id="pm-'+k+'">'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
+  const ed=(mode==='unset')?'<span class="muted">= '+effDisplay(e,t,k)+'</span>':valueEditor(e,t,k,f,mode,val);
+  return '<div class="pf"><span class="k">'+k+'</span><span class="tag">'+f.type+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div>';
+}
+function renderParams(){ const e=pE(); if(!e) return; const t=e.type, fields=SCHEMA.builders[t].fields;
+  $('#ptitle').textContent=t+' パラメータ';
+  const pn=presetNames(t), curp=(typeof e.params.preset==='string')?e.params.preset:'';
+  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(なし)</option>'+pn.map(n=>'<option'+(curp===n?' selected':'')+'>'+n+'</option>').join('')+'</select></div>';
+  for(const [k,f] of Object.entries(fields)) h+=paramRow(e,t,k,f);
+  $('#pbody').innerHTML=h;
+  $('#p-preset').onchange=ev=>{ if(ev.target.value) e.params.preset=ev.target.value; else delete e.params.preset; persist(); renderEntries(); renderParams(); };
+  wireParamRows(e,t,fields);
+}
+function light(){ persist(); renderEntries(); } // モーダル本体は再描画しない（入力フォーカス維持）
+function setMode(e,t,k,f,mode){
+  if(mode==='unset') delete e.params[k];
+  else if(mode==='fixed') e.params[k]= f.type==='blockspec'?asSpec(effElem(e,t,k)) : f.type==='bool'?(fieldVal(e,t,k)===true) : f.type==='int'?Math.round(fieldVal(e,t,k)||0) : (effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]);
+  else if(mode==='range'){ const b=Math.round(fieldVal(e,t,k)||0); e.params[k]={range:[b,b]}; }
+  else if(mode==='random') e.params[k]={choice:[true,false]};
+  else if(mode==='choice') e.params[k]={choice: f.type==='blockspec'?[asSpec(effElem(e,t,k))] : f.type==='int'?[Math.round(fieldVal(e,t,k)||0)] : [effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]]};
+  persist(); renderEntries(); renderParams();
+}
+function wireParamRows(e,t,fields){
+  for(const [k,f] of Object.entries(fields)){
+    const ms=$('#pm-'+k); if(ms) ms.onchange=ev=>setMode(e,t,k,f,ev.target.value);
+    const mode=curMode(f,e.params[k]);
+    if(mode==='fixed'){
+      if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); light(); }; }
+      else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); light(); }; }
+      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; light(); }; }
+      else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
+        if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderParams(); };
+        if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; light(); }; }
+    } else if(mode==='range'){ const a=$('#pr0-'+k), b=$('#pr1-'+k), upd=()=>{ e.params[k]={range:[Math.round(+a.value||0),Math.round(+b.value||0)]}; light(); }; if(a)a.oninput=upd; if(b)b.oninput=upd; }
+    else if(mode==='choice'){
+      if(f.type==='enum'){ document.querySelectorAll('[data-c="'+k+'"]').forEach(cb=>cb.onchange=()=>{ e.params[k]={choice:[...document.querySelectorAll('[data-c="'+k+'"]')].filter(x=>x.checked).map(x=>x.value)}; light(); }); }
+      else if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]={choice: ev.target.value.split(',').map(s=>s.trim()).filter(s=>s!=='').map(Number).filter(n=>!isNaN(n))}; light(); }; }
+      else if(f.type==='blockspec'){ const arr=()=>e.params[k].choice;
+        document.querySelectorAll('[data-bcf="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i]={form:s.value, mat:matsFor(s.value)[0]}; persist();renderEntries();renderParams(); });
+        document.querySelectorAll('[data-bcm="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i].mat=s.value; light(); });
+        document.querySelectorAll('[data-bcx="'+k+'"]').forEach(b=>b.onclick=()=>{ arr().splice(+b.dataset.i,1); persist();renderEntries();renderParams(); });
+        const add=document.querySelector('[data-bca="'+k+'"]'); if(add) add.onclick=()=>{ arr().push(asSpec(effElem(e,t,k))); persist();renderEntries();renderParams(); };
+      }
+    }
+  }
 }
 
 /* ---------- plan.json 直列化（記載規約: relPos→relDir→margin/ground→type→...・1レコード1行） ---------- */
@@ -417,6 +521,8 @@ function boot(){
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
+  $('#p-close').onclick=()=>{ $('#pmodal').classList.remove('on'); renderEditor(); };
+  $('#pmodal').onclick=e=>{ if(e.target.id==='pmodal'){ $('#pmodal').classList.remove('on'); renderEditor(); } };
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン
   let drag=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
