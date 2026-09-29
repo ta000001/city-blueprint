@@ -363,8 +363,8 @@ function render(){
     const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0);
     ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.fillText(e.type,c0[0]+4,c0[1]-4);
   });
-  { const parts=[]; if(ovl.bodyPairs) parts.push('本体重なり '+ovl.bodyPairs+'件'); if(ovl.marginPairs) parts.push('マージン重なり '+ovl.marginPairs+'件');
-    if(parts.length){ ctx.fillStyle=ovl.bodyPairs?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('⚠ '+parts.join(' / '), 8*devicePixelRatio, 20*devicePixelRatio); } }
+  { const bn=ovl.bodyPairs, mn=ovl.marginPairs;
+    if(bn||mn){ ctx.fillStyle=bn?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('conflict: (body:'+bn+'、margin:'+mn+')', 8*devicePixelRatio, 20*devicePixelRatio); } }
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
 }
 
