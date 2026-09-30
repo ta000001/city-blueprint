@@ -138,7 +138,7 @@ async function loadData(){
   try{ const d=await fetch('./dict.json?v='+APP_VERSION,{cache:'no-cache'}); const j=await d.json(); DICT=Array.isArray(j)?j:(j.entries||[]); DICT_VER=(j&&j.version!=null)?j.version:null; }catch(_){}
 }
 const builderTypes=()=>Object.keys(SCHEMA.builders);
-const allTypes=()=>['plan','structure',...builderTypes()];
+const allTypes=()=>['plan','structure','randomarea',...builderTypes()];
 const defaultsOf=t=>((PRESETS.presets[t]&&PRESETS.presets[t].DEFAULTS)||{});
 const presetNames=t=>Object.keys(PRESETS.presets[t]||{}).filter(n=>n!=='DEFAULTS');
 
@@ -183,6 +183,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
+  else if(type==='randomarea') e.params={ id:genId(), region:{shape:'RECT',size:[24,24]}, builder:builderTypes()[0]||'house', source:'DEFAULTS', count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
@@ -194,8 +195,13 @@ function renderEntries(){
   const ul=$('#entries'); ul.innerHTML='';
   plan.entries.forEach((e,i)=>{
     const li=document.createElement('li'); if(i===sel) li.className='sel';
-    const rp=e.relPos||{}; const ref=e.type==='plan'?e.plan:e.type==='structure'?e.structure:(e.params&&e.params.preset?('preset:'+e.params.preset):'');
-    li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+'</span>';
+    const rp=e.relPos||{};
+    let ref='';
+    if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
+    else if(e.type==='randomarea'){ const id=e.params&&e.params.id; const n=plan.entries.filter(x=>x.group===id).length; ref=(e.params.builder||'?')+'×'+((e.params.count||0)>0?e.params.count:'詰める')+' ('+n+'配置)'; }
+    else if(e.params&&e.params.preset) ref='preset:'+e.params.preset;
+    const grp=e.group?(' ⚭'+e.group):'';
+    li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
     li.onclick=()=>{ sel=i; renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
@@ -209,12 +215,15 @@ function renderEditor(){
   h+='<div class="r"><label>relDir</label><select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select></div>';
   if(e.type==='plan') h+='<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:100px"></div>';
   else if(e.type==='structure') h+='<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:100px"></div>';
+  else if(e.type==='randomarea') h+=randomEditorRows(e);
   else {
     const pn=presetNames(e.type);
     h+='<div class="r"><label>preset</label><select id="e-preset"><option value="">(なし)</option>'+pn.map(n=>'<option'+(e.params&&e.params.preset===n?' selected':'')+'>'+n+'</option>').join('')+'</select> <button id="e-params">パラメータ…</button></div>';
   }
-  h+='<div class="r"><label>margin</label><input type="number" id="e-margin" value="'+(typeof e.margin==='number'?e.margin:'')+'" placeholder="なし"> <span class="muted">一律(スカラ)</span></div>';
-  h+='<div class="r"><label>ground</label><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:110px"> <span class="muted">FULLBLOCK</span></div>';
+  if(e.type!=='randomarea'){
+    h+='<div class="r"><label>margin</label><input type="number" id="e-margin" value="'+(typeof e.margin==='number'?e.margin:'')+'" placeholder="なし"> <span class="muted">一律(スカラ)</span></div>';
+    h+='<div class="r"><label>ground</label><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:110px"> <span class="muted">FULLBLOCK</span></div>';
+  }
   h+='<div class="r"><button id="e-up">↑</button><button id="e-down">↓</button><button id="e-del">削除</button></div>';
   ed.innerHTML=h;
   const upd=()=>{ persist(); renderEntries(); };
@@ -225,8 +234,9 @@ function renderEditor(){
   if($('#e-ref')) $('#e-ref').oninput=ev=>{ if(e.type==='plan') e.plan=ev.target.value; else e.structure=ev.target.value; upd(); };
   if($('#e-preset')) $('#e-preset').onchange=ev=>{ e.params=e.params||{}; if(ev.target.value) e.params.preset=ev.target.value; else delete e.params.preset; upd(); };
   if($('#e-params')) $('#e-params').onclick=()=>openParams(sel);
-  $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
-  $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; persist(); };
+  if(e.type==='randomarea') wireRandomEditor(e);
+  if($('#e-margin')) $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
+  if($('#e-ground')) $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; persist(); };
   $('#e-up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; sel--; persist(); renderEntries(); } };
   $('#e-down').onclick=()=>{ if(sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; sel++; persist(); renderEntries(); } };
   $('#e-del').onclick=()=>{ plan.entries.splice(sel,1); sel=-1; persist(); renderEntries(); renderEditor(); };
@@ -326,10 +336,21 @@ function entryLine(e){
   if(e.type==='plan') p.push('"plan": '+JSON.stringify(e.plan||''));
   else if(e.type==='structure') p.push('"structure": '+JSON.stringify(e.structure||''));
   else p.push('"params": '+JSON.stringify(e.params||{}));
+  if(e.group) p.push('"group": '+JSON.stringify(e.group)); // 機能3 グルーピング（mod は無視）
+  return '{'+p.join(', ')+'}';
+}
+function metaLine(e){ const rp=e.relPos||{}; const p=[];
+  p.push('"relPos": '+JSON.stringify({d:rp.d||0,h:rp.h||0,w:rp.w||0}));
+  p.push('"relDir": '+JSON.stringify(e.relDir||'FRONT'));
+  p.push('"type": '+JSON.stringify(e.type));
+  p.push('"params": '+JSON.stringify(e.params||{}));
   return '{'+p.join(', ')+'}';
 }
 function buildPlanJson(){
-  return '{\n  "entries": [\n'+plan.entries.map(e=>'    '+entryLine(e)).join(',\n')+(plan.entries.length?'\n':'')+'  ]\n}\n';
+  const ents=plan.entries.filter(e=>e.type!=='randomarea'), metas=plan.entries.filter(e=>e.type==='randomarea');
+  let s='{\n  "entries": [\n'+ents.map(e=>'    '+entryLine(e)).join(',\n')+(ents.length?'\n':'')+'  ]';
+  if(metas.length) s+=',\n  "meta": [\n'+metas.map(e=>'    '+metaLine(e)).join(',\n')+'\n  ]'; // アプリ専用（mod は entries のみ読む）
+  return s+'\n}\n';
 }
 function renderJson(){ $('#json').value=buildPlanJson(); }
 
@@ -351,6 +372,7 @@ function fitCam(){
 function w2c(d,w){ return [camo.x + w*camo.scale, camo.y - d*camo.scale]; }
 // entry の world footprint（描画用の頂点/中心）
 function worldShape(e){
+  if(e.type==='randomarea') return regionShape(e);
   if(e.type==='plan'||e.type==='structure') return null; // footprint 未算出（marker 表示）
   const fp=footprintFor(e); if(!fp) return null;
   const rp=e.relPos||{}, dir=e.relDir||'FRONT', m=marginOf(e);
@@ -366,12 +388,14 @@ function worldShape(e){
 }
 // ---------- 重なり判定（確保領域 = footprint + margin）----------
 function reservedRegion(e){
+  if(e.type==='randomarea') return null; // 領域は重なり判定対象外
   const sh=worldShape(e); if(!sh) return null; // plan/structure(marker) は footprint なし→対象外
   if(sh.shape==='RECT'){ const ds=sh.reserved.map(p=>p.d), ws=sh.reserved.map(p=>p.w);
     return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
   return {kind:'circle', cd:sh.center.d, cw:sh.center.w, r:sh.rr};
 }
 function bodyRegion(e){
+  if(e.type==='randomarea') return null; // 領域は重なり判定対象外
   const sh=worldShape(e); if(!sh) return null; // marker は対象外
   if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
     return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
@@ -437,6 +461,7 @@ function render(){
   // entries
   const ovl=computeOverlaps();
   plan.entries.forEach((e,i)=>{
+    if(e.type==='randomarea'){ drawRegion(e, i===sel); return; }
     const sh=worldShape(e); const on=(i===sel);
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
@@ -472,6 +497,95 @@ function render(){
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
 }
 
+/* ---------- 機能3: ランダム配置（randomarea = 散布ジョブ／設計時に確定・不確定要素は mod に渡さない） ---------- */
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function genId(){ return 'r'+Math.random().toString(36).slice(2,7); }
+// randomarea の領域 footprint（params.region → world 図形）
+function regionShape(e){
+  const p=e.params||{}, reg=p.region||{shape:'RECT',size:[10,10]}, rp=e.relPos||{}, dir=e.relDir||'FRONT';
+  if(reg.shape==='RECT'){ const extD=(+reg.size[0])||1, extW=(+reg.size[1])||1;
+    const corners=(d0,d1,w0,w1)=>[[d0,w0],[d1,w0],[d1,w1],[d0,w1]].map(([ld,lw])=>xform(ld,lw,rp,dir));
+    const body=corners(0,extD-1,0,extW-1); return {shape:'RECT', pts:body, body, reserved:body, region:true}; }
+  const c=xform(0,0,rp,dir), r=((+reg.size[0])||2)/2, pts=[];
+  for(let a=0;a<360;a+=30){ const rad=a*Math.PI/180; pts.push({d:c.d+r*Math.cos(rad), w:c.w+r*Math.sin(rad)}); }
+  return {shape:'CIRCLE', center:c, r, rr:r, pts, reserved:pts, region:true};
+}
+function drawRegion(e,onSel){ const sh=regionShape(e);
+  ctx.setLineDash([2,3]); ctx.lineWidth=onSel?2:1.2; ctx.strokeStyle=onSel?'#D4A93C':'#8A6E20'; ctx.fillStyle='rgba(212,169,60,.06)';
+  if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((pt,k)=>{const [x,y]=w2c(pt.d,pt.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  else { const [cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); }
+  ctx.setLineDash([]);
+  const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0); ctx.fillStyle='#D4A93C'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.fillText('▦ randomarea '+((e.params&&e.params.id)||''), c0[0]+4, c0[1]-4);
+}
+// 領域(world) / 子の確保領域 bbox / フィット判定
+function regionWorld(m){ const sh=regionShape(m);
+  if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d),ws=sh.body.map(p=>p.w); return {shape:'RECT', d0:Math.min(...ds),d1:Math.max(...ds),w0:Math.min(...ws),w1:Math.max(...ws)}; }
+  return {shape:'CIRCLE', cd:sh.center.d, cw:sh.center.w, r:sh.r}; }
+function reservedBBox(child){ const rr=reservedRegion(child); if(!rr) return null; if(rr.kind==='rect') return {d0:rr.d0,d1:rr.d1,w0:rr.w0,w1:rr.w1}; return {d0:rr.cd-rr.r,d1:rr.cd+rr.r,w0:rr.cw-rr.r,w1:rr.cw+rr.r}; }
+function inflate(r,g){ if(!r||!g) return r; if(r.kind==='rect') return {kind:'rect',d0:r.d0-g,d1:r.d1+g,w0:r.w0-g,w1:r.w1+g}; return {kind:'circle',cd:r.cd,cw:r.cw,r:r.r+g}; }
+function regionContains(reg, child){ const b=reservedBBox(child); if(!b) return false;
+  if(reg.shape==='RECT') return b.d0>=reg.d0 && b.d1<=reg.d1 && b.w0>=reg.w0 && b.w1<=reg.w1;
+  return [[b.d0,b.w0],[b.d1,b.w0],[b.d1,b.w1],[b.d0,b.w1]].every(([d,w])=>Math.hypot(d-reg.cd,w-reg.cw)<=reg.r); }
+function randomFitPos(child, reg, rng){
+  const saved=child.relPos; child.relPos={d:0,h:0,w:0}; const b=reservedBBox(child); child.relPos=saved; if(!b) return null;
+  if(reg.shape==='RECT'){ const loD=reg.d0-b.d0, hiD=reg.d1-b.d1, loW=reg.w0-b.w0, hiW=reg.w1-b.w1; if(loD>hiD||loW>hiW) return null;
+    return {d:Math.round(loD+rng()*(hiD-loD)), w:Math.round(loW+rng()*(hiW-loW))}; }
+  const halfD=(b.d1-b.d0)/2, halfW=(b.w1-b.w0)/2, maxOff=reg.r-Math.max(halfD,halfW); if(maxOff<0) return null;
+  const ang=rng()*2*Math.PI, rad=Math.sqrt(rng())*maxOff, cx=reg.cd+rad*Math.cos(ang), cw=reg.cw+rad*Math.sin(ang);
+  return {d:Math.round(cx-(b.d0+b.d1)/2), w:Math.round(cw-(b.w0+b.w1)/2)}; }
+// preset の range/choice をアプリ側で振って固定値へ（不確定要素を mod に持ち込まない）
+function rollElem(v,rng){ if(v&&typeof v==='object'){ if(Array.isArray(v.range)){ const a=v.range[0],b=v.range[1]; return a+Math.floor(rng()*(b-a+1)); } if(Array.isArray(v.choice)) return rollElem(v.choice[Math.floor(rng()*v.choice.length)],rng); if(v.form) return {form:v.form, mat:v.mat}; } return v; }
+function rollParams(bt, source, rng){ const out={}; if(source && source!=='DEFAULTS'){ const pr=(PRESETS.presets[bt]||{})[source]||{}; for(const [k,v] of Object.entries(pr)) out[k]=rollElem(v,rng); } return out; }
+function scatterArea(m){
+  const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0, target=p.count|0;
+  plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
+  const rng=mulberry32((p.seed|0)||1), reg=regionWorld(m);
+  const exclude=plan.entries.filter(e=>e.type!=='randomarea').map(reservedRegion).filter(Boolean); // 領域自身は除外対象外
+  const placed=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
+  while(attempts<maxA && (target===0 || made<target)){
+    attempts++;
+    const dir=p.rotate ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT';
+    const child={type:bt, relDir:dir, relPos:{d:0,h:0,w:0}, params:rollParams(bt,src,rng), group:id};
+    if(cm>0) child.margin=cm;
+    const pos=randomFitPos(child, reg, rng); if(!pos) continue;
+    child.relPos={d:pos.d,h:0,w:pos.w};
+    if(!regionContains(reg, child)) continue;
+    const rr=reservedRegion(child); if(!rr) continue;
+    if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) continue;
+    plan.entries.push(child); placed.push(rr); made++;
+  }
+  persist(); renderEntries(); renderEditor(); render();
+  status('抽選: '+made+' 件配置'+(target>0&&made<target?'（'+target+' に届かず・領域/間隔を確認）':''));
+}
+function randomEditorRows(e){ const p=e.params, isRect=(p.region.shape==='RECT');
+  let h='<div class="r"><label>領域</label><select id="rg-shape"><option'+(isRect?' selected':'')+'>RECT</option><option'+(!isRect?' selected':'')+'>CIRCLE</option></select>';
+  if(isRect) h+=' d<input type="number" id="rg-d" value="'+(p.region.size[0]||10)+'"> w<input type="number" id="rg-w" value="'+(p.region.size[1]||10)+'">';
+  else h+=' 径<input type="number" id="rg-dia" value="'+(p.region.size[0]||10)+'">';
+  h+='</div>';
+  h+='<div class="r"><label>建てる</label><select id="rg-builder">'+builderTypes().map(t=>'<option'+(p.builder===t?' selected':'')+'>'+t+'</option>').join('')+'</select> 元<select id="rg-src"><option value="DEFAULTS"'+(p.source==='DEFAULTS'?' selected':'')+'>DEFAULTS</option>'+presetNames(p.builder).map(n=>'<option'+(p.source===n?' selected':'')+'>'+n+'</option>').join('')+'</select></div>';
+  h+='<div class="r"><label>個数</label><input type="number" id="rg-count" value="'+(p.count||0)+'" title="0=詰められるだけ"> <span class="muted">0=詰める</span> <label class="chk"><input type="checkbox" id="rg-rot"'+(p.rotate?' checked':'')+'>向きrandom</label></div>';
+  h+='<div class="r"><label>間隔</label>margin<input type="number" id="rg-cm" value="'+(p.childMargin||0)+'"> gap<input type="number" id="rg-gap" value="'+(p.gap||0)+'"></div>';
+  h+='<div class="r"><label>seed</label><input type="number" id="rg-seed" value="'+(p.seed||0)+'"><button id="rg-dice">🎲</button></div>';
+  h+='<div class="r"><button class="pri" id="rg-run">抽選</button><button id="rg-reroll">再抽選</button><button id="rg-clear">子削除</button></div>';
+  return h; }
+function wireRandomEditor(e){ const p=e.params, up=()=>{persist();renderEntries();};
+  $('#rg-shape').onchange=ev=>{ p.region.shape=ev.target.value; p.region.size=(ev.target.value==='RECT')?[20,20]:[20]; persist();renderEntries();renderEditor();render(); };
+  if($('#rg-d')) $('#rg-d').oninput=ev=>{ p.region.size[0]=Math.max(1,Math.round(+ev.target.value||1)); up();render(); };
+  if($('#rg-w')) $('#rg-w').oninput=ev=>{ p.region.size[1]=Math.max(1,Math.round(+ev.target.value||1)); up();render(); };
+  if($('#rg-dia')) $('#rg-dia').oninput=ev=>{ p.region.size[0]=Math.max(1,Math.round(+ev.target.value||1)); up();render(); };
+  $('#rg-builder').onchange=ev=>{ p.builder=ev.target.value; p.source='DEFAULTS'; persist();renderEntries();renderEditor(); };
+  $('#rg-src').onchange=ev=>{ p.source=ev.target.value; up(); };
+  $('#rg-count').oninput=ev=>{ p.count=Math.max(0,Math.round(+ev.target.value||0)); up(); };
+  $('#rg-rot').onchange=ev=>{ p.rotate=ev.target.checked; up(); };
+  $('#rg-cm').oninput=ev=>{ p.childMargin=Math.max(0,Math.round(+ev.target.value||0)); up(); };
+  $('#rg-gap').oninput=ev=>{ p.gap=Math.max(0,Math.round(+ev.target.value||0)); up(); };
+  $('#rg-seed').oninput=ev=>{ p.seed=Math.round(+ev.target.value||0); };
+  $('#rg-dice').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); renderEditor(); };
+  $('#rg-run').onclick=()=>scatterArea(e);
+  $('#rg-reroll').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); scatterArea(e); };
+  $('#rg-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==p.id); sel=-1; persist();renderEntries();renderEditor();render(); status('子を削除'); };
+}
+
 /* ---------- 保存先（File System Access API + IndexedDB）: mc-blueprint から流用 ---------- */
 const FS_OK=!!(window.showDirectoryPicker);
 function idb(mode,fn){ return new Promise((res,rej)=>{ const r=indexedDB.open('cb',1);
@@ -491,8 +605,12 @@ async function saveFile(text,fname){
 /* ---------- open plan.json ---------- */
 function importPlan(text){
   try{ const d=JSON.parse(text); if(!d||!Array.isArray(d.entries)) throw 0;
-    plan={entries:d.entries.map(e=>({relPos:{d:(e.relPos&&e.relPos.d)||0,h:(e.relPos&&e.relPos.h)||0,w:(e.relPos&&e.relPos.w)||0},relDir:e.relDir||'FRONT',...e}))};
-    sel=-1; persist(); renderEntries(); renderEditor(); fitCam(); status('読み込みました（'+plan.entries.length+'件）');
+    const norm=e=>({relPos:{d:(e.relPos&&e.relPos.d)||0,h:(e.relPos&&e.relPos.h)||0,w:(e.relPos&&e.relPos.w)||0},relDir:e.relDir||'FRONT',...e});
+    const ents=d.entries.map(norm), metas=(Array.isArray(d.meta)?d.meta:[]).map(norm);
+    const out=[], used=new Set();                       // 各 randomarea の直後にその子を並べる
+    metas.forEach(m=>{ out.push(m); const id=m.params&&m.params.id; ents.forEach(c=>{ if(id!=null&&c.group===id){ out.push(c); used.add(c); } }); });
+    ents.forEach(c=>{ if(!used.has(c)) out.push(c); });
+    plan={entries:out}; sel=-1; persist(); renderEntries(); renderEditor(); fitCam(); status('読込: entries '+ents.length+' / meta '+metas.length);
   }catch(_){ status('plan.json の解析に失敗'); }
 }
 
