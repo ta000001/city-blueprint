@@ -199,7 +199,7 @@ function renderEntries(){
     let ref='';
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
     else if(e.type==='randomarea'){ const id=e.params&&e.params.id; const n=plan.entries.filter(x=>x.group===id).length; ref=(e.params.builder||'?')+'×'+((e.params.count||0)>0?e.params.count:'詰める')+' ('+n+'配置)'; }
-    else if(e.params&&e.params.preset) ref='preset:'+e.params.preset;
+    else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
     li.onclick=()=>{ sel=i; renderEntries(); renderEditor(); render(); };
@@ -216,10 +216,7 @@ function renderEditor(){
   if(e.type==='plan') h+='<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:100px"></div>';
   else if(e.type==='structure') h+='<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:100px"></div>';
   else if(e.type==='randomarea') h+=randomEditorRows(e);
-  else {
-    const pn=presetNames(e.type);
-    h+='<div class="r"><label>preset</label><select id="e-preset"><option value="">(なし)</option>'+pn.map(n=>'<option'+(e.params&&e.params.preset===n?' selected':'')+'>'+n+'</option>').join('')+'</select> <button id="e-params">パラメータ…</button></div>';
-  }
+  else h+='<div class="r"><button id="e-params">パラメータ…</button></div>';
   if(e.type!=='randomarea'){
     h+='<div class="r"><label>margin</label><input type="number" id="e-margin" value="'+(typeof e.margin==='number'?e.margin:'')+'" placeholder="なし"> <span class="muted">一律(スカラ)</span></div>';
     h+='<div class="r"><label>ground</label><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:110px"> <span class="muted">FULLBLOCK</span></div>';
@@ -232,7 +229,6 @@ function renderEditor(){
   $('#e-w').oninput=ev=>{rp.w=+ev.target.value||0; upd();};
   $('#e-dir').onchange=ev=>{e.relDir=ev.target.value; upd();};
   if($('#e-ref')) $('#e-ref').oninput=ev=>{ if(e.type==='plan') e.plan=ev.target.value; else e.structure=ev.target.value; upd(); };
-  if($('#e-preset')) $('#e-preset').onchange=ev=>{ e.params=e.params||{}; if(ev.target.value) e.params.preset=ev.target.value; else delete e.params.preset; upd(); };
   if($('#e-params')) $('#e-params').onclick=()=>openParams(sel);
   if(e.type==='randomarea') wireRandomEditor(e);
   if($('#e-margin')) $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
@@ -253,7 +249,14 @@ function openParams(i){
   const e=plan.entries[i]; if(!(e.type in SCHEMA.builders)){ status('plan/structure にパラメータはありません'); return; }
   e.params=e.params||{}; pIdx=i; renderParams(); $('#pmodal').classList.add('on');
 }
-function curMode(f,val){ if(val===undefined) return 'unset'; if(val&&typeof val==='object'){ if('range' in val) return 'range'; if('choice' in val) return f.type==='bool'?'random':'choice'; } return 'fixed'; }
+function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) return 'range'; if('choice' in c) return f.type==='bool'?'random':'choice'; } if(e.params&&e.params[k]!==undefined) return 'fixed'; return 'unset'; }
+// cond(抽選条件) を seed で振って params(確定値) を更新。全体の原則=plan.jsonのparamsは常に固定値
+function rollEntry(e){ if(!e.cond||!Object.keys(e.cond).length) return; if(e.seed==null) e.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type].fields; for(const k of Object.keys(fields)){ if(e.cond[k]!==undefined) e.params[k]=rollElem(e.cond[k],rng); } }
+function cleanupCond(e){ if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
+function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent='→ '+specOrValStr(e.params[k]); }
+function applyPreset(e,t,name){ e.params={}; e.cond={};
+  if(name){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } }
+  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderParams(); }
 function modesFor(ft){ if(ft==='int') return [['unset','未設定'],['fixed','固定'],['range','範囲'],['choice','選択']]; if(ft==='bool') return [['unset','未設定'],['fixed','固定'],['random','ランダム']]; return [['unset','未設定'],['fixed','固定'],['choice','選択']]; }
 function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
   return 'form <select id="pbf-'+k+'">'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'">'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
@@ -261,49 +264,54 @@ function blockspecChoiceEditor(k,arr){ let h='';
   arr.forEach((s,idx)=>{ const sp=asSpec(s), mats=matsFor(sp.form);
     h+='<div class="bcrow"><select data-bcf="'+k+'" data-i="'+idx+'">'+FORMS().map(f=>'<option'+(f===sp.form?' selected':'')+'>'+f+'</option>').join('')+'</select><select data-bcm="'+k+'" data-i="'+idx+'">'+mats.map(m=>'<option'+(m===sp.mat?' selected':'')+'>'+m+'</option>').join('')+'</select><button data-bcx="'+k+'" data-i="'+idx+'">×</button></div>'; });
   h+='<button data-bca="'+k+'">＋候補</button>'; return h; }
-function valueEditor(e,t,k,f,mode,val){ const ft=f.type;
+function valueEditor(e,t,k,f,mode){ const ft=f.type, cond=(e.cond&&e.cond[k])||null, val=e.params[k];
   if(mode==='fixed'){
     if(ft==='int'){ const v=(typeof val==='number')?val:(fieldVal(e,t,k)||0); return '<input type="number" id="pv-'+k+'" value="'+v+'">'; }
     if(ft==='bool'){ const v=(val===true); return '<select id="pv-'+k+'"><option value="true"'+(v?' selected':'')+'>true</option><option value="false"'+(!v?' selected':'')+'>false</option></select>'; }
     if(ft==='enum'){ const cur=(typeof val==='string')?val:effElem(e,t,k); return '<select id="pv-'+k+'">'+f.values.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
     if(ft==='blockspec') return blockspecEditor(k, (val&&val.form)?val:asSpec(effElem(e,t,k)));
   }
-  if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(val&&val.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'">'; }
-  if(mode==='random') return '<span class="muted">true / false からランダム</span>';
-  if(mode==='choice'){ const arr=(val&&val.choice)||[];
+  if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(cond&&cond.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'">'; }
+  if(mode==='random') return '<span class="muted">true / false</span>';
+  if(mode==='choice'){ const arr=(cond&&cond.choice)||[];
     if(ft==='enum') return f.values.map(o=>'<label class="chk"><input type="checkbox" data-c="'+k+'" value="'+o+'"'+(arr.includes(o)?' checked':'')+'>'+o+'</label>').join(' ');
     if(ft==='int') return '<input type="text" id="pv-'+k+'" placeholder="1,2,3" value="'+arr.join(',')+'">';
     if(ft==='blockspec') return blockspecChoiceEditor(k,arr);
   }
   return '';
 }
-function paramRow(e,t,k,f){ const val=e.params[k], mode=curMode(f,val);
+function paramRow(e,t,k,f){ const mode=curMode(e,f,k);
   const modeSel='<select class="mode" id="pm-'+k+'">'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
-  const ed=(mode==='unset')?'<span class="muted">= '+effDisplay(e,t,k)+'</span>':valueEditor(e,t,k,f,mode,val);
+  let ed;
+  if(mode==='unset') ed='<span class="muted">= '+effDisplay(e,t,k)+'</span>';
+  else if(mode==='fixed') ed=valueEditor(e,t,k,f,'fixed');
+  else ed=valueEditor(e,t,k,f,mode)+' <span class="res" id="pres-'+k+'">→ '+specOrValStr(e.params[k])+'</span>'; // 抽選条件 → 確定値 を併記
   return '<div class="pf"><span class="k">'+k+'</span><span class="tag">'+f.type+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div>';
 }
 function renderParams(){ const e=pE(); if(!e) return; const t=e.type, fields=SCHEMA.builders[t].fields;
   $('#ptitle').textContent=t+' パラメータ';
-  const pn=presetNames(t), curp=(typeof e.params.preset==='string')?e.params.preset:'';
-  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(なし)</option>'+pn.map(n=>'<option'+(curp===n?' selected':'')+'>'+n+'</option>').join('')+'</select></div>';
+  const pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
+  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
+  h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
   for(const [k,f] of Object.entries(fields)) h+=paramRow(e,t,k,f);
   $('#pbody').innerHTML=h;
-  $('#p-preset').onchange=ev=>{ if(ev.target.value) e.params.preset=ev.target.value; else delete e.params.preset; persist(); renderEntries(); renderParams(); };
+  $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
+  $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderParams(); };
   wireParamRows(e,t,fields);
 }
 function light(){ persist(); renderEntries(); } // モーダル本体は再描画しない（入力フォーカス維持）
-function setMode(e,t,k,f,mode){
-  if(mode==='unset') delete e.params[k];
-  else if(mode==='fixed') e.params[k]= f.type==='blockspec'?asSpec(effElem(e,t,k)) : f.type==='bool'?(fieldVal(e,t,k)===true) : f.type==='int'?Math.round(fieldVal(e,t,k)||0) : (effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]);
-  else if(mode==='range'){ const b=Math.round(fieldVal(e,t,k)||0); e.params[k]={range:[b,b]}; }
-  else if(mode==='random') e.params[k]={choice:[true,false]};
-  else if(mode==='choice') e.params[k]={choice: f.type==='blockspec'?[asSpec(effElem(e,t,k))] : f.type==='int'?[Math.round(fieldVal(e,t,k)||0)] : [effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]]};
-  persist(); renderEntries(); renderParams();
+function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
+  if(mode==='unset'){ delete e.params[k]; delete e.cond[k]; }
+  else if(mode==='fixed'){ delete e.cond[k]; e.params[k]= f.type==='blockspec'?asSpec(effElem(e,t,k)) : f.type==='bool'?(fieldVal(e,t,k)===true) : f.type==='int'?Math.round(fieldVal(e,t,k)||0) : (effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]); }
+  else if(mode==='range'){ const b=Math.round(fieldVal(e,t,k)||0); e.cond[k]={range:[b,b]}; }
+  else if(mode==='random'){ e.cond[k]={choice:[true,false]}; }
+  else if(mode==='choice'){ e.cond[k]={choice: f.type==='blockspec'?[asSpec(effElem(e,t,k))] : f.type==='int'?[Math.round(fieldVal(e,t,k)||0)] : [effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]]}; }
+  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderParams();
 }
 function wireParamRows(e,t,fields){
   for(const [k,f] of Object.entries(fields)){
     const ms=$('#pm-'+k); if(ms) ms.onchange=ev=>setMode(e,t,k,f,ev.target.value);
-    const mode=curMode(f,e.params[k]);
+    const mode=curMode(e,f,k);
     if(mode==='fixed'){
       if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); light(); }; }
       else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); light(); }; }
@@ -311,15 +319,15 @@ function wireParamRows(e,t,fields){
       else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
         if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderParams(); };
         if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; light(); }; }
-    } else if(mode==='range'){ const a=$('#pr0-'+k), b=$('#pr1-'+k), upd=()=>{ e.params[k]={range:[Math.round(+a.value||0),Math.round(+b.value||0)]}; light(); }; if(a)a.oninput=upd; if(b)b.oninput=upd; }
+    } else if(mode==='range'){ const a=$('#pr0-'+k), b=$('#pr1-'+k), upd=()=>{ e.cond[k]={range:[Math.round(+a.value||0),Math.round(+b.value||0)]}; rollEntry(e); refreshResolved(e,k); light(); }; if(a)a.oninput=upd; if(b)b.oninput=upd; }
     else if(mode==='choice'){
-      if(f.type==='enum'){ document.querySelectorAll('[data-c="'+k+'"]').forEach(cb=>cb.onchange=()=>{ e.params[k]={choice:[...document.querySelectorAll('[data-c="'+k+'"]')].filter(x=>x.checked).map(x=>x.value)}; light(); }); }
-      else if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]={choice: ev.target.value.split(',').map(s=>s.trim()).filter(s=>s!=='').map(Number).filter(n=>!isNaN(n))}; light(); }; }
-      else if(f.type==='blockspec'){ const arr=()=>e.params[k].choice;
-        document.querySelectorAll('[data-bcf="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i]={form:s.value, mat:matsFor(s.value)[0]}; persist();renderEntries();renderParams(); });
-        document.querySelectorAll('[data-bcm="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i].mat=s.value; light(); });
-        document.querySelectorAll('[data-bcx="'+k+'"]').forEach(b=>b.onclick=()=>{ arr().splice(+b.dataset.i,1); persist();renderEntries();renderParams(); });
-        const add=document.querySelector('[data-bca="'+k+'"]'); if(add) add.onclick=()=>{ arr().push(asSpec(effElem(e,t,k))); persist();renderEntries();renderParams(); };
+      if(f.type==='enum'){ document.querySelectorAll('[data-c="'+k+'"]').forEach(cb=>cb.onchange=()=>{ e.cond[k]={choice:[...document.querySelectorAll('[data-c="'+k+'"]')].filter(x=>x.checked).map(x=>x.value)}; rollEntry(e); refreshResolved(e,k); light(); }); }
+      else if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.cond[k]={choice: ev.target.value.split(',').map(s=>s.trim()).filter(s=>s!=='').map(Number).filter(n=>!isNaN(n))}; rollEntry(e); refreshResolved(e,k); light(); }; }
+      else if(f.type==='blockspec'){ const arr=()=>e.cond[k].choice;
+        document.querySelectorAll('[data-bcf="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i]={form:s.value, mat:matsFor(s.value)[0]}; rollEntry(e); persist();renderEntries();renderParams(); });
+        document.querySelectorAll('[data-bcm="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i].mat=s.value; rollEntry(e); persist();renderEntries();renderParams(); });
+        document.querySelectorAll('[data-bcx="'+k+'"]').forEach(b=>b.onclick=()=>{ arr().splice(+b.dataset.i,1); rollEntry(e); persist();renderEntries();renderParams(); });
+        const add=document.querySelector('[data-bca="'+k+'"]'); if(add) add.onclick=()=>{ arr().push(asSpec(effElem(e,t,k))); rollEntry(e); persist();renderEntries();renderParams(); };
       }
     }
   }
@@ -336,6 +344,7 @@ function entryLine(e){
   if(e.type==='plan') p.push('"plan": '+JSON.stringify(e.plan||''));
   else if(e.type==='structure') p.push('"structure": '+JSON.stringify(e.structure||''));
   else p.push('"params": '+JSON.stringify(e.params||{}));
+  if(e.cond && Object.keys(e.cond).length){ p.push('"cond": '+JSON.stringify(e.cond)); if(e.seed!=null) p.push('"seed": '+JSON.stringify(e.seed)); } // 抽選条件（mod は無視）
   if(e.group) p.push('"group": '+JSON.stringify(e.group)); // 機能3 グルーピング（mod は無視）
   return '{'+p.join(', ')+'}';
 }
@@ -521,6 +530,12 @@ function drawRegion(e,onSel){ const sh=regionShape(e);
 function regionWorld(m){ const sh=regionShape(m);
   if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d),ws=sh.body.map(p=>p.w); return {shape:'RECT', d0:Math.min(...ds),d1:Math.max(...ds),w0:Math.min(...ws),w1:Math.max(...ws)}; }
   return {shape:'CIRCLE', cd:sh.center.d, cw:sh.center.w, r:sh.r}; }
+// 領域を footprint が内包するエントリ（＝城壁などの囲い）は除外対象外
+function enclosesRegion(e, reg){ const b=bodyRegion(e); if(!b) return false;
+  let rd0,rd1,rw0,rw1;
+  if(reg.shape==='RECT'){ rd0=reg.d0;rd1=reg.d1;rw0=reg.w0;rw1=reg.w1; } else { rd0=reg.cd-reg.r;rd1=reg.cd+reg.r;rw0=reg.cw-reg.r;rw1=reg.cw+reg.r; }
+  if(b.kind==='rect') return b.d0<=rd0 && b.d1>=rd1 && b.w0<=rw0 && b.w1>=rw1;
+  return [[rd0,rw0],[rd1,rw0],[rd1,rw1],[rd0,rw1]].every(([d,w])=>Math.hypot(d-b.cd,w-b.cw)<=b.r); }
 function reservedBBox(child){ const rr=reservedRegion(child); if(!rr) return null; if(rr.kind==='rect') return {d0:rr.d0,d1:rr.d1,w0:rr.w0,w1:rr.w1}; return {d0:rr.cd-rr.r,d1:rr.cd+rr.r,w0:rr.cw-rr.r,w1:rr.cw+rr.r}; }
 function inflate(r,g){ if(!r||!g) return r; if(r.kind==='rect') return {kind:'rect',d0:r.d0-g,d1:r.d1+g,w0:r.w0-g,w1:r.w1+g}; return {kind:'circle',cd:r.cd,cw:r.cw,r:r.r+g}; }
 function regionContains(reg, child){ const b=reservedBBox(child); if(!b) return false;
@@ -540,7 +555,7 @@ function scatterArea(m){
   const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0, target=p.count|0;
   plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
   const rng=mulberry32((p.seed|0)||1), reg=regionWorld(m);
-  const exclude=plan.entries.filter(e=>e.type!=='randomarea').map(reservedRegion).filter(Boolean); // 領域自身は除外対象外
+  const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean); // 領域自身＋領域を内包する囲い(城壁等)は除外対象外
   const placed=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
   while(attempts<maxA && (target===0 || made<target)){
     attempts++;
@@ -565,8 +580,7 @@ function randomEditorRows(e){ const p=e.params, isRect=(p.region.shape==='RECT')
   h+='<div class="r"><label>建てる</label><select id="rg-builder">'+builderTypes().map(t=>'<option'+(p.builder===t?' selected':'')+'>'+t+'</option>').join('')+'</select> 元<select id="rg-src"><option value="DEFAULTS"'+(p.source==='DEFAULTS'?' selected':'')+'>DEFAULTS</option>'+presetNames(p.builder).map(n=>'<option'+(p.source===n?' selected':'')+'>'+n+'</option>').join('')+'</select></div>';
   h+='<div class="r"><label>個数</label><input type="number" id="rg-count" value="'+(p.count||0)+'" title="0=詰められるだけ"> <span class="muted">0=詰める</span> <label class="chk"><input type="checkbox" id="rg-rot"'+(p.rotate?' checked':'')+'>向きrandom</label></div>';
   h+='<div class="r"><label>間隔</label>margin<input type="number" id="rg-cm" value="'+(p.childMargin||0)+'"> gap<input type="number" id="rg-gap" value="'+(p.gap||0)+'"></div>';
-  h+='<div class="r"><label>seed</label><input type="number" id="rg-seed" value="'+(p.seed||0)+'"><button id="rg-dice">🎲</button></div>';
-  h+='<div class="r"><button class="pri" id="rg-run">抽選</button><button id="rg-reroll">再抽選</button><button id="rg-clear">子削除</button></div>';
+  h+='<div class="r"><button class="pri" id="rg-run">抽選</button><button id="rg-clear">子削除</button> <span class="muted">seed '+(p.seed||0)+'</span></div>';
   return h; }
 function wireRandomEditor(e){ const p=e.params, up=()=>{persist();renderEntries();};
   $('#rg-shape').onchange=ev=>{ p.region.shape=ev.target.value; p.region.size=(ev.target.value==='RECT')?[20,20]:[20]; persist();renderEntries();renderEditor();render(); };
@@ -579,10 +593,7 @@ function wireRandomEditor(e){ const p=e.params, up=()=>{persist();renderEntries(
   $('#rg-rot').onchange=ev=>{ p.rotate=ev.target.checked; up(); };
   $('#rg-cm').oninput=ev=>{ p.childMargin=Math.max(0,Math.round(+ev.target.value||0)); up(); };
   $('#rg-gap').oninput=ev=>{ p.gap=Math.max(0,Math.round(+ev.target.value||0)); up(); };
-  $('#rg-seed').oninput=ev=>{ p.seed=Math.round(+ev.target.value||0); };
-  $('#rg-dice').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); renderEditor(); };
-  $('#rg-run').onclick=()=>scatterArea(e);
-  $('#rg-reroll').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); scatterArea(e); };
+  $('#rg-run').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); scatterArea(e); };
   $('#rg-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==p.id); sel=-1; persist();renderEntries();renderEditor();render(); status('子を削除'); };
 }
 
