@@ -38,6 +38,9 @@ input[type=number]{width:56px}
 .bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .wrap{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:10px;align-items:start}
 @media(max-width:720px){.wrap{grid-template-columns:1fr}}
+.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:10px;align-items:start}
+@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.sub2{font-size:10px;color:var(--brass);letter-spacing:.08em;margin:8px 0 2px;font-weight:600}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px}
 .panel h2{font-size:12px;color:var(--brass);margin:0 0 6px;font-weight:600;letter-spacing:.04em}
 #entries{list-style:none;margin:0;padding:0;max-height:38vh;overflow:auto}
@@ -45,7 +48,7 @@ input[type=number]{width:56px}
 #entries li.sel{border-color:var(--sel);background:var(--panel2)}
 #entries .t{color:var(--brass);font-weight:600}
 #entries .m{color:var(--dim)}
-.ed{margin-top:8px;border-top:1px solid var(--rule);padding-top:8px;font-size:11px}
+.ed{margin-top:4px;font-size:11px}
 .ed label{display:inline-block;color:var(--dim);min-width:44px}
 .ed .r{margin-bottom:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 canvas{width:100%;height:52vh;background:#0C1214;border:1px solid var(--rule);border-radius:8px;display:block;touch-action:none}
@@ -87,7 +90,22 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
   <button id="fit">全体表示</button>
 </div>
 
-<div class="wrap">
+<div class="grid">
+  <div class="panel">
+    <h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
+    <canvas id="cv"></canvas>
+    <div class="canbar">
+      <button id="zin">＋</button><button id="zout">－</button>
+      <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>パラメータ（選択中エントリ）</h2>
+    <div class="sub2">基本</div>
+    <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
+    <div class="sub2" id="tphead">type別</div>
+    <div class="ed" id="tparams"><span class="muted">—</span></div>
+  </div>
   <div class="panel">
     <h2>エントリ（記載順）</h2>
     <div class="bar" style="margin-bottom:6px">
@@ -95,18 +113,10 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
       <button id="add">＋追加</button>
     </div>
     <ul id="entries"></ul>
-    <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
   </div>
-  <div>
-    <div class="panel">
-      <h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
-      <canvas id="cv"></canvas>
-      <div class="canbar">
-        <button id="zin">＋</button><button id="zout">－</button>
-        <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
-      </div>
-    </div>
-    <textarea id="json" readonly spellcheck="false"></textarea>
+  <div class="panel">
+    <h2>plan.json</h2>
+    <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
   </div>
 </div>
 <div id="status"></div>
@@ -117,12 +127,6 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
     <div style="margin-top:8px"><button id="pick">plan フォルダを選ぶ</button></div>
     <div class="muted" style="margin-top:6px">mod の data/transaction/plan/ を選ぶと直接保存されます</div></div>
   <div class="muted" id="fs-note" style="display:none">この端末はフォルダ保存に非対応（ダウンロードになります）</div>
-</div></div>
-
-<div class="modal" id="pmodal"><div class="m wide">
-  <div class="pfhdr" style="position:sticky;top:0;background:var(--panel2);padding:2px 0 6px;z-index:1">
-    <h3 id="ptitle" style="margin:0;flex:1">パラメータ</h3><button id="p-close">閉じる</button></div>
-  <div id="pbody"></div>
 </div></div>
 
 <script>
@@ -208,16 +212,12 @@ function renderEntries(){
 }
 function renderEditor(){
   const ed=$('#editor');
-  if(sel<0||sel>=plan.entries.length){ ed.innerHTML='<span class="muted">エントリを選択</span>'; return; }
+  if(sel<0||sel>=plan.entries.length){ ed.innerHTML='<span class="muted">エントリを選択</span>'; renderTParams(); return; }
   const e=plan.entries[sel], rp=e.relPos||(e.relPos={d:0,h:0,w:0});
   let h='';
   h+='<div class="r"><label>relPos</label> d<input type="number" id="e-d" value="'+(rp.d||0)+'"> h<input type="number" id="e-h" value="'+(rp.h||0)+'"> w<input type="number" id="e-w" value="'+(rp.w||0)+'"></div>';
   h+='<div class="r"><label>relDir</label><select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select></div>';
-  if(e.type==='plan') h+='<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:100px"></div>';
-  else if(e.type==='structure') h+='<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:100px"></div>';
-  else if(e.type==='randomarea') h+=randomEditorRows(e);
-  else h+='<div class="r"><button id="e-params">パラメータ…</button></div>';
-  if(e.type!=='randomarea'){
+  if(e.type in SCHEMA.builders){
     h+='<div class="r"><label>margin</label><input type="number" id="e-margin" value="'+(typeof e.margin==='number'?e.margin:'')+'" placeholder="なし"> <span class="muted">一律(スカラ)</span></div>';
     h+='<div class="r"><label>ground</label><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:110px"> <span class="muted">FULLBLOCK</span></div>';
   }
@@ -228,27 +228,36 @@ function renderEditor(){
   $('#e-h').oninput=ev=>{rp.h=+ev.target.value||0; upd();};
   $('#e-w').oninput=ev=>{rp.w=+ev.target.value||0; upd();};
   $('#e-dir').onchange=ev=>{e.relDir=ev.target.value; upd();};
-  if($('#e-ref')) $('#e-ref').oninput=ev=>{ if(e.type==='plan') e.plan=ev.target.value; else e.structure=ev.target.value; upd(); };
-  if($('#e-params')) $('#e-params').onclick=()=>openParams(sel);
-  if(e.type==='randomarea') wireRandomEditor(e);
   if($('#e-margin')) $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
   if($('#e-ground')) $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; persist(); };
   $('#e-up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; sel--; persist(); renderEntries(); } };
   $('#e-down').onclick=()=>{ if(sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; sel++; persist(); renderEntries(); } };
   $('#e-del').onclick=()=>{ plan.entries.splice(sel,1); sel=-1; persist(); renderEntries(); renderEditor(); };
+  renderTParams();
+}
+// type別パラメータ（選択中エントリの params / 参照 / randomarea 条件）をインライン表示
+function renderTParams(){
+  const box=$('#tparams'), head=$('#tphead'); if(!box) return;
+  if(sel<0||sel>=plan.entries.length){ head.textContent='type別'; box.innerHTML='<span class="muted">—</span>'; return; }
+  const e=plan.entries[sel], t=e.type;
+  if(t==='plan'){ head.textContent='type別（plan）'; box.innerHTML='<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML='<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=randomEditorRows(e); wireRandomEditor(e); return; }
+  head.textContent='type別（'+t+'）';
+  const fields=SCHEMA.builders[t].fields, pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
+  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
+  h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
+  for(const [k,f] of Object.entries(fields)) h+=paramRow(e,t,k,f);
+  box.innerHTML=h;
+  $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
+  $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
+  wireParamRows(e,t,fields);
 }
 
 /* ---------- 機能2: パラメータモーダル（schema fields から自動生成・値は固定/範囲/選択） ---------- */
 const FORMS=()=>[...new Set(DICT.map(d=>d.form))];
 const matsFor=f=>[...new Set(DICT.filter(d=>d.form===f&&d.mat!=null).map(d=>d.mat))];
 function asSpec(v){ if(v&&typeof v==='object'&&v.form) return {form:v.form, mat:v.mat}; const f=FORMS()[0]||'FULLBLOCK'; return {form:f, mat:matsFor(f)[0]}; }
-let pIdx=-1;
-function pE(){ return plan.entries[pIdx]; }
-function openParams(i){
-  if(i<0||i>=plan.entries.length) return;
-  const e=plan.entries[i]; if(!(e.type in SCHEMA.builders)){ status('plan/structure にパラメータはありません'); return; }
-  e.params=e.params||{}; pIdx=i; renderParams(); $('#pmodal').classList.add('on');
-}
 function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) return 'range'; if('choice' in c) return f.type==='bool'?'random':'choice'; } if(e.params&&e.params[k]!==undefined) return 'fixed'; return 'unset'; }
 // cond(抽選条件) を seed で振って params(確定値) を更新。全体の原則=plan.jsonのparamsは常に固定値
 function rollEntry(e){ if(!e.cond||!Object.keys(e.cond).length) return; if(e.seed==null) e.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type].fields; for(const k of Object.keys(fields)){ if(e.cond[k]!==undefined) e.params[k]=rollElem(e.cond[k],rng); } }
@@ -256,7 +265,7 @@ function cleanupCond(e){ if(e.cond&&!Object.keys(e.cond).length){ delete e.cond;
 function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent='→ '+specOrValStr(e.params[k]); }
 function applyPreset(e,t,name){ e.params={}; e.cond={};
   if(name){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } }
-  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderParams(); }
+  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderTParams(); }
 function modesFor(ft){ if(ft==='int') return [['unset','未設定'],['fixed','固定'],['range','範囲'],['choice','選択']]; if(ft==='bool') return [['unset','未設定'],['fixed','固定'],['random','ランダム']]; return [['unset','未設定'],['fixed','固定'],['choice','選択']]; }
 function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
   return 'form <select id="pbf-'+k+'">'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'">'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
@@ -288,25 +297,14 @@ function paramRow(e,t,k,f){ const mode=curMode(e,f,k);
   else ed=valueEditor(e,t,k,f,mode)+' <span class="res" id="pres-'+k+'">→ '+specOrValStr(e.params[k])+'</span>'; // 抽選条件 → 確定値 を併記
   return '<div class="pf"><span class="k">'+k+'</span><span class="tag">'+f.type+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div>';
 }
-function renderParams(){ const e=pE(); if(!e) return; const t=e.type, fields=SCHEMA.builders[t].fields;
-  $('#ptitle').textContent=t+' パラメータ';
-  const pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
-  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
-  h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
-  for(const [k,f] of Object.entries(fields)) h+=paramRow(e,t,k,f);
-  $('#pbody').innerHTML=h;
-  $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
-  $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderParams(); };
-  wireParamRows(e,t,fields);
-}
-function light(){ persist(); renderEntries(); } // モーダル本体は再描画しない（入力フォーカス維持）
+function light(){ persist(); renderEntries(); } // 本体は再描画しない（入力フォーカス維持）
 function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
   if(mode==='unset'){ delete e.params[k]; delete e.cond[k]; }
   else if(mode==='fixed'){ delete e.cond[k]; e.params[k]= f.type==='blockspec'?asSpec(effElem(e,t,k)) : f.type==='bool'?(fieldVal(e,t,k)===true) : f.type==='int'?Math.round(fieldVal(e,t,k)||0) : (effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]); }
   else if(mode==='range'){ const b=Math.round(fieldVal(e,t,k)||0); e.cond[k]={range:[b,b]}; }
   else if(mode==='random'){ e.cond[k]={choice:[true,false]}; }
   else if(mode==='choice'){ e.cond[k]={choice: f.type==='blockspec'?[asSpec(effElem(e,t,k))] : f.type==='int'?[Math.round(fieldVal(e,t,k)||0)] : [effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]]}; }
-  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderParams();
+  cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderTParams();
 }
 function wireParamRows(e,t,fields){
   for(const [k,f] of Object.entries(fields)){
@@ -317,17 +315,17 @@ function wireParamRows(e,t,fields){
       else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); light(); }; }
       else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; light(); }; }
       else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
-        if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderParams(); };
+        if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderTParams(); };
         if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; light(); }; }
     } else if(mode==='range'){ const a=$('#pr0-'+k), b=$('#pr1-'+k), upd=()=>{ e.cond[k]={range:[Math.round(+a.value||0),Math.round(+b.value||0)]}; rollEntry(e); refreshResolved(e,k); light(); }; if(a)a.oninput=upd; if(b)b.oninput=upd; }
     else if(mode==='choice'){
       if(f.type==='enum'){ document.querySelectorAll('[data-c="'+k+'"]').forEach(cb=>cb.onchange=()=>{ e.cond[k]={choice:[...document.querySelectorAll('[data-c="'+k+'"]')].filter(x=>x.checked).map(x=>x.value)}; rollEntry(e); refreshResolved(e,k); light(); }); }
       else if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.cond[k]={choice: ev.target.value.split(',').map(s=>s.trim()).filter(s=>s!=='').map(Number).filter(n=>!isNaN(n))}; rollEntry(e); refreshResolved(e,k); light(); }; }
       else if(f.type==='blockspec'){ const arr=()=>e.cond[k].choice;
-        document.querySelectorAll('[data-bcf="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i]={form:s.value, mat:matsFor(s.value)[0]}; rollEntry(e); persist();renderEntries();renderParams(); });
-        document.querySelectorAll('[data-bcm="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i].mat=s.value; rollEntry(e); persist();renderEntries();renderParams(); });
-        document.querySelectorAll('[data-bcx="'+k+'"]').forEach(b=>b.onclick=()=>{ arr().splice(+b.dataset.i,1); rollEntry(e); persist();renderEntries();renderParams(); });
-        const add=document.querySelector('[data-bca="'+k+'"]'); if(add) add.onclick=()=>{ arr().push(asSpec(effElem(e,t,k))); rollEntry(e); persist();renderEntries();renderParams(); };
+        document.querySelectorAll('[data-bcf="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i]={form:s.value, mat:matsFor(s.value)[0]}; rollEntry(e); persist();renderEntries();renderTParams(); });
+        document.querySelectorAll('[data-bcm="'+k+'"]').forEach(s=>s.onchange=()=>{ arr()[+s.dataset.i].mat=s.value; rollEntry(e); persist();renderEntries();renderTParams(); });
+        document.querySelectorAll('[data-bcx="'+k+'"]').forEach(b=>b.onclick=()=>{ arr().splice(+b.dataset.i,1); rollEntry(e); persist();renderEntries();renderTParams(); });
+        const add=document.querySelector('[data-bca="'+k+'"]'); if(add) add.onclick=()=>{ arr().push(asSpec(effElem(e,t,k))); rollEntry(e); persist();renderEntries();renderTParams(); };
       }
     }
   }
@@ -650,8 +648,6 @@ function boot(){
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
-  $('#p-close').onclick=()=>{ $('#pmodal').classList.remove('on'); renderEditor(); };
-  $('#pmodal').onclick=e=>{ if(e.target.id==='pmodal'){ $('#pmodal').classList.remove('on'); renderEditor(); } };
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン
   let drag=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
