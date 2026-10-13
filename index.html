@@ -71,6 +71,12 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
 .pf .ped{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .chk{display:inline-flex;align-items:center;gap:2px;font-size:10px;color:var(--dim);white-space:nowrap}
 .bcrow{display:flex;gap:4px;margin-bottom:3px;align-items:center;flex-basis:100%}
+.tp2{display:flex;gap:10px;align-items:flex-start;margin-top:2px}
+.tp2 .res-col{flex:0 0 40%;min-width:0}
+.tp2 .cond-col{flex:1;min-width:0}
+.rrow{display:flex;justify-content:space-between;gap:6px;font-size:11px;padding:3px 2px;border-bottom:1px solid var(--rule)}
+.rrow .rk{color:var(--dim);white-space:nowrap}
+.rrow .rv{color:var(--chalk);text-align:right;word-break:break-word}
 </style>
 </head>
 <body>
@@ -247,7 +253,9 @@ function renderTParams(){
   const fields=SCHEMA.builders[t].fields, pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
   let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
   h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
-  for(const [k,f] of Object.entries(fields)) h+=paramRow(e,t,k,f);
+  const fe=Object.entries(fields);
+  h+='<div class="tp2"><div class="res-col"><div class="sub2">抽選結果</div>'+fe.map(([k,f])=>resultRow(e,t,k,f)).join('')+'</div>';
+  h+='<div class="cond-col"><div class="sub2">抽選条件</div>'+fe.map(([k,f])=>condRow(e,t,k,f)).join('')+'</div></div>';
   box.innerHTML=h;
   $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
   $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
@@ -262,7 +270,7 @@ function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) retu
 // cond(抽選条件) を seed で振って params(確定値) を更新。全体の原則=plan.jsonのparamsは常に固定値
 function rollEntry(e){ if(!e.cond||!Object.keys(e.cond).length) return; if(e.seed==null) e.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type].fields; for(const k of Object.keys(fields)){ if(e.cond[k]!==undefined) e.params[k]=rollElem(e.cond[k],rng); } }
 function cleanupCond(e){ if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
-function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent='→ '+specOrValStr(e.params[k]); }
+function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); }
 function applyPreset(e,t,name){ e.params={}; e.cond={};
   if(name){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } }
   cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderTParams(); }
@@ -289,13 +297,12 @@ function valueEditor(e,t,k,f,mode){ const ft=f.type, cond=(e.cond&&e.cond[k])||n
   }
   return '';
 }
-function paramRow(e,t,k,f){ const mode=curMode(e,f,k);
+// 左列=抽選結果（確定値・読み取り） / 右列=抽選条件（モード＋編集）
+function resultRow(e,t,k,f){ return '<div class="rrow"><span class="rk">'+k+'</span><span class="rv" id="pres-'+k+'">'+effDisplay(e,t,k)+'</span></div>'; }
+function condRow(e,t,k,f){ const mode=curMode(e,f,k);
   const modeSel='<select class="mode" id="pm-'+k+'">'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
-  let ed;
-  if(mode==='unset') ed='<span class="muted">= '+effDisplay(e,t,k)+'</span>';
-  else if(mode==='fixed') ed=valueEditor(e,t,k,f,'fixed');
-  else ed=valueEditor(e,t,k,f,mode)+' <span class="res" id="pres-'+k+'">→ '+specOrValStr(e.params[k])+'</span>'; // 抽選条件 → 確定値 を併記
-  return '<div class="pf"><span class="k">'+k+'</span><span class="tag">'+f.type+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div>';
+  const ed=(mode==='unset')?'':valueEditor(e,t,k,f,mode);
+  return '<div class="pf"><span class="k">'+k+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div>';
 }
 function light(){ persist(); renderEntries(); } // 本体は再描画しない（入力フォーカス維持）
 function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
@@ -311,12 +318,12 @@ function wireParamRows(e,t,fields){
     const ms=$('#pm-'+k); if(ms) ms.onchange=ev=>setMode(e,t,k,f,ev.target.value);
     const mode=curMode(e,f,k);
     if(mode==='fixed'){
-      if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); light(); }; }
-      else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); light(); }; }
-      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; light(); }; }
+      if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); refreshResolved(e,k); light(); }; }
+      else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); refreshResolved(e,k); light(); }; }
+      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; refreshResolved(e,k); light(); }; }
       else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
         if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderTParams(); };
-        if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; light(); }; }
+        if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; refreshResolved(e,k); light(); }; }
     } else if(mode==='range'){ const a=$('#pr0-'+k), b=$('#pr1-'+k), upd=()=>{ e.cond[k]={range:[Math.round(+a.value||0),Math.round(+b.value||0)]}; rollEntry(e); refreshResolved(e,k); light(); }; if(a)a.oninput=upd; if(b)b.oninput=upd; }
     else if(mode==='choice'){
       if(f.type==='enum'){ document.querySelectorAll('[data-c="'+k+'"]').forEach(cb=>cb.onchange=()=>{ e.cond[k]={choice:[...document.querySelectorAll('[data-c="'+k+'"]')].filter(x=>x.checked).map(x=>x.value)}; rollEntry(e); refreshResolved(e,k); light(); }); }
