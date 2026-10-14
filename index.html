@@ -38,8 +38,9 @@ input[type=number]{width:56px}
 .bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .wrap{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:10px;align-items:start}
 @media(max-width:720px){.wrap{grid-template-columns:1fr}}
-.grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:10px;align-items:start}
-@media(max-width:860px){.grid{grid-template-columns:1fr}}
+.cols{display:flex;gap:10px;align-items:flex-start}
+.cols .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
+@media(max-width:860px){.cols{flex-direction:column}}
 .sub2{font-size:10px;color:var(--brass);letter-spacing:.08em;margin:8px 0 2px;font-weight:600}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px}
 .panel h2{font-size:12px;color:var(--brass);margin:0 0 6px;font-weight:600;letter-spacing:.04em}
@@ -98,31 +99,35 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
   <button id="fit">全体表示</button>
 </div>
 
-<div class="grid">
-  <div class="panel">
-    <div class="ph"><h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
-      <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button></span></div>
-    <canvas id="cv"></canvas>
-    <div class="canbar">
-      <button id="zin">＋</button><button id="zout">－</button>
-      <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
+<div class="cols">
+  <div class="col">
+    <div class="panel">
+      <div class="ph"><h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
+        <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button></span></div>
+      <canvas id="cv"></canvas>
+      <div class="canbar">
+        <button id="zin">＋</button><button id="zout">－</button>
+        <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>エントリ（記載順）</h2>
+        <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button></span></div>
+      <ul id="entries"></ul>
     </div>
   </div>
-  <div class="panel">
-    <h2>パラメータ（選択中エントリ）</h2>
-    <div class="sub2">基本</div>
-    <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
-    <div class="sub2" id="tphead">type別</div>
-    <div class="ed" id="tparams"><span class="muted">—</span></div>
-  </div>
-  <div class="panel">
-    <div class="ph"><h2>エントリ（記載順）</h2>
-      <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button></span></div>
-    <ul id="entries"></ul>
-  </div>
-  <div class="panel">
-    <h2>plan.json</h2>
-    <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
+  <div class="col">
+    <div class="panel">
+      <h2>パラメータ（選択中エントリ）</h2>
+      <div class="sub2">基本</div>
+      <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
+      <div class="sub2" id="tphead">type別</div>
+      <div class="ed" id="tparams"><span class="muted">—</span></div>
+    </div>
+    <div class="panel">
+      <h2>plan.json</h2>
+      <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
+    </div>
   </div>
 </div>
 <div id="status"></div>
@@ -212,7 +217,7 @@ function renderEntries(){
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
-    li.onclick=()=>{ sel=i; renderEntries(); renderEditor(); render(); };
+    li.onclick=()=>{ sel=i; cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
 }
@@ -365,6 +370,7 @@ function renderJson(){ $('#json').value=buildPlanJson(); }
 /* ---------- 2D d-w キャンバス ---------- */
 const cv=$('#cv'); const ctx=cv.getContext('2d');
 let camo={x:40,y:0,scale:5}; // 原点位置(px)・scale=px/block
+let cursor={d:0,w:0};        // 空セル選択カーソル（追加のデフォルト位置）
 function fitCam(){
   const pts=[]; plan.entries.forEach(e=>{ const w=worldShape(e); if(w) w.pts.forEach(p=>pts.push(p)); else { const c=xform(0,0,e.relPos||{},e.relDir); pts.push({d:c.d,w:c.w}); } });
   pts.push({d:0,w:0});
@@ -462,6 +468,10 @@ function render(){
   const step=Math.max(1,Math.round(10*devicePixelRatio/camo.scale))*camo.scale;
   for(let x=camo.x%step;x<W;x+=step){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
   for(let y=camo.y%step;y<H;y+=step){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  // 目盛ラベル（グリッド間隔ごとの world 座標：上辺=w / 左辺=d）
+  ctx.fillStyle='#4A5A57'; ctx.font=(9*devicePixelRatio)+'px monospace';
+  ctx.textBaseline='top'; for(let x=camo.x%step;x<W;x+=step){ ctx.fillText(''+Math.round((x-camo.x)/camo.scale), x+2*devicePixelRatio, 2*devicePixelRatio); }
+  ctx.textBaseline='alphabetic'; for(let y=camo.y%step;y<H;y+=step){ ctx.fillText(''+Math.round((camo.y-y)/camo.scale), 2*devicePixelRatio, y-2*devicePixelRatio); }
   // origin
   const [ox,oy]=w2c(0,0);
   ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5;
@@ -502,12 +512,17 @@ function render(){
   });
   { const bn=ovl.bodyPairs, mn=ovl.marginPairs;
     if(bn||mn){ ctx.fillStyle=bn?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('conflict: (body:'+bn+'、margin:'+mn+')', 8*devicePixelRatio, 20*devicePixelRatio); } }
+  // 空セル選択カーソル＋現在座標
+  const cp=(sel>=0&&plan.entries[sel]&&plan.entries[sel].relPos)?{d:plan.entries[sel].relPos.d||0,w:plan.entries[sel].relPos.w||0}:{d:cursor.d,w:cursor.w};
+  if(sel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
+  ctx.fillStyle='#9fb0ac'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left';
+  ctx.fillText((sel>=0?'sel ':'cursor ')+'d'+cp.d+' w'+cp.w, 8*devicePixelRatio, H-8*devicePixelRatio);
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
 }
 
 /* ---------- 機能3: ランダム配置（randomarea = 散布ジョブ／設計時に確定・不確定要素は mod に渡さない） ---------- */
 function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
-function genId(){ return 'r'+Math.random().toString(36).slice(2,7); }
+function genId(){ let mx=0; plan.entries.forEach(e=>{ const m=((e.type==='randomarea'&&e.params&&e.params.id)||'').match(/^r(\d+)$/); if(m) mx=Math.max(mx,+m[1]); }); return 'r'+(mx+1); } // 連番
 // randomarea の領域 footprint（params.region → world 図形）
 function regionShape(e){
   const p=e.params||{}, reg=p.region||{shape:'RECT',size:[10,10]}, rp=e.relPos||{}, dir=e.relDir||'FRONT';
@@ -642,7 +657,7 @@ function importPlan(text){
 
 /* ---------- wire ---------- */
 function boot(){
-  $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} plan.entries.push(newEntry($('#addtype').value)); sel=plan.entries.length-1; persist(); renderEntries(); renderEditor(); };
+  $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); sel=plan.entries.length-1; cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
   $('#del').onclick=()=>{ if(sel<0||sel>=plan.entries.length) return; plan.entries.splice(sel,1); sel=-1; persist(); renderEntries(); renderEditor(); };
   $('#up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; sel--; persist(); renderEntries(); } };
   $('#down').onclick=()=>{ if(sel>=0&&sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; sel++; persist(); renderEntries(); } };
@@ -673,15 +688,19 @@ function boot(){
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
   cv.onpointerdown=e=>{
     const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); cv.setPointerCapture(e.pointerId);
-    if(hit>=0){ sel=hit; const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0)}; renderEntries(); renderEditor(); render(); }
-    else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y};
+    if(hit>=0){ sel=hit; const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0}; drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0)}; renderEntries(); renderEditor(); render(); }
+    else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y, moved:false, cd:Math.round(p.d), cw:Math.round(p.w)};
   };
   cv.onpointermove=e=>{
     if(!drag){ const p=ptWorld(e); cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
-    if(drag.mode==='pan'){ camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
-    const p=ptWorld(e), rp=plan.entries[sel].relPos; rp.d=Math.round(p.d-drag.gd); rp.w=Math.round(p.w-drag.gw); cv.style.cursor='grabbing'; render(); syncEditorPos();
+    if(drag.mode==='pan'){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true; camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
+    const p=ptWorld(e), rp=plan.entries[sel].relPos; rp.d=Math.round(p.d-drag.gd); rp.w=Math.round(p.w-drag.gw); cursor={d:rp.d,w:rp.w}; cv.style.cursor='grabbing'; render(); syncEditorPos();
   };
-  cv.onpointerup=()=>{ if(drag&&drag.mode==='entry'){ persist(); renderEntries(); renderEditor(); } drag=null; cv.style.cursor='default'; };
+  cv.onpointerup=()=>{
+    if(drag&&drag.mode==='entry'){ persist(); renderEntries(); renderEditor(); }
+    else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; sel=-1; renderEntries(); renderEditor(); render(); } // 空セル選択
+    drag=null; cv.style.cursor='default';
+  };
   // R キー: 選択中エントリの relDir を 90°回転
   addEventListener('keydown',e=>{
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
@@ -694,7 +713,7 @@ function boot(){
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
-loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); fillVer(); renderEntries(); renderEditor(); renderJson(); fitCam(); status('schema/presets 読込 OK'); })
+loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 updateDirLabel();
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
