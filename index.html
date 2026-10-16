@@ -54,7 +54,7 @@ input[type=number]{width:56px}
 .ed .r{margin-bottom:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 canvas{width:100%;height:52vh;background:#0C1214;border:1px solid var(--rule);border-radius:8px;display:block;touch-action:none}
 .canbar{display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap}
-textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px solid var(--rule);border-radius:8px;
+textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--chalk);border:1px solid var(--rule);border-radius:8px;
   font-family:ui-monospace,monospace;font-size:11px;padding:8px;margin-top:8px;white-space:pre;overflow:auto}
 #status{font-size:11px;color:var(--dim);min-height:15px;margin-top:6px}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:60}
@@ -97,6 +97,9 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
   <button id="open">開く</button>
   <input type="file" id="file" accept=".json" style="display:none">
   <button id="fit">全体表示</button>
+  <span style="flex:1"></span>
+  <button id="undo" title="戻る (Ctrl+Z)">↶ 戻る</button>
+  <button id="redo" title="進む (Ctrl+Y)">↷ 進む</button>
 </div>
 
 <div class="cols">
@@ -112,7 +115,7 @@ textarea{width:100%;height:22vh;background:#0C1214;color:var(--chalk);border:1px
     </div>
     <div class="panel">
       <div class="ph"><h2>エントリ（記載順）</h2>
-        <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button></span></div>
+        <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button><button id="multi" title="複数選択モード (Ctrl+クリック/ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子のgroupを解除">解除</button></span></div>
       <ul id="entries"></ul>
     </div>
   </div>
@@ -194,22 +197,45 @@ function xform(ld,lw,rp,dir){
 
 /* ---------- model ---------- */
 let plan={entries:[]}, sel=-1;
+let selset=new Set();   // 複数選択（一括削除/移動）。sel=プライマリ（param編集対象）
+let multiMode=false;    // 複数選択モード（タップで追加）
+let history=[], histIdx=-1, lastHist=0;  // undo/redo
+function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
+function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
+// 旧 region:{shape,size} を flat(shape/depth/width/diameter) へ移行（⑫）
+function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT'; } return e; }
+// undo/redo 履歴（plan スナップショット・連続操作は600msで合流）
+function snapshot(){ const s=JSON.stringify(plan), now=Date.now();
+  if(histIdx>=0 && history[histIdx]===s) return;
+  if(histIdx>=0 && now-lastHist<600){ history[histIdx]=s; lastHist=now; return; }
+  history=history.slice(0,histIdx+1); history.push(s); histIdx=history.length-1; lastHist=now;
+  if(history.length>120){ history.shift(); histIdx--; } }
+function restoreHist(){ plan=JSON.parse(history[histIdx]); sel=-1; selset.clear(); try{localStorage.setItem('city-blueprint:plan',history[histIdx]);}catch(_){ } renderEntries(); renderEditor(); renderJson(); render(); }
+function undo(){ if(histIdx>0){ histIdx--; restoreHist(); status('戻る'); } else status('これ以上戻れません'); }
+function redo(){ if(histIdx<history.length-1){ histIdx++; restoreHist(); status('進む'); } else status('これ以上進めません'); }
+// 一括削除（親 randomarea は紐づく子も削除）(⑬⑭)
+function deleteSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!idxs.length) return;
+  const ids=idxs.map(i=>plan.entries[i]).filter(x=>x&&x.type==='randomarea').map(x=>x.params&&x.params.id).filter(Boolean);
+  const rm=new Set(idxs); plan.entries.forEach((e,i)=>{ if(e.group&&ids.includes(e.group)) rm.add(i); });
+  plan.entries=plan.entries.filter((e,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); status('削除 '+rm.size+'件'); }
+// group 解除（親削除から守りたい子用）(⑭)
+function unlinkSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); let n=0; idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } }); if(n){ persist(); renderEntries(); renderEditor(); status('group 解除 '+n+'件'); } else status('group を持つ子が未選択'); }
 function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ id:genId(), region:{shape:'RECT',size:[24,24]}, builder:builderTypes()[0]||'house', source:'DEFAULTS', count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:'DEFAULTS', count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
 function persist(){ try{ localStorage.setItem('city-blueprint:plan', JSON.stringify(plan)); }catch(_){}
-  renderJson(); render(); }
+  snapshot(); renderJson(); render(); }
 
 /* ---------- entries panel ---------- */
 function renderEntries(){
   const ul=$('#entries'); ul.innerHTML='';
   plan.entries.forEach((e,i)=>{
-    const li=document.createElement('li'); if(i===sel) li.className='sel';
+    const li=document.createElement('li'); if(selset.has(i)||i===sel) li.className='sel';
     const rp=e.relPos||{};
     let ref='';
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
@@ -217,7 +243,8 @@ function renderEntries(){
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
-    li.onclick=()=>{ sel=i; cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
+    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggle(i); else selOne(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
+    li.ondblclick=()=>{ multiMode=true; updateMultiBtn(); selToggle(i); renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
 }
@@ -377,7 +404,7 @@ function fitCam(){
   let dmin=1e9,dmax=-1e9,wmin=1e9,wmax=-1e9;
   pts.forEach(p=>{dmin=Math.min(dmin,p.d);dmax=Math.max(dmax,p.d);wmin=Math.min(wmin,p.w);wmax=Math.max(wmax,p.w);});
   const pad=6; dmin-=pad;dmax+=pad;wmin-=pad;wmax+=pad;
-  const W=cv.width, H=cv.height;
+  const W=cv.width=cv.clientWidth*devicePixelRatio, H=cv.height=cv.clientHeight*devicePixelRatio; // ⑩ フィット前に実サイズを確定
   const sc=Math.max(2,Math.min(W/Math.max(1,(wmax-wmin)), H/Math.max(1,(dmax-dmin))));
   camo.scale=sc;
   camo.x=-wmin*sc; camo.y=H+dmin*sc; // world(w=0)->x=camo.x ; world(d=0)->y=camo.y (d up)
@@ -480,7 +507,7 @@ function render(){
   const ovl=computeOverlaps();
   plan.entries.forEach((e,i)=>{
     if(e.type==='randomarea'){ drawRegion(e, i===sel); return; }
-    const sh=worldShape(e); const on=(i===sel);
+    const sh=worldShape(e); const on=selset.has(i)||(i===sel);
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
       ctx.fillStyle=on?'#D4A93C':'#4F8A7B'; ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill();
@@ -525,11 +552,11 @@ function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.im
 function genId(){ let mx=0; plan.entries.forEach(e=>{ const m=((e.type==='randomarea'&&e.params&&e.params.id)||'').match(/^r(\d+)$/); if(m) mx=Math.max(mx,+m[1]); }); return 'r'+(mx+1); } // 連番
 // randomarea の領域 footprint（params.region → world 図形）
 function regionShape(e){
-  const p=e.params||{}, reg=p.region||{shape:'RECT',size:[10,10]}, rp=e.relPos||{}, dir=e.relDir||'FRONT';
-  if(reg.shape==='RECT'){ const extD=(+reg.size[0])||1, extW=(+reg.size[1])||1;
+  const p=e.params||{}, shp=p.shape||'RECT', rp=e.relPos||{}, dir=e.relDir||'FRONT';
+  if(shp==='RECT'){ const extD=(+p.depth)||1, extW=(+p.width)||1;
     const corners=(d0,d1,w0,w1)=>[[d0,w0],[d1,w0],[d1,w1],[d0,w1]].map(([ld,lw])=>xform(ld,lw,rp,dir));
     const body=corners(0,extD-1,0,extW-1); return {shape:'RECT', pts:body, body, reserved:body, region:true}; }
-  const c=xform(0,0,rp,dir), r=((+reg.size[0])||2)/2, pts=[];
+  const c=xform(0,0,rp,dir), r=((+p.diameter)||2)/2, pts=[];
   for(let a=0;a<360;a+=30){ const rad=a*Math.PI/180; pts.push({d:c.d+r*Math.cos(rad), w:c.w+r*Math.sin(rad)}); }
   return {shape:'CIRCLE', center:c, r, rr:r, pts, reserved:pts, region:true};
 }
@@ -594,16 +621,17 @@ function scatterArea(m){
     if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) continue;
     plan.entries.push(child); placed.push(rr); made++;
   }
-  persist(); renderEntries(); renderEditor(); render();
+  selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置'+(target>0&&made<target?'（'+target+' に届かず・領域/間隔を確認）':''));
 }
 // randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
-function raFields(e){ return [['region','region'],['builder','enum'],['source','enum'],['count','int'],['rotate','bool'],['gap','int'],['childMargin','int'],['seed','int']]; }
+// 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
+function raFields(e){ const rect=((e.params.shape||'RECT')==='RECT');
+  return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']])
+    .concat([['builder','enum'],['source','enum'],['count','int'],['rotate','bool'],['gap','int'],['childMargin','int'],['seed','int']]); }
 function raEditor(e,k,kind){ const p=e.params, v=p[k];
-  if(kind==='region'){ const reg=p.region, isRect=reg.shape==='RECT';
-    return '<select id="ra-region-shape"><option'+(isRect?' selected':'')+'>RECT</option><option'+(!isRect?' selected':'')+'>CIRCLE</option></select>'
-      +(isRect?(' d<input type="number" id="ra-region-d" value="'+(reg.size[0]||10)+'"> w<input type="number" id="ra-region-w" value="'+(reg.size[1]||10)+'">')
-             :(' <input type="number" id="ra-region-dia" value="'+(reg.size[0]||10)+'">')); }
+  if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
+  if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
   if(kind==='enum'){ const vals=(k==='builder')?builderTypes():['DEFAULTS',...presetNames(p.builder)]; return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
   if(kind==='bool') return '<label class="chk"><input type="checkbox" id="ra-'+k+'"'+(v?' checked':'')+'></label>';
   return '<input type="number" id="ra-'+k+'" value="'+(v||0)+'">'; }
@@ -613,18 +641,15 @@ function randomEditorRows(e){
   return h; }
 function wireRandomEditor(e){ const p=e.params;
   raFields(e).forEach(([k,kind])=>{
-    if(kind==='region'){
-      const rs=$('#ra-region-shape'); if(rs) rs.onchange=ev=>{ p.region.shape=ev.target.value; p.region.size=(ev.target.value==='RECT')?[20,20]:[20]; persist();renderEntries();renderTParams();render(); };
-      [['ra-region-d',0],['ra-region-w',1],['ra-region-dia',0]].forEach(([id,i])=>{ const el=$('#'+id); if(el) el.oninput=()=>{ p.region.size[i]=Math.max(1,Math.round(+el.value||1)); persist();renderEntries();render(); }; });
-      return;
-    }
+    if(kind==='ro') return;
     const el=$('#ra-'+k); if(!el) return;
-    if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
+    if(kind==='enum2') el.onchange=()=>{ p.shape=el.value; persist();renderEntries();renderTParams();render(); }; // RECT↔CIRCLE で depth/width ↔ diameter 切替
+    else if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
     else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source='DEFAULTS'; persist();renderEntries();renderTParams(); };
-    else el.oninput=()=>{ p[k]=Math.max(0,Math.round(+el.value||0)); persist();renderEntries(); };
+    else { const min=(k==='depth'||k==='width'||k==='diameter')?1:0; el.oninput=()=>{ p[k]=Math.max(min,Math.round(+el.value||0)); persist();renderEntries();render(); }; }
   });
   $('#ra-run').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); scatterArea(e); };
-  $('#ra-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==p.id); sel=-1; persist();renderEntries();renderEditor();render(); status('子を削除'); };
+  $('#ra-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==p.id); sel=-1; selset.clear(); persist();renderEntries();renderEditor();render(); status('子を削除'); };
 }
 
 /* ---------- 保存先（File System Access API + IndexedDB）: mc-blueprint から流用 ---------- */
@@ -646,21 +671,25 @@ async function saveFile(text,fname){
 /* ---------- open plan.json ---------- */
 function importPlan(text){
   try{ const d=JSON.parse(text); if(!d||!Array.isArray(d.entries)) throw 0;
-    const norm=e=>({relPos:{d:(e.relPos&&e.relPos.d)||0,h:(e.relPos&&e.relPos.h)||0,w:(e.relPos&&e.relPos.w)||0},relDir:e.relDir||'FRONT',...e});
+    const norm=e=>migRA({relPos:{d:(e.relPos&&e.relPos.d)||0,h:(e.relPos&&e.relPos.h)||0,w:(e.relPos&&e.relPos.w)||0},relDir:e.relDir||'FRONT',...e});
     const ents=d.entries.map(norm), metas=(Array.isArray(d.meta)?d.meta:[]).map(norm);
     const out=[], used=new Set();                       // 各 randomarea の直後にその子を並べる
     metas.forEach(m=>{ out.push(m); const id=m.params&&m.params.id; ents.forEach(c=>{ if(id!=null&&c.group===id){ out.push(c); used.add(c); } }); });
     ents.forEach(c=>{ if(!used.has(c)) out.push(c); });
-    plan={entries:out}; sel=-1; persist(); renderEntries(); renderEditor(); fitCam(); status('読込: entries '+ents.length+' / meta '+metas.length);
+    plan={entries:out}; selOne(-1); persist(); renderEntries(); renderEditor(); fitCam(); status('読込: entries '+ents.length+' / meta '+metas.length);
   }catch(_){ status('plan.json の解析に失敗'); }
 }
 
 /* ---------- wire ---------- */
 function boot(){
-  $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); sel=plan.entries.length-1; cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
-  $('#del').onclick=()=>{ if(sel<0||sel>=plan.entries.length) return; plan.entries.splice(sel,1); sel=-1; persist(); renderEntries(); renderEditor(); };
-  $('#up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; sel--; persist(); renderEntries(); } };
-  $('#down').onclick=()=>{ if(sel>=0&&sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; sel++; persist(); renderEntries(); } };
+  $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); selOne(plan.entries.length-1); cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
+  $('#del').onclick=deleteSelected;
+  $('#up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; selOne(sel-1); persist(); renderEntries(); } };
+  $('#down').onclick=()=>{ if(sel>=0&&sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; selOne(sel+1); persist(); renderEntries(); } };
+  $('#multi').onclick=()=>{ multiMode=!multiMode; if(!multiMode&&selset.size>1) selOne(sel); updateMultiBtn(); };
+  $('#unlink').onclick=unlinkSelected;
+  $('#undo').onclick=undo;
+  $('#redo').onclick=redo;
   $('#save').onclick=()=>{ const n=($('#name').value||'my_plan').replace(/\.json$/,''); saveFile(buildPlanJson(), n+'.json'); };
   $('#open').onclick=async ()=>{
     if(FS_OK){
@@ -688,28 +717,43 @@ function boot(){
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
   cv.onpointerdown=e=>{
     const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); cv.setPointerCapture(e.pointerId);
-    if(hit>=0){ sel=hit; const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0}; drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0)}; renderEntries(); renderEditor(); render(); }
+    if(hit>=0){
+      const multi=e.ctrlKey||e.metaKey||multiMode;
+      if(multi){ selToggle(hit); const rp=plan.entries[hit].relPos||{}; cursor={d:rp.d||0,w:rp.w||0}; drag=null; renderEntries(); renderEditor(); render(); return; }
+      if(!selset.has(hit)) selOne(hit); else sel=hit;
+      const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0};
+      const grp=(selset.size>1)?[...selset].map(idx=>({idx,d:plan.entries[idx].relPos.d||0,w:plan.entries[idx].relPos.w||0})):null; // 一括移動
+      drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp};
+      renderEntries(); renderEditor(); render();
+    }
     else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y, moved:false, cd:Math.round(p.d), cw:Math.round(p.w)};
   };
   cv.onpointermove=e=>{
     if(!drag){ const p=ptWorld(e); cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
     if(drag.mode==='pan'){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true; camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
-    const p=ptWorld(e), rp=plan.entries[sel].relPos; rp.d=Math.round(p.d-drag.gd); rp.w=Math.round(p.w-drag.gw); cursor={d:rp.d,w:rp.w}; cv.style.cursor='grabbing'; render(); syncEditorPos();
+    const p=ptWorld(e), nd=Math.round(p.d-drag.gd), nw=Math.round(p.w-drag.gw);
+    if(drag.grp){ const dd=nd-drag.pd, dw=nw-drag.pw; drag.grp.forEach(s=>{ const rp=plan.entries[s.idx].relPos; rp.d=s.d+dd; rp.w=s.w+dw; }); }
+    else { const rp=plan.entries[sel].relPos; rp.d=nd; rp.w=nw; }
+    cursor={d:nd,w:nw}; cv.style.cursor='grabbing'; render(); syncEditorPos();
   };
   cv.onpointerup=()=>{
     if(drag&&drag.mode==='entry'){ persist(); renderEntries(); renderEditor(); }
-    else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; sel=-1; renderEntries(); renderEditor(); render(); } // 空セル選択
+    else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); renderEntries(); renderEditor(); render(); } // 空セル選択
     drag=null; cv.style.cursor='default';
   };
-  // R キー: 選択中エントリの relDir を 90°回転
+  // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
   addEventListener('keydown',e=>{
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
+    if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
+    if((e.ctrlKey||e.metaKey)&&(e.key==='y'||e.key==='Y')){ e.preventDefault(); redo(); return; }
     if((e.key==='r'||e.key==='R')&&sel>=0&&sel<plan.entries.length){ const o=['FRONT','RIGHT','BACK','LEFT']; const en=plan.entries[sel]; en.relDir=o[(o.indexOf(en.relDir||'FRONT')+1)%4]; persist(); renderEntries(); renderEditor(); }
   });
   addEventListener('resize',render);
   // restore local plan
-  try{ const raw=localStorage.getItem('city-blueprint:plan'); if(raw){ const d=JSON.parse(raw); if(d&&Array.isArray(d.entries)) plan=d; } }catch(_){}
+  try{ const raw=localStorage.getItem('city-blueprint:plan'); if(raw){ const d=JSON.parse(raw); if(d&&Array.isArray(d.entries)){ d.entries.forEach(migRA); plan=d; } } }catch(_){}
+  updateMultiBtn(); snapshot(); // 初期状態を履歴に
 }
+function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',multiMode); b.textContent=multiMode?'複数:ON':'複数選択'; } }
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
