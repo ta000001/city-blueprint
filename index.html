@@ -106,7 +106,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel">
       <div class="ph"><h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
-        <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button></span></div>
+        <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
         <button id="zin">＋</button><button id="zout">－</button>
@@ -115,7 +115,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
     </div>
     <div class="panel">
       <div class="ph"><h2>エントリ（記載順）</h2>
-        <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button><button id="multi" title="複数選択モード (Ctrl+クリック/ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子のgroupを解除">解除</button></span></div>
+        <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button></span></div>
       <ul id="entries"></ul>
     </div>
   </div>
@@ -218,8 +218,14 @@ function deleteSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]);
   const ids=idxs.map(i=>plan.entries[i]).filter(x=>x&&x.type==='randomarea').map(x=>x.params&&x.params.id).filter(Boolean);
   const rm=new Set(idxs); plan.entries.forEach((e,i)=>{ if(e.group&&ids.includes(e.group)) rm.add(i); });
   plan.entries=plan.entries.filter((e,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); status('削除 '+rm.size+'件'); }
-// group 解除（親削除から守りたい子用）(⑭)
-function unlinkSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); let n=0; idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } }); if(n){ persist(); renderEntries(); renderEditor(); status('group 解除 '+n+'件'); } else status('group を持つ子が未選択'); }
+// グループ解除（親削除から守りたい子用）(⑭)：親選択→全子のgroup削除 / 子選択→自身のgroup削除
+function selHasUnlinkTarget(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); return idxs.some(i=>{ const e=plan.entries[i]; if(!e) return false; if(e.group) return true; if(e.type==='randomarea'){ const id=e.params&&e.params.id; return plan.entries.some(x=>x.group===id); } return false; }); }
+function unlinkSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]);
+  const pids=idxs.map(i=>plan.entries[i]).filter(e=>e&&e.type==='randomarea').map(e=>e.params&&e.params.id).filter(Boolean);
+  let n=0; plan.entries.forEach(e=>{ if(e.group&&pids.includes(e.group)){ delete e.group; n++; } }); // 親→全子
+  idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } });               // 子→自身
+  if(n){ persist(); renderEntries(); renderEditor(); status('グループ解除 '+n+'件'); } else status('解除対象がありません'); }
+function updateTools(){ const u=$('#unlink'); if(u) u.disabled=!selHasUnlinkTarget(); }
 function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
@@ -247,6 +253,7 @@ function renderEntries(){
     li.ondblclick=()=>{ multiMode=true; updateMultiBtn(); selToggle(i); renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
+  updateTools();
 }
 function renderEditor(){
   const ed=$('#editor');
@@ -270,19 +277,27 @@ function renderEditor(){
   renderTParams();
 }
 // type別パラメータ（選択中エントリの params / 参照 / randomarea 条件）をインライン表示
+function metaRow(e){ return e.group?('<div class="pf"><span class="k">group</span><span class="muted">'+e.group+'（読み取り）</span></div>'):''; } // ⑪ group を読み取り表示
+function hiddenSizeFields(type, probe){ const b=SCHEMA.builders[type]; if(!b||!Array.isArray(b.footprint)) return new Set(); // ⑯ 非活性なサイズ場を隠す
+  const active=new Set(footprintSizeFields(type,probe)), hid=new Set();
+  b.footprint.forEach(r=>(r.size||[]).forEach(s=>{ if(!active.has(s)) hid.add(s); })); return hid; }
+function isFootprintDiscriminator(type,key){ const b=SCHEMA.builders[type]; return !!(b&&Array.isArray(b.footprint)&&b.footprint.some(r=>r.when&&(key in r.when))); }
 function renderTParams(){
   const box=$('#tparams'), head=$('#tphead'); if(!box) return;
   if(sel<0||sel>=plan.entries.length){ head.textContent='type別'; box.innerHTML='<span class="muted">—</span>'; return; }
-  const e=plan.entries[sel], t=e.type;
-  if(t==='plan'){ head.textContent='type別（plan）'; box.innerHTML='<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
-  if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML='<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
-  if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=randomEditorRows(e); wireRandomEditor(e); return; }
+  const e=plan.entries[sel], t=e.type, meta=metaRow(e);
+  if(t==='plan'){ head.textContent='type別（plan）'; box.innerHTML=meta+'<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   head.textContent='type別（'+t+'）';
   const fields=SCHEMA.builders[t].fields, pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
-  let h='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
+  const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
+  const hid=hiddenSizeFields(t,probe);
+  let h=meta;
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
   h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
-  h+=Object.entries(fields).map(([k,f])=>fieldRow(e,t,k,f)).join('');
+  h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
   $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
   $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
@@ -346,7 +361,7 @@ function wireParamRows(e,t,fields){
     if(mode==='fixed'){
       if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); refreshResolved(e,k); light(); }; }
       else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); refreshResolved(e,k); light(); }; }
-      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; refreshResolved(e,k); light(); }; }
+      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; if(isFootprintDiscriminator(t,k)) renderTParams(); else { refreshResolved(e,k); light(); } }; } // shape等でサイズ場の出し分けを更新
       else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
         if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderTParams(); };
         if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; refreshResolved(e,k); light(); }; }
@@ -718,12 +733,11 @@ function boot(){
   cv.onpointerdown=e=>{
     const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); cv.setPointerCapture(e.pointerId);
     if(hit>=0){
-      const multi=e.ctrlKey||e.metaKey||multiMode;
-      if(multi){ selToggle(hit); const rp=plan.entries[hit].relPos||{}; cursor={d:rp.d||0,w:rp.w||0}; drag=null; renderEntries(); renderEditor(); render(); return; }
-      if(!selset.has(hit)) selOne(hit); else sel=hit;
+      const additive=e.ctrlKey||e.metaKey||multiMode, wasSel=selset.has(hit);
+      if(additive){ if(!wasSel) selToggle(hit); else sel=hit; } else { if(!wasSel) selOne(hit); else sel=hit; }
       const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0};
-      const grp=(selset.size>1)?[...selset].map(idx=>({idx,d:plan.entries[idx].relPos.d||0,w:plan.entries[idx].relPos.w||0})):null; // 一括移動
-      drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp};
+      const grp=(selset.size>1&&selset.has(hit))?[...selset].map(idx=>({idx,d:plan.entries[idx].relPos.d||0,w:plan.entries[idx].relPos.w||0})):null;
+      drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp, additive, wasSel, hit, moved:false};
       renderEntries(); renderEditor(); render();
     }
     else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y, moved:false, cd:Math.round(p.d), cw:Math.round(p.w)};
@@ -732,15 +746,21 @@ function boot(){
     if(!drag){ const p=ptWorld(e); cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
     if(drag.mode==='pan'){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true; camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
     const p=ptWorld(e), nd=Math.round(p.d-drag.gd), nw=Math.round(p.w-drag.gw);
+    if(nd!==drag.pd||nw!==drag.pw) drag.moved=true;
     if(drag.grp){ const dd=nd-drag.pd, dw=nw-drag.pw; drag.grp.forEach(s=>{ const rp=plan.entries[s.idx].relPos; rp.d=s.d+dd; rp.w=s.w+dw; }); }
     else { const rp=plan.entries[sel].relPos; rp.d=nd; rp.w=nw; }
     cursor={d:nd,w:nw}; cv.style.cursor='grabbing'; render(); syncEditorPos();
   };
   cv.onpointerup=()=>{
-    if(drag&&drag.mode==='entry'){ persist(); renderEntries(); renderEditor(); }
+    if(drag&&drag.mode==='entry'){
+      if(drag.moved){ persist(); renderEntries(); renderEditor(); }
+      else if(drag.additive&&drag.wasSel){ selToggle(drag.hit); renderEntries(); renderEditor(); render(); } // 追加選択のタップ(無移動)で解除
+      else { renderEntries(); renderEditor(); render(); }
+    }
     else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); renderEntries(); renderEditor(); render(); } // 空セル選択
     drag=null; cv.style.cursor='default';
   };
+  cv.ondblclick=e=>{ const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); if(hit>=0){ multiMode=true; updateMultiBtn(); if(!selset.has(hit)) selToggle(hit); sel=hit; renderEntries(); renderEditor(); render(); } }; // ダブルクリックで複数選択モード開始
   // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
   addEventListener('keydown',e=>{
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
