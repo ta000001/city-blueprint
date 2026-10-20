@@ -225,7 +225,15 @@ function unlinkSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]);
   let n=0; plan.entries.forEach(e=>{ if(e.group&&pids.includes(e.group)){ delete e.group; n++; } }); // 親→全子
   idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } });               // 子→自身
   if(n){ persist(); renderEntries(); renderEditor(); status('グループ解除 '+n+'件'); } else status('解除対象がありません'); }
-function updateTools(){ const u=$('#unlink'); if(u) u.disabled=!selHasUnlinkTarget(); }
+// 実行不可なボタンは非活性（可視的に）＝基本方針
+function updateTools(){ const en=(id,ok)=>{ const b=$('#'+id); if(b) b.disabled=!ok; };
+  en('unlink', selHasUnlinkTarget());
+  en('del', selset.size>0||sel>=0);
+  en('up', sel>0);
+  en('down', sel>=0&&sel<plan.entries.length-1);
+  en('undo', histIdx>0);
+  en('redo', histIdx<history.length-1);
+}
 function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
@@ -238,7 +246,7 @@ function newEntry(type){
 function pruneHidden(e){ const t=e.type; if(!SCHEMA||!(t in SCHEMA.builders)||!e.params) return; const fields=SCHEMA.builders[t].fields; const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k); hiddenSizeFields(t,probe).forEach(k=>{ delete e.params[k]; if(e.cond) delete e.cond[k]; }); if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
 function pruneAll(){ if(!SCHEMA) return; plan.entries.forEach(pruneHidden); }
 function persist(){ pruneAll(); try{ localStorage.setItem('city-blueprint:plan', JSON.stringify(plan)); }catch(_){}
-  snapshot(); renderJson(); render(); }
+  snapshot(); renderJson(); render(); updateTools(); }
 
 /* ---------- entries panel ---------- */
 function renderEntries(){
@@ -304,7 +312,7 @@ function renderTParams(){
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
   h+='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
-  h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll">抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
+  h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll"'+(hasCond?'':' disabled')+'>抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
@@ -508,15 +516,22 @@ function candidatesAt(d,w,px,py){
 }
 // ② footprint リサイズ（RECT=角→depth/width corner-anchorのみ / CIRCLE=縁→diameter）
 function unxform(D,W,dir){ if(dir==='RIGHT') return {ld:W,lw:-D}; if(dir==='BACK') return {ld:-D,lw:-W}; if(dir==='LEFT') return {ld:-W,lw:D}; return {ld:D,lw:W}; }
+// 4角のいずれか/縁に近いか。角は対角(opp)のworld座標を固定点として返す
 function resizeHandleAt(e,px,py){ const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;
-  if(sh.shape==='RECT'){ if(sh.body[0].d!==(rp.d||0)||sh.body[0].w!==(rp.w||0)) return null; const [hx,hy]=w2c(sh.body[2].d,sh.body[2].w); return (Math.hypot(px-hx,py-hy)<=R)?'corner':null; }
-  const [cx,cy]=w2c(sh.center.d,sh.center.w+sh.r); return (Math.hypot(px-cx,py-cy)<=R)?'rim':null; }
+  if(sh.shape==='RECT'){ if(sh.body[0].d!==(rp.d||0)||sh.body[0].w!==(rp.w||0)) return null; // corner-anchorのみ
+    for(let k=0;k<4;k++){ const c=sh.body[k]; const [hx,hy]=w2c(c.d,c.w); if(Math.hypot(px-hx,py-hy)<=R){ const o=sh.body[(k+2)%4]; return {type:'corner', opp:{d:o.d,w:o.w}}; } } return null; }
+  const [cx,cy]=w2c(sh.center.d,sh.center.w+sh.r); return (Math.hypot(px-cx,py-cy)<=R)?{type:'rim'}:null; }
 function sizeFieldsOf(e){ if(!(e.type in SCHEMA.builders)) return null; const pr={}, f=SCHEMA.builders[e.type].fields; for(const k of Object.keys(f)) pr[k]=fieldVal(e,e.type,k); return footprintSizeFields(e.type,pr); }
-function applyResize(e,p,handle){ const rp=e.relPos||{}, dir=e.relDir||'FRONT';
-  if(handle==='corner'){ const lx=unxform(p.d-(rp.d||0),p.w-(rp.w||0),dir), depth=Math.max(1,Math.round(lx.ld)+1), width=Math.max(1,Math.round(lx.lw)+1);
-    if(e.type==='randomarea'){ e.params.depth=depth; e.params.width=width; } else { const sf=sizeFieldsOf(e); if(!sf) return; if(e.cond){delete e.cond[sf[0]];delete e.cond[sf[1]];} e.params=e.params||{}; e.params[sf[0]]=depth; e.params[sf[1]]=width; } }
-  else { const dia=Math.max(1,Math.round(Math.hypot(p.d-(rp.d||0),p.w-(rp.w||0))*2));
-    if(e.type==='randomarea'){ e.params.diameter=dia; } else { const sf=sizeFieldsOf(e); if(!sf) return; if(e.cond) delete e.cond[sf[0]]; e.params=e.params||{}; e.params[sf[0]]=dia; } } }
+function setSizeFields(e,vals){ // vals=[depth,width] or [diameter]
+  if(e.type==='randomarea'){ if(vals.length===2){ e.params.depth=vals[0]; e.params.width=vals[1]; } else e.params.diameter=vals[0]; return; }
+  const sf=sizeFieldsOf(e); if(!sf) return; e.params=e.params||{}; sf.forEach((k,i)=>{ if(e.cond) delete e.cond[k]; if(vals[i]!=null) e.params[k]=vals[i]; }); }
+function applyResize(e,p,hz){ const dir=e.relDir||'FRONT', rp=e.relPos||{};
+  if(hz.type==='corner'){ const Pd=Math.round(p.d), Pw=Math.round(p.w), od=hz.opp.d, ow=hz.opp.w;
+    const d0=Math.min(od,Pd),d1=Math.max(od,Pd),w0=Math.min(ow,Pw),w1=Math.max(ow,Pw), extD=d1-d0+1, extW=w1-w0+1;
+    const swap=(dir==='RIGHT'||dir==='LEFT'), depth=Math.max(1,swap?extW:extD), width=Math.max(1,swap?extD:extW);
+    const a = dir==='FRONT'?{d:d0,w:w0} : dir==='RIGHT'?{d:d1,w:w0} : dir==='BACK'?{d:d1,w:w1} : {d:d0,w:w1}; // 対角固定→アンカー再計算
+    e.relPos=e.relPos||{d:0,h:0,w:0}; e.relPos.d=a.d; e.relPos.w=a.w; setSizeFields(e,[depth,width]); }
+  else { const dia=Math.max(1,Math.round(Math.hypot(p.d-(rp.d||0),p.w-(rp.w||0))*2)); setSizeFields(e,[dia]); } }
 let hitSig='', hitIdx=0;
 function pickAt(d,w,px,py){
   const cands=candidatesAt(d,w,px,py);
@@ -588,7 +603,7 @@ function render(){
   // 選択中エントリのサイズハンドル（角/縁をドラッグで depth/width・diameter 編集）
   if(sel>=0&&plan.entries[sel]){ const se=plan.entries[sel], ssh=worldShape(se), HS=5*devicePixelRatio;
     if(ssh){ ctx.fillStyle='#D4A93C';
-      if(ssh.shape==='RECT'){ if(ssh.body[0].d===((se.relPos||{}).d||0)&&ssh.body[0].w===((se.relPos||{}).w||0)){ const [hx,hy]=w2c(ssh.body[2].d,ssh.body[2].w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } }
+      if(ssh.shape==='RECT'){ if(ssh.body[0].d===((se.relPos||{}).d||0)&&ssh.body[0].w===((se.relPos||{}).w||0)) ssh.body.forEach(c=>{ const [hx,hy]=w2c(c.d,c.w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); } // 全4角
       else { const [hx,hy]=w2c(ssh.center.d,ssh.center.w+ssh.r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } } }
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
 }
