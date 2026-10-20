@@ -312,7 +312,7 @@ function renderTParams(){
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select> <button class="pri" id="p-roll"'+(hasCond?'':' disabled')+' title="範囲/選択を乱数seedで振り直し">適用・抽選</button>'+(hasCond?(' <span class="muted">seed</span><input type="number" id="p-seed" value="'+(e.seed||0)+'" style="width:88px">'):'')+'</div>';
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select>'+(hasCond?(' <span class="muted">seed</span><input type="number" id="p-seed" value="'+(e.seed||0)+'" style="width:88px">'):'')+' <button class="pri" id="p-roll"'+(hasCond?'':' disabled')+' title="範囲/選択を乱数seedで振り直し" style="margin-left:auto">適用・抽選</button></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
