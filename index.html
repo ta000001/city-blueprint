@@ -157,8 +157,9 @@ async function loadData(){
 }
 const builderTypes=()=>Object.keys(SCHEMA.builders);
 const allTypes=()=>['plan','structure','randomarea',...builderTypes()];
-const defaultsOf=t=>((PRESETS.presets[t]&&PRESETS.presets[t].DEFAULTS)||{});
-const presetNames=t=>Object.keys(PRESETS.presets[t]||{}).filter(n=>n!=='DEFAULTS');
+const DEF_KEY='DEFAULTS'; // presets.json のベースライン(既定値)キー＝mod の BuilderSchema.defaults と同契約
+const defaultsOf=t=>((PRESETS.presets[t]&&PRESETS.presets[t][DEF_KEY])||{});
+const allPresets=t=>Object.keys((PRESETS.presets&&PRESETS.presets[t])||{}); // DEF_KEY を先頭に全キー（データ駆動）
 
 /* ---------- パラメータ実効値（DEFAULTS→preset→明示・mod Params.resolve と同順） ---------- */
 function presetOf(e,t){ const p=e.params||{}; let pn=p.preset; if(pn&&typeof pn==='object') pn=(pn.choice||[])[0]; return (pn&&(PRESETS.presets[t]||{})[pn])||null; }
@@ -238,7 +239,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:'DEFAULTS', count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
@@ -307,11 +308,11 @@ function renderTParams(){
   if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
   if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   head.textContent='type別（'+t+'）';
-  const fields=SCHEMA.builders[t].fields, pn=presetNames(t), hasCond=e.cond&&Object.keys(e.cond).length;
+  const fields=SCHEMA.builders[t].fields, pn=allPresets(t), hasCond=e.cond&&Object.keys(e.cond).length;
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">DEFAULTS</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
   h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll"'+(hasCond?'':' disabled')+'>抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
@@ -331,7 +332,7 @@ function rollEntry(e){ if(!e.cond||!Object.keys(e.cond).length) return; if(e.see
 function cleanupCond(e){ if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
 function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); }
 function applyPreset(e,t,name){ e.params={}; e.cond={};
-  if(name){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } }
+  if(name && name!==DEF_KEY){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } } // DEFAULTS=オーバーライド無し(ベースライン)
   cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderTParams(); }
 function modesFor(ft){ if(ft==='int') return [['unset','未設定'],['fixed','固定'],['range','範囲'],['choice','選択']]; if(ft==='bool') return [['unset','未設定'],['fixed','固定'],['random','ランダム']]; return [['unset','未設定'],['fixed','固定'],['choice','選択']]; }
 function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
@@ -652,7 +653,7 @@ function randomFitPos(child, reg, rng){
   return {d:Math.round(cx-(b.d0+b.d1)/2), w:Math.round(cw-(b.w0+b.w1)/2)}; }
 // preset の range/choice をアプリ側で振って固定値へ（不確定要素を mod に持ち込まない）
 function rollElem(v,rng){ if(v&&typeof v==='object'){ if(Array.isArray(v.range)){ const a=v.range[0],b=v.range[1]; return a+Math.floor(rng()*(b-a+1)); } if(Array.isArray(v.choice)) return rollElem(v.choice[Math.floor(rng()*v.choice.length)],rng); if(v.form) return {form:v.form, mat:v.mat}; } return v; }
-function rollParams(bt, source, rng){ const out={}; if(source && source!=='DEFAULTS'){ const pr=(PRESETS.presets[bt]||{})[source]||{}; for(const [k,v] of Object.entries(pr)) out[k]=rollElem(v,rng); } return out; }
+function rollParams(bt, source, rng){ const out={}; if(source && source!==DEF_KEY){ const pr=(PRESETS.presets[bt]||{})[source]||{}; for(const [k,v] of Object.entries(pr)) out[k]=rollElem(v,rng); } return out; }
 // footprint の size に使うフィールド名（schema footprint.size を動的に解決）
 function footprintSizeFields(type, probe){
   const b=SCHEMA.builders[type]; if(!b||!b.footprint) return [];
@@ -693,7 +694,7 @@ function raFields(e){ const rect=((e.params.shape||'RECT')==='RECT');
 function raEditor(e,k,kind){ const p=e.params, v=p[k];
   if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
   if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
-  if(kind==='enum'){ const vals=(k==='builder')?builderTypes():['DEFAULTS',...presetNames(p.builder)]; return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
+  if(kind==='enum'){ const vals=(k==='builder')?builderTypes():allPresets(p.builder); return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
   if(kind==='bool') return '<label class="chk"><input type="checkbox" id="ra-'+k+'"'+(v?' checked':'')+'></label>';
   return '<input type="number" id="ra-'+k+'" value="'+(v||0)+'">'; }
 function randomEditorRows(e){
@@ -706,7 +707,7 @@ function wireRandomEditor(e){ const p=e.params;
     const el=$('#ra-'+k); if(!el) return;
     if(kind==='enum2') el.onchange=()=>{ p.shape=el.value; persist();renderEntries();renderTParams();render(); }; // RECT↔CIRCLE で depth/width ↔ diameter 切替
     else if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
-    else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source='DEFAULTS'; persist();renderEntries();renderTParams(); };
+    else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source=DEF_KEY; persist();renderEntries();renderTParams(); };
     else { const min=(k==='depth'||k==='width'||k==='diameter')?1:0; el.oninput=()=>{ p[k]=Math.max(min,Math.round(+el.value||0)); persist();renderEntries();render(); }; }
   });
   $('#ra-run').onclick=()=>{ p.seed=Math.floor(Math.random()*1e9); scatterArea(e); };
