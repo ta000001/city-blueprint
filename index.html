@@ -312,7 +312,8 @@ function renderTParams(){
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select>'+(hasCond?(' <span class="muted">seed</span><input type="number" id="p-seed" value="'+(e.seed||0)+'" style="width:88px">'):'')+' <button class="pri" id="p-roll"'+(hasCond?'':' disabled')+' title="範囲/選択を乱数seedで振り直し" style="margin-left:auto">適用・抽選</button></div>';
+  const curP=e._preset||DEF_KEY;
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select>'+(hasCond?(' <span class="muted">seed</span><input type="number" id="p-seed" value="'+(e.seed||0)+'" style="width:88px">'):'')+' <button class="pri" id="p-roll"'+(hasCond?'':' disabled')+' title="範囲/選択を乱数seedで振り直し" style="margin-left:auto">適用・抽選</button></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
@@ -331,7 +332,7 @@ function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) retu
 function rollEntry(e){ if(!e.cond||!Object.keys(e.cond).length) return; if(e.seed==null) e.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type].fields; for(const k of Object.keys(fields)){ if(e.cond[k]!==undefined) e.params[k]=rollElem(e.cond[k],rng); } }
 function cleanupCond(e){ if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
 function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); }
-function applyPreset(e,t,name){ e.params={}; e.cond={};
+function applyPreset(e,t,name){ e.params={}; e.cond={}; if(name&&name!==DEF_KEY) e._preset=name; else delete e._preset; // 選択中preset名を保持(アプリ内部・出力には含めない)
   if(name && name!==DEF_KEY){ const pr=(PRESETS.presets[t]||{})[name]||{}; for(const [k,v] of Object.entries(pr)){ const cv=JSON.parse(JSON.stringify(v)); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))) e.cond[k]=cv; else e.params[k]=cv; } } // DEFAULTS=オーバーライド無し(ベースライン)
   cleanupCond(e); rollEntry(e); persist(); renderEntries(); renderTParams(); }
 function modesFor(ft){ if(ft==='int') return [['unset','未設定'],['fixed','固定'],['range','範囲'],['choice','選択']]; if(ft==='bool') return [['unset','未設定'],['fixed','固定'],['random','ランダム']]; return [['unset','未設定'],['fixed','固定'],['choice','選択']]; }
