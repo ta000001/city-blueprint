@@ -234,7 +234,10 @@ function newEntry(type){
   else e.params={};
   return e;
 }
-function persist(){ try{ localStorage.setItem('city-blueprint:plan', JSON.stringify(plan)); }catch(_){}
+// 他フィールドに依存して不要になったフィールドを削除（⑯・schema駆動で汎用）
+function pruneHidden(e){ const t=e.type; if(!SCHEMA||!(t in SCHEMA.builders)||!e.params) return; const fields=SCHEMA.builders[t].fields; const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k); hiddenSizeFields(t,probe).forEach(k=>{ delete e.params[k]; if(e.cond) delete e.cond[k]; }); if(e.cond&&!Object.keys(e.cond).length){ delete e.cond; delete e.seed; } }
+function pruneAll(){ if(!SCHEMA) return; plan.entries.forEach(pruneHidden); }
+function persist(){ pruneAll(); try{ localStorage.setItem('city-blueprint:plan', JSON.stringify(plan)); }catch(_){}
   snapshot(); renderJson(); render(); }
 
 /* ---------- entries panel ---------- */
@@ -250,7 +253,7 @@ function renderEntries(){
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
     li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggle(i); else selOne(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
-    li.ondblclick=()=>{ multiMode=true; updateMultiBtn(); selToggle(i); renderEntries(); renderEditor(); render(); };
+    li.ondblclick=()=>{ multiMode=!multiMode; updateMultiBtn(); if(multiMode) selToggle(i); renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
   updateTools();
@@ -263,7 +266,11 @@ function renderEditor(){
   h+='<div class="r"><label>relPos</label> d<input type="number" id="e-d" value="'+(rp.d||0)+'"> h<input type="number" id="e-h" value="'+(rp.h||0)+'"> w<input type="number" id="e-w" value="'+(rp.w||0)+'"></div>';
   h+='<div class="r"><label>relDir</label><select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select></div>';
   if(e.type in SCHEMA.builders){
-    h+='<div class="r"><label>margin</label><input type="number" id="e-margin" value="'+(typeof e.margin==='number'?e.margin:'')+'" placeholder="なし"> <span class="muted">一律(スカラ)</span></div>';
+    const isRect=(footprintFor(e)||{}).shape==='RECT'; const mm=(e.margin==null)?'none':(typeof e.margin==='number'?'scalar':'sides');
+    h+='<div class="r"><label>margin</label><select id="e-mmode"><option value="none"'+(mm==='none'?' selected':'')+'>なし</option><option value="scalar"'+(mm==='scalar'?' selected':'')+'>一律</option>'+(isRect?('<option value="sides"'+(mm==='sides'?' selected':'')+'>四辺</option>'):'')+'</select>';
+    if(mm==='scalar') h+=' <input type="number" id="e-margin" value="'+(e.margin||0)+'">';
+    else if(mm==='sides'){ const m=e.margin||{}; h+=' front<input type="number" id="e-mf" value="'+(m.front||0)+'"> back<input type="number" id="e-mb" value="'+(m.back||0)+'"> left<input type="number" id="e-ml" value="'+(m.left||0)+'"> right<input type="number" id="e-mr" value="'+(m.right||0)+'">'; }
+    h+='</div>';
     h+='<div class="r"><label>ground</label><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:110px"> <span class="muted">FULLBLOCK</span></div>';
   }
   ed.innerHTML=h;
@@ -272,7 +279,9 @@ function renderEditor(){
   $('#e-h').oninput=ev=>{rp.h=+ev.target.value||0; upd();};
   $('#e-w').oninput=ev=>{rp.w=+ev.target.value||0; upd();};
   $('#e-dir').onchange=ev=>{e.relDir=ev.target.value; upd();};
-  if($('#e-margin')) $('#e-margin').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.margin; else e.margin=+v||0; persist(); };
+  if($('#e-mmode')) $('#e-mmode').onchange=ev=>{ const v=ev.target.value; if(v==='none') delete e.margin; else if(v==='scalar') e.margin=(typeof e.margin==='number'?e.margin:0); else e.margin={front:0,back:0,left:0,right:0}; persist(); renderEditor(); };
+  if($('#e-margin')) $('#e-margin').oninput=ev=>{ e.margin=Math.max(0,Math.round(+ev.target.value||0)); persist(); };
+  [['e-mf','front'],['e-mb','back'],['e-ml','left'],['e-mr','right']].forEach(([id,key])=>{ const el=$('#'+id); if(el) el.oninput=ev=>{ if(typeof e.margin!=='object') e.margin={front:0,back:0,left:0,right:0}; e.margin[key]=Math.max(0,Math.round(+ev.target.value||0)); persist(); }; });
   if($('#e-ground')) $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; persist(); };
   renderTParams();
 }
@@ -361,7 +370,7 @@ function wireParamRows(e,t,fields){
     if(mode==='fixed'){
       if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); refreshResolved(e,k); light(); }; }
       else if(f.type==='bool'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=(ev.target.value==='true'); refreshResolved(e,k); light(); }; }
-      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; if(isFootprintDiscriminator(t,k)) renderTParams(); else { refreshResolved(e,k); light(); } }; } // shape等でサイズ場の出し分けを更新
+      else if(f.type==='enum'){ const el=$('#pv-'+k); if(el) el.onchange=ev=>{ e.params[k]=ev.target.value; if(isFootprintDiscriminator(t,k)){ persist(); renderTParams(); } else { refreshResolved(e,k); light(); } }; } // shape等でサイズ場の出し分け/不要削除
       else if(f.type==='blockspec'){ const bf=$('#pbf-'+k), bm=$('#pbm-'+k);
         if(bf) bf.onchange=()=>{ e.params[k]={form:bf.value, mat:matsFor(bf.value)[0]}; renderTParams(); };
         if(bm) bm.onchange=()=>{ e.params[k]={form:bf.value, mat:bm.value||undefined}; refreshResolved(e,k); light(); }; }
@@ -757,10 +766,10 @@ function boot(){
       else if(drag.additive&&drag.wasSel){ selToggle(drag.hit); renderEntries(); renderEditor(); render(); } // 追加選択のタップ(無移動)で解除
       else { renderEntries(); renderEditor(); render(); }
     }
-    else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); renderEntries(); renderEditor(); render(); } // 空セル選択
+    else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); if(multiMode){ multiMode=false; updateMultiBtn(); } renderEntries(); renderEditor(); render(); } // 空セル選択+複数選択モード終了
     drag=null; cv.style.cursor='default';
   };
-  cv.ondblclick=e=>{ const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); if(hit>=0){ multiMode=true; updateMultiBtn(); if(!selset.has(hit)) selToggle(hit); sel=hit; renderEntries(); renderEditor(); render(); } }; // ダブルクリックで複数選択モード開始
+  cv.ondblclick=e=>{ const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); multiMode=!multiMode; updateMultiBtn(); if(multiMode&&hit>=0){ if(!selset.has(hit)) selToggle(hit); sel=hit; } renderEntries(); renderEditor(); render(); }; // ダブルクリックで複数選択モードを切替
   // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
   addEventListener('keydown',e=>{
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
@@ -777,7 +786,7 @@ function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
-loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
+loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); pruneAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 updateDirLabel();
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
