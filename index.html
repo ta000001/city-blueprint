@@ -308,7 +308,7 @@ function renderTParams(){
   if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
   if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   head.textContent='type別（'+t+'）';
-  const fields=SCHEMA.builders[t].fields, pn=allPresets(t), hasCond=e.cond&&Object.keys(e.cond).length;
+  const fields=SCHEMA.builders[t].fields, pn=allPresets(t), hasCond=rollable(e);
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
@@ -319,7 +319,7 @@ function renderTParams(){
   box.innerHTML=h;
   $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
   if($('#p-seed')) $('#p-seed').oninput=ev=>{ e.seed=Math.round(+ev.target.value||0); rollEntry(e); if(e.cond) Object.keys(e.cond).forEach(k=>refreshResolved(e,k)); light(); }; // seed指定で再現可能に
-  $('#p-roll').onclick=()=>{ if(!(e.cond&&Object.keys(e.cond).length)){ status('範囲/選択のフィールドがありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
+  $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('抽選できる範囲/選択がありません'); return; } e.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
   wireParamRows(e,t,fields);
 }
 
@@ -364,7 +364,9 @@ function fieldRow(e,t,k,f){ const mode=curMode(e,f,k);
   const ed=(mode==='unset')?'':valueEditor(e,t,k,f,mode);
   return '<div class="fr"><div class="fc-cond"><span class="k">'+k+'</span>'+modeSel+'<span class="ped">'+ed+'</span></div><div class="fc-res" id="pres-'+k+'">'+effDisplay(e,t,k)+'</div></div>';
 }
-function light(){ persist(); renderEntries(); } // 本体は再描画しない（入力フォーカス維持）
+// 振れる条件が実在するか（range、または候補≥1のchoice）＝「適用・抽選」の可否
+function rollable(e){ return !!(e.cond && Object.keys(e.cond).some(k=>{ const c=e.cond[k]; return c && (('range' in c)||(Array.isArray(c.choice)&&c.choice.length>0)); })); }
+function light(){ persist(); renderEntries(); const b=$('#p-roll'); if(b&&sel>=0&&plan.entries[sel]) b.disabled=!rollable(plan.entries[sel]); } // 編集のたびに抽選可否を更新
 function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
   if(mode==='unset'){ delete e.params[k]; delete e.cond[k]; }
   else if(mode==='fixed'){ delete e.cond[k]; e.params[k]= f.type==='blockspec'?asSpec(effElem(e,t,k)) : f.type==='bool'?(fieldVal(e,t,k)===true) : f.type==='int'?Math.round(fieldVal(e,t,k)||0) : (effElem(e,t,k)!=null?effElem(e,t,k):f.values[0]); }
