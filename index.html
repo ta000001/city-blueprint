@@ -311,7 +311,7 @@ function renderTParams(){
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">(テンプレ適用…)</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset"><option value="">DEFAULTS</option>'+pn.map(n=>'<option>'+n+'</option>').join('')+'</select></div>';
   h+='<div class="pf"><span class="k">抽選</span><button class="pri" id="p-roll"'+(hasCond?'':' disabled')+'>抽選（範囲/選択を確定）</button> <span class="muted">'+(hasCond?('seed '+(e.seed||0)):'範囲/選択なし')+'</span></div>';
   h+='<div class="fr fr-head"><div class="fc-cond">抽選条件</div><div class="fc-res">抽選結果</div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
