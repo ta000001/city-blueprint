@@ -337,15 +337,16 @@ function renderTParams(){
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY;
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select>'+(hasAnyCond?(' <span class="muted">seed</span><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:84px">'):'')+' <button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し" style="margin-left:auto">適用・抽選</button></div>';
-  h+='<div class="fr fr-head"><div class="fc-cond">設定 <button id="p-fixall" title="範囲/選択を全てfix">全fix</button><button id="p-unfixall" title="fixを全解除">解除</button></div><div class="fc-res">結果(params)</div><div class="fc-fix">fix</div></div>';
+  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select> <button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し" style="margin-left:auto">適用・抽選</button></div>';
+  h+='<div class="fr fr-head"><div class="fc-cond">設定 <button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div><div class="fc-res">結果(params)</div><div class="fc-fix">fix</div></div>';
+  if(hasAnyCond) h+='<div class="fr"><div class="fc-cond"><span class="k">seed</span><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:100px"></div><div class="fc-res muted">乱数種</div><div class="fc-fix"><input type="checkbox" id="p-seedfix" title="seedを固定(適用・抽選で変えない)"'+(e.cond&&e.cond.seedFix?' checked':'')+'></div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
   $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
   if($('#p-seed')) $('#p-seed').oninput=ev=>{ e.cond=e.cond||{}; e.cond.seed=Math.round(+ev.target.value||0); rollEntry(e); Object.keys(fields).forEach(k=>refreshResolved(e,k)); light(); };
-  $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
-  if($('#p-fixall')) $('#p-fixall').onclick=()=>setAllFix(e,true);
-  if($('#p-unfixall')) $('#p-unfixall').onclick=()=>setAllFix(e,false);
+  if($('#p-seedfix')) $('#p-seedfix').onchange=ev=>{ e.cond=e.cond||{}; e.cond.seedFix=ev.target.checked; light(); };
+  $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; if(!e.cond.seedFix) e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
+  if($('#p-fixtoggle')) $('#p-fixtoggle').onclick=()=>toggleAllFix(e);
   wireParamRows(e,t,fields);
 }
 
@@ -359,7 +360,8 @@ function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) retu
 function rollEntry(e){ if(!e.cond) return; if(e.cond.seed==null) e.cond.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.cond.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type]?SCHEMA.builders[e.type].fields:{}; for(const k of Object.keys(fields)){ const c=e.cond[k]; if(c && !c.fix && (('range' in c)||Array.isArray(c.choice))) e.params[k]=rollElem(c,rng); } }
 function cleanupCond(e){ if(e.cond){ const ks=Object.keys(e.cond).filter(k=>k!=='seed'); if(!ks.length) delete e.cond; } }
 function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); }
-function setAllFix(e,on){ if(!e.cond||!SCHEMA.builders[e.type]) return; Object.keys(SCHEMA.builders[e.type].fields).forEach(k=>{ const c=e.cond[k]; if(c&&(('range' in c)||Array.isArray(c.choice))) c.fix=on; }); persist(); renderEntries(); renderTParams(); }
+function setAllFix(e,on){ if(!e.cond||!SCHEMA.builders[e.type]) return; Object.keys(SCHEMA.builders[e.type].fields).forEach(k=>{ const c=e.cond[k]; if(c&&(('range' in c)||Array.isArray(c.choice))) c.fix=on; }); e.cond.seedFix=on; persist(); renderEntries(); renderTParams(); }
+function toggleAllFix(e){ if(!e.cond) return; const fields=SCHEMA.builders[e.type].fields; const conds=Object.keys(fields).map(k=>e.cond[k]).filter(c=>c&&(('range' in c)||Array.isArray(c.choice))); const anyUnfixed=conds.some(c=>!c.fix)||!e.cond.seedFix; setAllFix(e,anyUnfixed); } // 1つでも未fixなら全fix、全fixなら全解除
 function applyPreset(e,t,name){ e.params={}; e.cond={};
   if(name && name!==DEF_KEY){ e.cond.preset=name; const pr=(PRESETS.presets[t]||{})[name]||{};
     for(const [k,v] of Object.entries(pr)){ const cv=clone(v); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))){ cv.fix=false; e.cond[k]=cv; } else e.params[k]=cv; } }
