@@ -337,8 +337,8 @@ function renderTParams(){
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY;
   let h=meta;
-  h+='<div class="pf"><span class="k">preset</span><select id="p-preset">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select> <button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し" style="margin-left:auto">適用・抽選</button></div>';
-  h+='<div class="fr fr-head"><div class="fc-cond">設定 <button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div><div class="fc-res">結果(params)</div><div class="fc-fix">fix</div></div>';
+  h+='<div class="fr"><div class="fc-cond"><span class="k">preset</span></div><div class="fc-res"><select id="p-preset" style="max-width:100%">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="fc-fix"><button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">適用・抽選</button></div></div>';
+  h+='<div class="fr fr-head"><div class="fc-cond">設定</div><div class="fc-res">結果(params)</div><div class="fc-fix"><button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div></div>';
   if(hasAnyCond) h+='<div class="fr"><div class="fc-cond"><span class="k">seed</span></div><div class="fc-res"><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:100px"></div><div class="fc-fix"><input type="checkbox" id="p-seedfix" title="seedを固定(適用・抽選で変えない)"'+(e.cond&&e.cond.seedFix?' checked':'')+'></div></div>';
   h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   box.innerHTML=h;
