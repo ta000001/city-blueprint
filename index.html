@@ -141,6 +141,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div id="status"></div>
 
 <div class="modal" id="vmodal"><div class="m"><h3>version</h3><div id="vbody"></div></div></div>
+<div class="modal" id="presetmodal"><div class="m"><h3>プリセット設定</h3><div id="pmbody"></div></div></div>
 <div class="modal" id="smodal"><div class="m"><h3>保存先フォルダ</h3>
   <div id="fs-rows"><div class="vrow" id="dirlabel-plan"></div>
     <div style="margin-top:8px"><button id="pick">plan フォルダを選ぶ</button></div>
@@ -350,18 +351,15 @@ function renderTParams(){
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY;
-  // 上部操作ブロック（#pctrl）: preset+適用 / seed+fix+抽選 / 設定ヘッダ
-  let c=meta;
-  c+='<div class="pf"><span class="k">preset</span><select id="p-preset" style="flex:1;max-width:170px">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select> <button id="p-apply">適用</button></div>';
-  c+='<div class="pf"><span class="k">seed</span><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:112px"> <label class="chk"><input type="checkbox" id="p-seedfix"'+(e.cond&&e.cond.seedFix?' checked':'')+'>fix</label></div>';
-  c+='<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-res">設定値</div><div class="c-fix"><button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div></div>';
-  if(ctrl) ctrl.innerHTML=c;
+  // ヘッダ行のみ（パラメータ | プリセット(モーダル) | 抽選 | fix/解除）
+  if(ctrl) ctrl.innerHTML=meta+'<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-presetbtn" title="プリセット設定を開く">プリセット</button></div><div class="c-res"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-fix"><button id="p-fixtoggle" title="範囲/選択のfixをまとめてトグル">fix/解除</button></div></div>';
   if(div) div.style.display='';
+  const mb=$('#pmbody'); if(mb){ mb.innerHTML='<div class="pf"><span class="k">preset</span><select id="p-preset" style="flex:1;max-width:220px">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="pf" style="margin-top:10px"><button class="pri" id="p-apply">適用</button> <button id="p-pclose">閉じる</button></div>';
+    $('#p-apply').onclick=()=>{ applyPreset(e,t,$('#p-preset').value); $('#presetmodal').classList.remove('on'); };
+    $('#p-pclose').onclick=()=>$('#presetmodal').classList.remove('on'); }
   box.innerHTML=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
-  if($('#p-apply')) $('#p-apply').onclick=()=>applyPreset(e,t,$('#p-preset').value); // ドロップダウンは選ぶだけ・適用で反映
-  if($('#p-seed')) $('#p-seed').oninput=ev=>{ e.cond=e.cond||{}; e.cond.seed=Math.round(+ev.target.value||0); rollEntry(e); Object.keys(fields).forEach(k=>refreshResolved(e,k)); light(); };
-  if($('#p-seedfix')) $('#p-seedfix').onchange=ev=>{ e.cond=e.cond||{}; e.cond.seedFix=ev.target.checked; light(); };
-  if($('#p-roll')) $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; if(!e.cond.seedFix) e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
+  if($('#p-presetbtn')) $('#p-presetbtn').onclick=()=>$('#presetmodal').classList.add('on');
+  if($('#p-roll')) $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
   if($('#p-fixtoggle')) $('#p-fixtoggle').onclick=()=>toggleAllFix(e);
   wireParamRows(e,t,fields);
 }
@@ -823,6 +821,7 @@ function boot(){
   $('#zout').onclick=()=>{camo.scale/=1.25;render();};
   $('#ver').onclick=()=>$('#vmodal').classList.add('on');
   $('#vmodal').onclick=e=>{if(e.target.id==='vmodal')$('#vmodal').classList.remove('on');};
+  $('#presetmodal').onclick=e=>{if(e.target.id==='presetmodal')$('#presetmodal').classList.remove('on');};
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
