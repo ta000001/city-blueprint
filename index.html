@@ -72,18 +72,27 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .pf .mode{width:66px}
 .pf .ped{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
 .chk{display:inline-flex;align-items:center;gap:2px;font-size:10px;color:var(--dim);white-space:nowrap}
-.bcrow{display:flex;gap:4px;margin-bottom:3px;align-items:center;flex-basis:100%}
+.bcrow{display:flex;gap:4px;margin-bottom:3px;align-items:center;flex-basis:100%;min-width:0}
+.bcrow select{flex:1 1 0;min-width:0}
+.ped{display:flex;flex-wrap:wrap;gap:4px;align-items:center;min-width:0;flex:1 1 auto}
+.c-set select,.c-set input{min-width:0;max-width:100%}
+.fr .mode{flex:0 0 auto;width:60px}
 /* 基本・type別 共通の固定列グリッド：フィールド名 | 設定(条件) | 結果(確定値) | fix */
-.fr{display:grid;grid-template-columns:70px minmax(0,1fr) 132px 76px;gap:6px;align-items:center;border-bottom:1px solid var(--rule);padding:4px 2px}
-@media(max-width:620px){.fr{grid-template-columns:56px minmax(0,1fr) 96px 74px;gap:5px}}
+.fr{display:grid;grid-template-columns:70px minmax(0,1fr) 132px 76px;grid-template-areas:"name set res fix";gap:6px;align-items:center;border-bottom:1px solid var(--rule);padding:4px 2px}
+/* スマホ：ヘッダは1行のまま列を詰める／データ行は縦積み（name|fix → 設定 → 確定値）でエディタを全幅に */
+@media(max-width:620px){
+  .fr-head{grid-template-columns:56px minmax(0,1fr) 64px 74px;gap:5px}
+  .fr:not(.fr-head){grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name fix" "set set" "res res";gap:3px 6px;align-items:start}
+  .fr:not(.fr-head) .c-res::before{content:"= ";color:var(--dim)}
+}
 #p-presetbtn{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
 .fr-head{color:var(--brass);font-size:11px;font-weight:600;letter-spacing:.04em;border-bottom:1px solid var(--brass)}
 .fr-head button{border-color:var(--brass);color:var(--brass);background:transparent;padding:3px 8px;font-size:11px}
 .fr-head button.pdirty{border-color:#D24B4B;color:#D24B4B}
-.c-name{color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.c-set{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
-.c-res{color:var(--chalk);font-size:11px;word-break:break-word;min-width:0}
-.c-fix{display:flex;justify-content:flex-end;align-items:center;min-width:0}
+.c-name{grid-area:name;color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-set{grid-area:set;display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
+.c-res{grid-area:res;color:var(--chalk);font-size:11px;word-break:break-word;min-width:0}
+.c-fix{grid-area:fix;display:flex;justify-content:flex-end;align-items:center;min-width:0}
 .c-fix button{padding:4px 6px;font-size:11px}
 .ph{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px}
 .ph h2{margin:0}
