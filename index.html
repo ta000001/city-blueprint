@@ -75,6 +75,8 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .bcrow{display:flex;gap:4px;margin-bottom:3px;align-items:center;flex-basis:100%}
 /* 基本・type別 共通の固定列グリッド：フィールド名 | 設定(条件) | 結果(確定値) | fix */
 .fr{display:grid;grid-template-columns:70px minmax(0,1fr) 132px 76px;gap:6px;align-items:center;border-bottom:1px solid var(--rule);padding:4px 2px}
+@media(max-width:620px){.fr{grid-template-columns:56px minmax(0,1fr) 96px 74px;gap:5px}}
+#p-presetbtn{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block}
 .fr-head{color:var(--brass);font-size:11px;font-weight:600;letter-spacing:.04em;border-bottom:1px solid var(--brass)}
 .fr-head button{border-color:var(--brass);color:var(--brass);background:transparent;padding:3px 8px;font-size:11px}
 .fr-head button.pdirty{border-color:#D24B4B;color:#D24B4B}
