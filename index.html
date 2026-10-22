@@ -26,8 +26,8 @@ body{color:var(--chalk);font-family:'JetBrains Mono',ui-monospace,monospace;
 .head{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 h1{font-weight:800;font-size:20px;letter-spacing:-.02em;line-height:1;margin:0;color:var(--chalk)}
 .sub{font-size:11px;color:var(--dim)}
-.ver{font-size:11px;color:var(--brass);border:1px solid var(--brass-dim);border-radius:50%;
-  width:18px;height:18px;line-height:16px;text-align:center;cursor:pointer;flex:none}
+.ver{font-size:11px;color:var(--brass);border:1px solid var(--brass-dim);border-radius:9px;
+  padding:1px 7px;line-height:16px;text-align:center;cursor:pointer;flex:none;white-space:nowrap}
 button,select,input{font-family:inherit;font-size:12px}
 button{background:var(--panel2);color:var(--chalk);border:1px solid var(--rule);border-radius:6px;padding:5px 9px;cursor:pointer}
 button:hover{border-color:var(--brass-dim)}
@@ -162,7 +162,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.20';
+const APP_VERSION='0.21';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -849,6 +849,7 @@ function boot(){
   $('#fit').onclick=fitCam;
   $('#zin').onclick=()=>{camo.scale*=1.25;render();};
   $('#zout').onclick=()=>{camo.scale/=1.25;render();};
+  $('#ver').textContent='v'+APP_VERSION; $('#ver').title='バージョン v'+APP_VERSION+'（タップで詳細）';
   $('#ver').onclick=()=>$('#vmodal').classList.add('on');
   $('#vmodal').onclick=e=>{if(e.target.id==='vmodal')$('#vmodal').classList.remove('on');};
   $('#presetmodal').onclick=e=>{if(e.target.id==='presetmodal')$('#presetmodal').classList.remove('on');};
@@ -913,7 +914,17 @@ loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 updateDirLabel();
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
-if('serviceWorker' in navigator){ addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{})); }
+if('serviceWorker' in navigator){
+  // 新しいSWが制御を奪ったら1度だけ自動リロード（更新を確実に反映。iOSのウォーム復帰対策）
+  let swReloaded=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(swReloaded)return; swReloaded=true; location.reload(); });
+  addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg=>{
+      reg.update(); // 起動毎に更新チェック（sw.jsはHTTPキャッシュを使わず取得）
+      setInterval(()=>reg.update(),60*60*1000);
+    }).catch(()=>{});
+  });
+}
 </script>
 </body>
 </html>
