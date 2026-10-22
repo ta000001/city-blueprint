@@ -42,6 +42,7 @@ input[type=number]{width:56px}
 .cols .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
 @media(max-width:860px){.cols{flex-direction:column}}
 .sub2{font-size:10px;color:var(--brass);letter-spacing:.08em;margin:8px 0 2px;font-weight:600}
+.divider{border-top:1px solid var(--brass);margin:8px 0 6px}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px}
 .panel h2{font-size:12px;color:var(--brass);margin:0 0 6px;font-weight:600;letter-spacing:.04em}
 #entries{list-style:none;margin:0;padding:0;max-height:38vh;overflow:auto}
@@ -123,9 +124,8 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel">
       <h2>パラメータ（選択中エントリ）</h2>
-      <div class="sub2">基本</div>
       <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
-      <div class="sub2" id="tphead">type別</div>
+      <div class="divider"></div>
       <div class="ed" id="tparams"><span class="muted">—</span></div>
     </div>
     <div class="panel">
@@ -323,13 +323,12 @@ function hiddenSizeFields(type, probe){ const b=SCHEMA.builders[type]; if(!b||!A
   b.footprint.forEach(r=>(r.size||[]).forEach(s=>{ if(!active.has(s)) hid.add(s); })); return hid; }
 function isFootprintDiscriminator(type,key){ const b=SCHEMA.builders[type]; return !!(b&&Array.isArray(b.footprint)&&b.footprint.some(r=>r.when&&(key in r.when))); }
 function renderTParams(){
-  const box=$('#tparams'), head=$('#tphead'); if(!box) return;
-  if(sel<0||sel>=plan.entries.length){ head.textContent='type別'; box.innerHTML='<span class="muted">—</span>'; return; }
+  const box=$('#tparams'); if(!box) return;
+  if(sel<0||sel>=plan.entries.length){ box.innerHTML='<span class="muted">—</span>'; return; }
   const e=plan.entries[sel], t=e.type, meta=metaRow(e);
-  if(t==='plan'){ head.textContent='type別（plan）'; box.innerHTML=meta+'<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
-  if(t==='structure'){ head.textContent='type別（structure）'; box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
-  if(t==='randomarea'){ head.textContent='type別（randomarea）'; box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
-  head.textContent='type別（'+t+'）';
+  if(t==='plan'){ box.innerHTML=meta+'<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='structure'){ box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
+  if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, pn=allPresets(t), canRoll=rollable(e);
   const hasAnyCond=e.cond&&Object.keys(e.cond).some(k=>k!=='preset'&&k!=='seed');
