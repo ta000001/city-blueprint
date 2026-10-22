@@ -126,9 +126,10 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel">
       <h2>パラメータ（選択中エントリ）</h2>
+      <div id="pctrl"></div>
       <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
-      <div class="divider"></div>
-      <div class="ed" id="tparams"><span class="muted">—</span></div>
+      <div class="divider" id="pdiv" style="display:none"></div>
+      <div class="ed" id="tparams"></div>
     </div>
     <div class="panel">
       <h2>plan.json</h2>
@@ -296,15 +297,16 @@ function renderEditor(){
   if(sel<0||sel>=plan.entries.length){ ed.innerHTML='<span class="muted">エントリを選択</span>'; renderTParams(); return; }
   const e=plan.entries[sel], rp=e.relPos||(e.relPos={d:0,h:0,w:0});
   let h='';
-  h+='<div class="fr"><div class="c-name">relPos</div><div class="c-set">d<input type="number" id="e-d" value="'+(rp.d||0)+'"> h<input type="number" id="e-h" value="'+(rp.h||0)+'"> w<input type="number" id="e-w" value="'+(rp.w||0)+'"></div><div class="c-res"></div><div class="c-fix"></div></div>';
-  h+='<div class="fr"><div class="c-name">relDir</div><div class="c-set"><select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select></div><div class="c-res"></div><div class="c-fix"></div></div>';
+  const bm='<select class="mode" disabled><option>固定</option></select>', bf='<input type="checkbox" disabled title="基本フィールドは常に固定">';
+  h+='<div class="fr"><div class="c-name">relPos</div><div class="c-set">'+bm+'d<input type="number" id="e-d" value="'+(rp.d||0)+'">h<input type="number" id="e-h" value="'+(rp.h||0)+'">w<input type="number" id="e-w" value="'+(rp.w||0)+'"></div><div class="c-res"></div><div class="c-fix">'+bf+'</div></div>';
+  h+='<div class="fr"><div class="c-name">relDir</div><div class="c-set">'+bm+'<select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select></div><div class="c-res"></div><div class="c-fix">'+bf+'</div></div>';
   if(e.type in SCHEMA.builders){
     const isRect=(footprintFor(e)||{}).shape==='RECT'; const mm=(e.margin==null)?'none':(typeof e.margin==='number'?'scalar':'sides');
     h+='<div class="fr"><div class="c-name">margin</div><div class="c-set"><select id="e-mmode"><option value="none"'+(mm==='none'?' selected':'')+'>なし</option><option value="scalar"'+(mm==='scalar'?' selected':'')+'>一律</option>'+(isRect?('<option value="sides"'+(mm==='sides'?' selected':'')+'>四辺</option>'):'')+'</select>';
     if(mm==='scalar') h+=' <input type="number" id="e-margin" value="'+(e.margin||0)+'">';
     else if(mm==='sides'){ const m=e.margin||{}; h+=' F<input type="number" id="e-mf" value="'+(m.front||0)+'"> B<input type="number" id="e-mb" value="'+(m.back||0)+'"> L<input type="number" id="e-ml" value="'+(m.left||0)+'"> R<input type="number" id="e-mr" value="'+(m.right||0)+'">'; }
-    h+='</div><div class="c-res"></div><div class="c-fix"></div></div>';
-    h+='<div class="fr"><div class="c-name">ground</div><div class="c-set"><input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:108px"> <span class="muted">FULLBLOCK</span></div><div class="c-res"></div><div class="c-fix"></div></div>';
+    h+='</div><div class="c-res"></div><div class="c-fix">'+bf+'</div></div>';
+    h+='<div class="fr"><div class="c-name">ground</div><div class="c-set">'+bm+'<input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:100px"> <span class="muted">FULLBLOCK</span></div><div class="c-res"></div><div class="c-fix">'+bf+'</div></div>';
   }
   ed.innerHTML=h;
   const upd=()=>{ persist(); renderEntries(); };
@@ -325,28 +327,30 @@ function hiddenSizeFields(type, probe){ const b=SCHEMA.builders[type]; if(!b||!A
   b.footprint.forEach(r=>(r.size||[]).forEach(s=>{ if(!active.has(s)) hid.add(s); })); return hid; }
 function isFootprintDiscriminator(type,key){ const b=SCHEMA.builders[type]; return !!(b&&Array.isArray(b.footprint)&&b.footprint.some(r=>r.when&&(key in r.when))); }
 function renderTParams(){
-  const box=$('#tparams'); if(!box) return;
-  if(sel<0||sel>=plan.entries.length){ box.innerHTML='<span class="muted">—</span>'; return; }
+  const box=$('#tparams'), ctrl=$('#pctrl'), div=$('#pdiv'); if(!box) return;
+  if(ctrl) ctrl.innerHTML=''; if(div) div.style.display='none';
+  if(sel<0||sel>=plan.entries.length){ box.innerHTML=''; return; }
   const e=plan.entries[sel], t=e.type, meta=metaRow(e);
   if(t==='plan'){ box.innerHTML=meta+'<div class="r"><label>plan</label><input id="e-ref" value="'+(e.plan||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.plan=ev.target.value; persist(); renderEntries(); }; return; }
   if(t==='structure'){ box.innerHTML=meta+'<div class="r"><label>structure</label><input id="e-ref" value="'+(e.structure||'')+'" style="flex:1;min-width:120px"></div>'; $('#e-ref').oninput=ev=>{ e.structure=ev.target.value; persist(); renderEntries(); }; return; }
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, pn=allPresets(t), canRoll=rollable(e);
-  const hasAnyCond=e.cond&&Object.keys(e.cond).some(k=>k!=='preset'&&k!=='seed');
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY;
-  let h=meta;
-  h+='<div class="fr"><div class="c-name">preset</div><div class="c-set"></div><div class="c-res"><select id="p-preset" style="width:100%">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="c-fix"><button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">適用・抽選</button></div></div>';
-  h+='<div class="fr fr-head"><div class="c-name"></div><div class="c-set">設定</div><div class="c-res">結果</div><div class="c-fix"><button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div></div>';
-  if(hasAnyCond) h+='<div class="fr"><div class="c-name">seed</div><div class="c-set"></div><div class="c-res"><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:100%"></div><div class="c-fix"><input type="checkbox" id="p-seedfix" title="seedを固定(適用・抽選で変えない)"'+(e.cond&&e.cond.seedFix?' checked':'')+'></div></div>';
-  h+=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
-  box.innerHTML=h;
-  $('#p-preset').onchange=ev=>applyPreset(e,t,ev.target.value);
+  // 上部操作ブロック（#pctrl）: preset+適用 / seed+fix+抽選 / 設定ヘッダ
+  let c=meta;
+  c+='<div class="pf"><span class="k">preset</span><select id="p-preset" style="flex:1;max-width:170px">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select> <button id="p-apply">適用</button></div>';
+  c+='<div class="pf"><span class="k">seed</span><input type="number" id="p-seed" value="'+((e.cond&&e.cond.seed)||0)+'" style="width:112px"> <label class="chk"><input type="checkbox" id="p-seedfix"'+(e.cond&&e.cond.seedFix?' checked':'')+'>fix</label> <button class="pri" id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div>';
+  c+='<div class="fr fr-head"><div class="c-name"></div><div class="c-set">設定</div><div class="c-res">結果</div><div class="c-fix"><button id="p-fixtoggle" title="範囲/選択とseedのfixをまとめてトグル">fix/解除</button></div></div>';
+  if(ctrl) ctrl.innerHTML=c;
+  if(div) div.style.display='';
+  box.innerHTML=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
+  if($('#p-apply')) $('#p-apply').onclick=()=>applyPreset(e,t,$('#p-preset').value); // ドロップダウンは選ぶだけ・適用で反映
   if($('#p-seed')) $('#p-seed').oninput=ev=>{ e.cond=e.cond||{}; e.cond.seed=Math.round(+ev.target.value||0); rollEntry(e); Object.keys(fields).forEach(k=>refreshResolved(e,k)); light(); };
   if($('#p-seedfix')) $('#p-seedfix').onchange=ev=>{ e.cond=e.cond||{}; e.cond.seedFix=ev.target.checked; light(); };
-  $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; if(!e.cond.seedFix) e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
+  if($('#p-roll')) $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; if(!e.cond.seedFix) e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
   if($('#p-fixtoggle')) $('#p-fixtoggle').onclick=()=>toggleAllFix(e);
   wireParamRows(e,t,fields);
 }
