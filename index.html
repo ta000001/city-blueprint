@@ -320,8 +320,8 @@ function renderEditor(){
     rows.push(['margin', me]);
     rows.push(['ground', '<input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:96px"> <span class="muted">FULLBLOCK</span>']);
   }
-  const bm='<select class="mode" disabled><option>固定</option></select>', bf='<input type="checkbox" disabled>';
-  ed.innerHTML=rows.map(([k,ved])=>'<div class="fr"><div class="c-name">'+k+'</div><div class="c-set">'+bm+ved+'</div><div class="c-res" id="br-'+k+'">'+basicVal(e,k)+'</div><div class="c-fix">'+bf+'</div></div>').join('');
+  const bm='<select class="mode" disabled><option>固定</option></select>';
+  ed.innerHTML=rows.map(([k,ved])=>frRow(k, bm, ved, 'br-'+k, basicVal(e,k), fixCell('fixed','',false))).join(''); // 固定なのでfixセルは空（共通ルール）
   const upd=(k)=>{ if(k) refreshBasic(e,k); persist(); renderEntries(); };
   $('#e-d').oninput=ev=>{rp.d=+ev.target.value||0; upd('relPos');};
   $('#e-h').oninput=ev=>{rp.h=+ev.target.value||0; upd('relPos');};
@@ -363,11 +363,12 @@ function renderTParams(){
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, pn=allPresets(t), canRoll=rollable(e);
+  const hasCondField=!!(e.cond&&Object.keys(fields).some(k=>{ const c=e.cond[k]; return c&&(('range' in c)||Array.isArray(c.choice)); })); // fix/解除の可否
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY, dirty=presetDirty(e,t);
   // ヘッダ行のみ（パラメータ | プリセット名(モーダル・変更時は赤) | 抽選 | fix/解除）
-  if(ctrl) ctrl.innerHTML=meta+'<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-presetbtn"'+(dirty?' class="pdirty"':'')+' title="プリセット設定を開く'+(dirty?'（定義から変更あり）':'')+'">'+curP+'</button></div><div class="c-res"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-fix"><button id="p-fixtoggle" title="範囲/選択のfixをまとめてトグル">fix/解除</button></div></div>';
+  if(ctrl) ctrl.innerHTML=meta+'<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-presetbtn"'+(dirty?' class="pdirty"':'')+' title="プリセット設定を開く'+(dirty?'（定義から変更あり）':'')+'">'+curP+'</button></div><div class="c-res"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-fix"><button id="p-fixtoggle"'+(hasCondField?'':' disabled')+' title="範囲/選択のfixをまとめてトグル">fix/解除</button></div></div>';
   if(div) div.style.display='';
   const mb=$('#pmbody'); if(mb){ mb.innerHTML='<div class="pf"><span class="k">preset</span><select id="p-preset" style="flex:1;max-width:220px">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="pf" style="margin-top:10px"><button class="pri" id="p-apply">適用</button> <button id="p-pclose">閉じる</button></div>';
     $('#p-apply').onclick=()=>{ applyPreset(e,t,$('#p-preset').value); $('#presetmodal').classList.remove('on'); };
@@ -420,10 +421,13 @@ function valueEditor(e,t,k,f,mode){ const ft=f.type, cond=(e.cond&&e.cond[k])||n
   return '';
 }
 // 1行=1フィールド：左=設定（モード＋fix＋編集）/ 右=結果（params確定値）・上下位置が揃う
+// 共通の行テンプレ（基本・type別で統一）。fixセルは固定モードでは出さない（共通ルール）
+function frRow(name, modeHtml, editorHtml, resId, resVal, fixHtml){
+  return '<div class="fr"><div class="c-name">'+name+'</div><div class="c-set">'+modeHtml+editorHtml+'</div><div class="c-res"'+(resId?(' id="'+resId+'"'):'')+'>'+resVal+'</div><div class="c-fix">'+(fixHtml||'')+'</div></div>'; }
+function fixCell(mode,id,checked){ return (mode==='range'||mode==='choice')?('<input type="checkbox" id="'+id+'" title="固定して抽選対象外"'+(checked?' checked':'')+'>'):''; }
 function fieldRow(e,t,k,f){ const mode=curMode(e,f,k), c=e.cond&&e.cond[k];
   const modeSel='<select class="mode" id="pm-'+k+'">'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
-  const fixBox=(mode==='range'||mode==='choice')?('<input type="checkbox" id="pfx-'+k+'" title="固定して抽選対象外"'+(c&&c.fix?' checked':'')+'>'):'';
-  return '<div class="fr"><div class="c-name">'+k+'</div><div class="c-set">'+modeSel+'<span class="ped">'+valueEditor(e,t,k,f,mode)+'</span></div><div class="c-res" id="pres-'+k+'">'+effDisplay(e,t,k)+'</div><div class="c-fix">'+fixBox+'</div></div>';
+  return frRow(k, modeSel, '<span class="ped">'+valueEditor(e,t,k,f,mode)+'</span>', 'pres-'+k, effDisplay(e,t,k), fixCell(mode,'pfx-'+k, c&&c.fix));
 }
 // 振れる条件が実在するか（fix でない range / 候補≥1 の choice）＝「適用・抽選」の可否
 function rollable(e){ if(!e.cond) return false; const fields=SCHEMA.builders[e.type]?SCHEMA.builders[e.type].fields:{}; return Object.keys(fields).some(k=>{ const c=e.cond[k]; return c && !c.fix && (('range' in c)||(Array.isArray(c.choice)&&c.choice.length>0)); }); }
