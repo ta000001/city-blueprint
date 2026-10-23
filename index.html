@@ -62,6 +62,12 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .modal.on{display:flex}
 .modal .m{background:var(--panel2);border:1px solid var(--rule);border-radius:8px;padding:16px 18px;min-width:220px;max-width:88%}
 .modal h3{margin:0 0 10px;font-size:13px;color:var(--brass)}
+.mhead{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 10px}
+.mhead h3{margin:0}
+.mtools{display:flex;gap:4px;flex:none}
+.icobtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;color:var(--dim);cursor:pointer;flex:none;border-radius:7px;border:1px solid transparent;background:transparent}
+.icobtn:hover{color:var(--brass);border-color:var(--rule)}
+.icobtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 .vrow{font-size:12px;color:var(--brass);line-height:1.9}
 .muted{color:var(--dim);font-size:11px}
 .modal .m.wide{min-width:340px;max-width:min(560px,94vw);width:560px;max-height:86vh;overflow:auto}
@@ -167,7 +173,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div id="status"></div>
 
 <div class="modal" id="vmodal"><div class="m"><h3>version</h3><div id="vbody"></div></div></div>
-<div class="modal" id="presetmodal"><div class="m"><h3>プリセット設定</h3><div id="pmbody"></div></div></div>
+<div class="modal" id="presetmodal"><div class="m"><div class="mhead"><h3>プリセット設定</h3><span class="mtools"><span class="icobtn" id="p-export" role="button" tabindex="0" title="全ユーザープリセットを1ファイルに書き出す" aria-label="書き出し"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span><span class="icobtn" id="p-import" role="button" tabindex="0" title="ファイルから取り込む" aria-label="取り込み"><svg viewBox="0 0 24 24"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg></span></span></div><div id="pmbody"></div></div></div>
 <div class="modal" id="smodal"><div class="m"><h3>保存先フォルダ</h3>
   <div id="fs-rows"><div class="vrow" id="dirlabel-plan"></div>
     <div style="margin-top:8px"><button id="pick">plan フォルダを選ぶ</button></div>
@@ -176,7 +182,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.28';
+const APP_VERSION='0.29';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -415,14 +421,11 @@ function renderTParams(){
       return '<div class="prow'+(cur?' cur':'')+'"><span class="pname'+(master?' pmaster':'')+'" title="'+(master?'内蔵（変更/削除不可）':'ユーザー')+'">'+n+(cur?' ✓':'')+'</span><span class="pact"><button data-pa="'+en+'">適用</button>'+(master?'':' <button class="pdel" data-pd="'+en+'">削除</button>')+'</span></div>'; }).join('');
     mb.innerHTML='<div class="plist">'+rows+'</div>'
       +'<div class="psave"><input id="p-newname" placeholder="新規プリセット名" value=""> <button class="pri" id="p-save" title="現在のfix項目（DEFAULTSとの差分）を端末に保存">保存</button></div>'
-      +'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap"><button id="p-export" title="全ユーザープリセットを1ファイル(user_presets.json)に書き出す">書出(全体)</button><button id="p-import" title="ファイルから取り込む（集約/個別どちらも可）">取込</button></div>'
-      +'<div class="muted" style="font-size:10px;margin-top:4px">内蔵（橙）は変更/削除不可。保存は fix した差分のみ（端末に保存）。書出は全ユーザープリセットを1ファイルに。</div>'
+      +'<div class="muted" style="font-size:10px;margin-top:4px">内蔵（橙）は変更/削除不可。保存は fix した差分のみ（端末に保存）。右上の ↓書出 / ↑取込 でファイル入出力。</div>'
       +'<div style="margin-top:8px"><button id="p-pclose">閉じる</button></div>';
     mb.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>applyPreset(e,t,decodeURIComponent(b.dataset.pa)));
     mb.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>deletePreset(t,decodeURIComponent(b.dataset.pd)));
     if($('#p-save')) $('#p-save').onclick=()=>savePreset(e,t,$('#p-newname').value);
-    if($('#p-export')) $('#p-export').onclick=exportAllPresets;
-    if($('#p-import')) $('#p-import').onclick=importPresetsPrompt;
     $('#p-pclose').onclick=()=>$('#presetmodal').classList.remove('on'); }
   box.innerHTML=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
   if($('#p-presetbtn')) $('#p-presetbtn').onclick=()=>$('#presetmodal').classList.add('on');
@@ -939,6 +942,7 @@ function boot(){
   $('#ver').onclick=()=>$('#vmodal').classList.add('on');
   $('#vmodal').onclick=e=>{if(e.target.id==='vmodal')$('#vmodal').classList.remove('on');};
   $('#presetmodal').onclick=e=>{if(e.target.id==='presetmodal')$('#presetmodal').classList.remove('on');};
+  $('#p-export').onclick=exportAllPresets; $('#p-import').onclick=importPresetsPrompt; // 書出/取込（モーダル右上・静的）
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
