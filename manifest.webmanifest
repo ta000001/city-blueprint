@@ -1,6 +1,6 @@
 {
   "name": "city-blueprint",
-  "version": "0.27",
+  "version": "0.28",
   "short_name": "city-blueprint",
   "description": "マイクラ用の町/エリア設計図(plan.json)を作り、JSONとして書き出すエディタ",
   "start_url": "./index.html",
