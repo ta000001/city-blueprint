@@ -176,7 +176,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.26';
+const APP_VERSION='0.27';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -381,12 +381,13 @@ function presetDirty(e,t){
   const hid=hiddenSizeFields(t,probe);
   return Object.keys(fields).some(k=>!hid.has(k)&&fieldDirty(e,t,k));
 }
-// ---- ユーザープリセット（専用フォルダに保存／master=内蔵は橙・読取専用） ----
-let PDIR=null, USER_PRESETS={}, USER_PRESETS_LOADED=false; // PDIR=保存先フォルダ handle, USER_PRESETS[type][name]={def,file}
+// ---- ユーザープリセット（端末に保存=localStorage／ファイル書出・取込／master=内蔵は橙・読取専用） ----
+// iOS Safari は File System Access 非対応のため、永続化は localStorage、ファイルは書出(download)/取込(file input)で扱う
+let USER_PRESETS={}; // USER_PRESETS[type][name] = def(fields)
 function userPresetsOf(t){ return USER_PRESETS[t]||{}; }
 function isMasterPreset(t,name){ return name===DEF_KEY || !!((PRESETS.presets[t]||{})[name]); }
 function allPresetNames(t){ const m=allPresets(t); return [...m, ...Object.keys(userPresetsOf(t)).filter(n=>!m.includes(n))]; }
-function presetFieldsFor(t,name){ if(name===DEF_KEY) return {}; const mp=(PRESETS.presets[t]||{})[name]; if(mp) return mp; const up=userPresetsOf(t)[name]; return up?up.def:{}; }
+function presetFieldsFor(t,name){ if(name===DEF_KEY) return {}; const mp=(PRESETS.presets[t]||{})[name]; if(mp) return mp; return userPresetsOf(t)[name]||{}; }
 // 保存するプリセット定義：fix かつ DEFAULTS と異なるフィールドのみ（範囲/選択は条件、固定は値）
 function buildPresetDef(e,t){ const fields=SCHEMA.builders[t].fields, def={}; const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k); const hid=hiddenSizeFields(t,probe);
   for(const k of Object.keys(fields)){ if(hid.has(k)) continue; const c=e.cond&&e.cond[k]; if(!(c&&c.fix)) continue;
@@ -411,19 +412,19 @@ function renderTParams(){
   if(div) div.style.display='';
   const mb=$('#pmbody'); if(mb){
     const rows=allPresetNames(t).map(n=>{ const master=isMasterPreset(t,n), cur=(n===curP), en=encodeURIComponent(n);
-      return '<div class="prow'+(cur?' cur':'')+'"><span class="pname'+(master?' pmaster':'')+'" title="'+(master?'内蔵（変更/削除不可）':'ユーザー')+'">'+n+(cur?' ✓':'')+'</span><span class="pact"><button data-pa="'+en+'">適用</button>'+(master?'':' <button class="pdel" data-pd="'+en+'">削除</button>')+'</span></div>'; }).join('');
-    const folder=FS_OK?('<div class="pfolder">保存先: <b>'+(PDIR?(PDIR.name+'/'):'未設定')+'</b> <button id="pdir-pick">フォルダ選択</button></div>'):'<div class="pfolder muted">この端末はフォルダ保存に非対応</div>';
-    mb.innerHTML=folder+'<div class="plist">'+rows+'</div>'
-      +'<div class="psave"><input id="p-newname" placeholder="新規プリセット名" value=""> <button class="pri" id="p-save" title="現在のfix項目（DEFAULTSとの差分）を保存">現在の設定を保存</button></div>'
-      +'<div class="muted" style="font-size:10px;margin-top:4px">内蔵（橙）は変更/削除不可。保存は fix した差分のみ。</div>'
+      return '<div class="prow'+(cur?' cur':'')+'"><span class="pname'+(master?' pmaster':'')+'" title="'+(master?'内蔵（変更/削除不可）':'ユーザー')+'">'+n+(cur?' ✓':'')+'</span><span class="pact"><button data-pa="'+en+'">適用</button>'+(master?'':' <button data-px="'+en+'" title="ファイルに書き出す">書出</button> <button class="pdel" data-pd="'+en+'">削除</button>')+'</span></div>'; }).join('');
+    mb.innerHTML='<div class="plist">'+rows+'</div>'
+      +'<div class="psave"><input id="p-newname" placeholder="新規プリセット名" value=""> <button class="pri" id="p-save" title="現在のfix項目（DEFAULTSとの差分）を端末に保存">保存</button> <button id="p-import" title="ファイルから取り込む">取込</button></div>'
+      +'<div class="muted" style="font-size:10px;margin-top:4px">内蔵（橙）は変更/削除不可。保存は fix した差分のみ（端末に保存）。書出でファイル化、取込でファイルから追加。</div>'
       +'<div style="margin-top:8px"><button id="p-pclose">閉じる</button></div>';
     mb.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>applyPreset(e,t,decodeURIComponent(b.dataset.pa)));
+    mb.querySelectorAll('[data-px]').forEach(b=>b.onclick=()=>exportPreset(t,decodeURIComponent(b.dataset.px)));
     mb.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>deletePreset(t,decodeURIComponent(b.dataset.pd)));
-    if($('#pdir-pick')) $('#pdir-pick').onclick=pickPresetDir;
     if($('#p-save')) $('#p-save').onclick=()=>savePreset(e,t,$('#p-newname').value);
+    if($('#p-import')) $('#p-import').onclick=importPresetsPrompt;
     $('#p-pclose').onclick=()=>$('#presetmodal').classList.remove('on'); }
   box.innerHTML=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
-  if($('#p-presetbtn')) $('#p-presetbtn').onclick=async()=>{ $('#presetmodal').classList.add('on'); if(PDIR&&!USER_PRESETS_LOADED){ await loadUserPresets(); renderTParams(); } }; // 権限はジェスチャ内で取得
+  if($('#p-presetbtn')) $('#p-presetbtn').onclick=()=>$('#presetmodal').classList.add('on');
   if($('#p-roll')) $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
   if($('#p-fixtoggle')) $('#p-fixtoggle').onclick=()=>toggleAllFix(e);
   wireParamRows(e,t,fields);
@@ -870,28 +871,24 @@ async function saveFile(text,fname){
   const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); status('保存（ダウンロード）');
 }
 
-/* ---------- ユーザープリセット保存/読込/削除（専用フォルダ） ---------- */
+/* ---------- ユーザープリセット：端末保存(localStorage)＋ファイル書出/取込 ---------- */
 const safeName=s=>String(s).replace(/[^A-Za-z0-9_]/g,'_');
-async function loadUserPresets(){ USER_PRESETS={}; if(!PDIR) return; try{ if(!(await ensurePerm(PDIR))) return;
-  for await (const [nm,h] of PDIR.entries()){ if(h.kind!=='file'||!nm.toLowerCase().endsWith('.json')) continue;
-    try{ const j=JSON.parse(await (await h.getFile()).text()); if(j&&j.type&&j.name&&j.fields&&typeof j.fields==='object'){ (USER_PRESETS[j.type]=USER_PRESETS[j.type]||{})[j.name]={def:j.fields, file:nm}; } }catch(_){} }
-  USER_PRESETS_LOADED=true; }catch(_){} }
-async function pickPresetDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-presets'}); PDIR=h; try{await idbSet('dir_presets',h);}catch(_){} await loadUserPresets(); status('プリセット保存先: '+h.name); if(sel>=0) renderTParams(); }catch(_){} }
-async function savePreset(e,t,name){ name=(name||'').trim();
+const UP_KEY='city-blueprint:userpresets';
+function loadUserPresets(){ try{ USER_PRESETS=JSON.parse(localStorage.getItem(UP_KEY))||{}; }catch(_){ USER_PRESETS={}; } }
+function saveUserPresets(){ try{ localStorage.setItem(UP_KEY, JSON.stringify(USER_PRESETS)); }catch(_){} }
+function downloadFile(text,fname){ const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
+function savePreset(e,t,name){ name=(name||'').trim();
   if(!name){ status('プリセット名を入力してください'); return; }
   if(isMasterPreset(t,name)){ status('内蔵プリセットと同名は保存できません'); return; }
-  if(!PDIR){ status('先に「フォルダ選択」で保存先を指定してください'); return; }
   const def=buildPresetDef(e,t);
   if(!Object.keys(def).length){ status('fixした差分がありません（固定したい項目をfixしてから保存）'); return; }
-  const up=userPresetsOf(t)[name], file=(up&&up.file)||(safeName(t)+'_'+safeName(name)+'.json');
-  try{ if(!(await ensurePerm(PDIR))){ status('保存先の権限がありません'); return; }
-    const fh=await PDIR.getFileHandle(file,{create:true}), w=await fh.createWritable(); await w.write(JSON.stringify({type:t,name,fields:def},null,2)); await w.close(); }
-  catch(_){ status('保存に失敗しました'); return; }
-  (USER_PRESETS[t]=USER_PRESETS[t]||{})[name]={def,file}; status('プリセット保存: '+name+'（'+Object.keys(def).length+'項目）'); renderTParams(); }
-async function deletePreset(t,name){ const up=userPresetsOf(t)[name]; if(!up) return;
-  if(!confirm('プリセット「'+name+'」を削除しますか？')) return;
-  try{ if(PDIR&&up.file&&await ensurePerm(PDIR)) await PDIR.removeEntry(up.file); }catch(_){}
-  delete USER_PRESETS[t][name]; status('プリセット削除: '+name); renderTParams(); }
+  (USER_PRESETS[t]=USER_PRESETS[t]||{})[name]=def; saveUserPresets();
+  status('プリセット保存: '+name+'（'+Object.keys(def).length+'項目）'); renderTParams(); }
+function exportPreset(t,name){ const def=userPresetsOf(t)[name]; if(!def) return; downloadFile(JSON.stringify({type:t,name,fields:def},null,2), safeName(t)+'_'+safeName(name)+'.json'); status('書出: '+name+'.json'); }
+function deletePreset(t,name){ if(!userPresetsOf(t)[name]) return; if(!confirm('プリセット「'+name+'」を削除しますか？')) return; delete USER_PRESETS[t][name]; saveUserPresets(); status('プリセット削除: '+name); renderTParams(); }
+function importPresetsPrompt(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.multiple=true;
+  inp.onchange=async()=>{ let n=0; for(const f of inp.files){ try{ const j=JSON.parse(await f.text()); if(j&&j.type&&j.name&&j.fields&&typeof j.fields==='object'){ (USER_PRESETS[j.type]=USER_PRESETS[j.type]||{})[j.name]=j.fields; n++; } }catch(_){} } saveUserPresets(); status('取込: '+n+'件'); renderTParams(); };
+  inp.click(); }
 
 /* ---------- open plan.json ---------- */
 function importPlan(text){
@@ -997,7 +994,7 @@ loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 updateDirLabel();
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
-if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadUserPresets(); if(sel>=0) renderTParams(); } }).catch(()=>{});
+loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
 if('serviceWorker' in navigator){
   // 新しいSWが制御を奪ったら1度だけ自動リロード（更新を確実に反映。iOSのウォーム復帰対策）
   let swReloaded=false;
