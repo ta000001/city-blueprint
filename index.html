@@ -114,6 +114,8 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .pdel{border-color:#D24B4B;color:#D24B4B}
 .psave{display:flex;gap:6px;align-items:center}
 .psave input{flex:1;min-width:0}
+.pmsg{font-size:11px;color:var(--dim);min-height:15px;margin-top:8px;word-break:break-word}
+.pmsg.err{color:#D24B4B}
 .c-name{grid-area:name;color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-set{grid-area:set;display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
 .c-res{grid-area:res;color:var(--chalk);font-size:11px;word-break:break-word;min-width:0}
@@ -178,7 +180,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div id="status"></div>
 
 <div class="modal" id="vmodal"><div class="m"><h3>version</h3><div id="vbody"></div></div></div>
-<div class="modal" id="presetmodal"><div class="m"><div class="mhead"><h3>プリセット設定</h3><span class="mtools"><span class="qbtn" id="p-help" role="button" tabindex="0" title="使い方" aria-label="使い方">?</span><span class="icobtn" id="p-export" role="button" tabindex="0" title="全ユーザープリセットを1ファイルに書き出す" aria-label="書き出し"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span><span class="icobtn" id="p-import" role="button" tabindex="0" title="ファイルから取り込む" aria-label="取り込み"><svg viewBox="0 0 24 24"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg></span></span></div><div id="pmbody"></div></div></div>
+<div class="modal" id="presetmodal"><div class="m"><div class="mhead"><h3>プリセット設定</h3><span class="mtools"><span class="qbtn" id="p-help" role="button" tabindex="0" title="使い方" aria-label="使い方">?</span><span class="icobtn" id="p-export" role="button" tabindex="0" title="全ユーザープリセットを1ファイルに書き出す" aria-label="書き出し"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span><span class="icobtn" id="p-import" role="button" tabindex="0" title="ファイルから取り込む" aria-label="取り込み"><svg viewBox="0 0 24 24"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg></span></span></div><div id="pmbody"></div><div id="pmsg" class="pmsg"></div></div></div>
 <div class="modal" id="phelpmodal"><div class="m"><h3>プリセットの使い方</h3><div class="hbody">
 <p><b>適用</b>：そのプリセットを現在のエントリに反映します。</p>
 <p><b>内蔵（橙色）</b>：DEFAULTS など標準プリセット。変更・削除はできません。</p>
@@ -196,7 +198,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.31';
+const APP_VERSION='0.32';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -439,7 +441,7 @@ function renderTParams(){
     mb.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>deletePreset(t,decodeURIComponent(b.dataset.pd)));
     if($('#p-save')) $('#p-save').onclick=()=>savePreset(e,t,$('#p-newname').value); }
   box.innerHTML=Object.entries(fields).filter(([k])=>!hid.has(k)).map(([k,f])=>fieldRow(e,t,k,f)).join('');
-  if($('#p-presetbtn')) $('#p-presetbtn').onclick=()=>$('#presetmodal').classList.add('on');
+  if($('#p-presetbtn')) $('#p-presetbtn').onclick=()=>{ const pm=$('#pmsg'); if(pm){ pm.textContent=''; pm.classList.remove('err'); } $('#presetmodal').classList.add('on'); };
   if($('#p-roll')) $('#p-roll').onclick=()=>{ if(!rollable(e)){ status('振れる範囲/選択がありません'); return; } e.cond=e.cond||{}; e.cond.seed=Math.floor(Math.random()*1e9); rollEntry(e); persist(); renderEntries(); renderTParams(); };
   if($('#p-fixtoggle')) $('#p-fixtoggle').onclick=()=>toggleAllFix(e);
   wireParamRows(e,t,fields);
@@ -890,27 +892,31 @@ async function saveFile(text,fname){
 const safeName=s=>String(s).replace(/[^A-Za-z0-9_]/g,'_');
 const UP_KEY='city-blueprint:userpresets';
 function loadUserPresets(){ try{ USER_PRESETS=JSON.parse(localStorage.getItem(UP_KEY))||{}; }catch(_){ USER_PRESETS={}; } }
-function saveUserPresets(){ try{ localStorage.setItem(UP_KEY, JSON.stringify(USER_PRESETS)); }catch(_){} }
+function saveUserPresets(){ try{ localStorage.setItem(UP_KEY, JSON.stringify(USER_PRESETS)); return true; }catch(err){ return err; } } // 成功=true / 失敗=Errorを返す
+function errText(r){ return (r&&r.name?r.name+': ':'')+((r&&r.message)||String(r)); }
+function pmsg(m,err){ const el=$('#pmsg'); if(el){ el.textContent=m; el.classList.toggle('err',!!err); } status(m); } // モーダル内＋下部statusの両方に表示
 function downloadFile(text,fname){ const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
 function savePreset(e,t,name){ name=(name||'').trim();
-  if(!name){ status('プリセット名を入力してください'); return; }
-  if(isMasterPreset(t,name)){ status('内蔵プリセットと同名は保存できません'); return; }
+  if(!name){ pmsg('保存不可：プリセット名を入力してください',1); return; }
+  if(isMasterPreset(t,name)){ pmsg('保存不可：内蔵プリセットと同名は使えません（'+name+'）',1); return; }
   const def=buildPresetDef(e,t);
-  if(!Object.keys(def).length){ status('fixした差分がありません（固定したい項目をfixしてから保存）'); return; }
-  (USER_PRESETS[t]=USER_PRESETS[t]||{})[name]=def; saveUserPresets();
-  status('プリセット保存: '+name+'（'+Object.keys(def).length+'項目）'); renderTParams(); }
+  if(!Object.keys(def).length){ pmsg('保存不可：fix した差分がありません（固定したい項目を fix してから保存）',1); return; }
+  (USER_PRESETS[t]=USER_PRESETS[t]||{})[name]=def; const r=saveUserPresets();
+  if(r!==true){ delete USER_PRESETS[t][name]; pmsg('保存失敗：端末に保存できません（'+errText(r)+'）',1); return; } // localStorage失敗（容量/プライベート等）を明示
+  pmsg('保存しました：'+name+'（'+Object.keys(def).length+'項目）'); renderTParams(); }
 // 全ユーザープリセットを1ファイルに書き出す（master presets.json と同形式 {version,presets:{type:{name:def}}}）
-function exportAllPresets(){ const has=Object.keys(USER_PRESETS).some(t=>Object.keys(USER_PRESETS[t]||{}).length); if(!has){ status('書き出すユーザープリセットがありません'); return; }
+function exportAllPresets(){ const has=Object.keys(USER_PRESETS).some(t=>Object.keys(USER_PRESETS[t]||{}).length); if(!has){ pmsg('書出不可：ユーザープリセットがありません',1); return; }
   let name=prompt('書き出すファイル名', 'user_presets'); if(name===null) return; // キャンセル
   name=(name||'').trim().replace(/\.json$/i,'').replace(/[\/\\:*?"<>|]+/g,'_')||'user_presets';
-  downloadFile(JSON.stringify({version:APP_VERSION, presets:USER_PRESETS},null,2), name+'.json'); status('書出: '+name+'.json'); }
-function deletePreset(t,name){ if(!userPresetsOf(t)[name]) return; if(!confirm('プリセット「'+name+'」を削除しますか？')) return; delete USER_PRESETS[t][name]; saveUserPresets(); status('プリセット削除: '+name); renderTParams(); }
+  try{ downloadFile(JSON.stringify({version:APP_VERSION, presets:USER_PRESETS},null,2), name+'.json'); pmsg('書き出しました：'+name+'.json'); }catch(err){ pmsg('書出失敗：'+errText(err),1); } }
+function deletePreset(t,name){ if(!userPresetsOf(t)[name]) return; if(!confirm('プリセット「'+name+'」を削除しますか？')) return; delete USER_PRESETS[t][name]; const r=saveUserPresets(); if(r!==true){ pmsg('削除の保存に失敗：'+errText(r),1); } else { pmsg('削除しました：'+name); } renderTParams(); }
 // 取込：集約形式 {presets:{type:{name:def}}}（＝書出/presets.json 形）と 旧 per-preset {type,name,fields} の両対応
 function importPresetsPrompt(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.multiple=true;
   inp.onchange=async()=>{ let n=0; for(const f of inp.files){ try{ const j=JSON.parse(await f.text());
     if(j&&j.presets&&typeof j.presets==='object'){ for(const ty of Object.keys(j.presets)){ const mp=j.presets[ty]||{}; for(const nm of Object.keys(mp)){ if(mp[nm]&&typeof mp[nm]==='object'){ (USER_PRESETS[ty]=USER_PRESETS[ty]||{})[nm]=mp[nm]; n++; } } } }
-    else if(j&&j.type&&j.name&&j.fields&&typeof j.fields==='object'){ (USER_PRESETS[j.type]=USER_PRESETS[j.type]||{})[j.name]=j.fields; n++; } }catch(_){} }
-    saveUserPresets(); status('取込: '+n+'件'); renderTParams(); };
+    else if(j&&j.type&&j.name&&j.fields&&typeof j.fields==='object'){ (USER_PRESETS[j.type]=USER_PRESETS[j.type]||{})[j.name]=j.fields; n++; } }catch(err){ pmsg('取込失敗：ファイルを解析できません（'+errText(err)+'）',1); } }
+    if(!n){ pmsg('取込できるプリセットがありませんでした（形式を確認）',1); renderTParams(); return; }
+    const r=saveUserPresets(); if(r!==true){ pmsg('取込の保存に失敗：'+errText(r),1); } else { pmsg('取り込みました：'+n+'件'); } renderTParams(); };
   inp.click(); }
 
 /* ---------- open plan.json ---------- */
