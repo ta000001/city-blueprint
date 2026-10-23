@@ -89,6 +89,8 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .fr-head{color:var(--brass);font-size:11px;font-weight:600;letter-spacing:.04em;border-bottom:1px solid var(--brass)}
 .fr-head button{border-color:var(--brass);color:var(--brass);background:transparent;padding:3px 8px;font-size:11px}
 .fr-head button.pdirty{border-color:#D24B4B;color:#D24B4B}
+.fr.fdirty .c-name{color:#D24B4B}
+.c-set :disabled{opacity:.5;cursor:not-allowed}
 .c-name{grid-area:name;color:var(--dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-set{grid-area:set;display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-width:0}
 .c-res{grid-area:res;color:var(--chalk);font-size:11px;word-break:break-word;min-width:0}
@@ -162,7 +164,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.22';
+const APP_VERSION='0.23';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -351,18 +353,21 @@ function hiddenSizeFields(type, probe){ const b=SCHEMA.builders[type]; if(!b||!A
   b.footprint.forEach(r=>(r.size||[]).forEach(s=>{ if(!active.has(s)) hid.add(s); })); return hid; }
 function isFootprintDiscriminator(type,key){ const b=SCHEMA.builders[type]; return !!(b&&Array.isArray(b.footprint)&&b.footprint.some(r=>r.when&&(key in r.when))); }
 function stripFix(c){ const o={}; for(const k in c) if(k!=='fix') o[k]=c[k]; return o; }
-// プリセット定義から変更されているか（条件・固定値を比較／抽選で振られた値やfixは無視）
-function presetDirty(e,t){
+// フィールド単位：プリセット定義から変更されているか（条件・固定値を比較／抽選で振られた値やfixは無視）
+function fieldDirty(e,t,k){
   const name=(e.cond&&e.cond.preset)||DEF_KEY, pr=(name!==DEF_KEY)?((PRESETS.presets[t]||{})[name]||{}):{};
+  const pv=pr[k], isPC=pv&&typeof pv==='object'&&(Array.isArray(pv.range)||Array.isArray(pv.choice));
+  const cc=e.cond&&e.cond[k], isEC=cc&&(('range' in cc)||Array.isArray(cc.choice));
+  if(isPC){ if(!isEC) return true; return JSON.stringify(stripFix(cc))!==JSON.stringify(stripFix(pv)); }
+  if(isEC) return true;
+  const exp=(pv!==undefined)?pv:defaultsOf(t)[k];
+  return JSON.stringify(e.params[k])!==JSON.stringify(exp);
+}
+// エントリ全体：有効フィールドのどれか1つでも差異があれば dirty
+function presetDirty(e,t){
   const fields=SCHEMA.builders[t].fields, probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
-  for(const k of Object.keys(fields)){ if(hid.has(k)) continue;
-    const pv=pr[k], isPC=pv&&typeof pv==='object'&&(Array.isArray(pv.range)||Array.isArray(pv.choice));
-    const cc=e.cond&&e.cond[k], isEC=cc&&(('range' in cc)||Array.isArray(cc.choice));
-    if(isPC){ if(!isEC) return true; if(JSON.stringify(stripFix(cc))!==JSON.stringify(stripFix(pv))) return true; }
-    else { if(isEC) return true; const exp=(pv!==undefined)?pv:defaultsOf(t)[k]; if(JSON.stringify(e.params[k])!==JSON.stringify(exp)) return true; }
-  }
-  return false;
+  return Object.keys(fields).some(k=>!hid.has(k)&&fieldDirty(e,t,k));
 }
 function renderTParams(){
   const box=$('#tparams'), ctrl=$('#pctrl'), div=$('#pdiv'); if(!box) return;
@@ -400,45 +405,51 @@ function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) retu
 // cond の条件(fix以外)を cond.seed で振って params を更新。fix=true は据え置き
 function rollEntry(e){ if(!e.cond) return; if(e.cond.seed==null) e.cond.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.cond.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type]?SCHEMA.builders[e.type].fields:{}; for(const k of Object.keys(fields)){ const c=e.cond[k]; if(c && !c.fix && (('range' in c)||Array.isArray(c.choice))) e.params[k]=rollElem(c,rng); } }
 function cleanupCond(e){ if(e.cond){ const ks=Object.keys(e.cond).filter(k=>k!=='seed'); if(!ks.length) delete e.cond; } }
-function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); }
+function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); const row=$('#fr-'+k); if(row&&SCHEMA.builders[e.type]) row.classList.toggle('fdirty', fieldDirty(e,e.type,k)); }
 function setAllFix(e,on){ if(!e.cond||!SCHEMA.builders[e.type]) return; Object.keys(SCHEMA.builders[e.type].fields).forEach(k=>{ const c=e.cond[k]; if(c&&(('range' in c)||Array.isArray(c.choice))) c.fix=on; }); e.cond.seedFix=on; persist(); renderEntries(); renderTParams(); }
 function toggleAllFix(e){ if(!e.cond) return; const fields=SCHEMA.builders[e.type].fields; const conds=Object.keys(fields).map(k=>e.cond[k]).filter(c=>c&&(('range' in c)||Array.isArray(c.choice))); const anyUnfixed=conds.some(c=>!c.fix)||!e.cond.seedFix; setAllFix(e,anyUnfixed); } // 1つでも未fixなら全fix、全fixなら全解除
-function applyPreset(e,t,name){ e.params={}; e.cond={};
+function applyPreset(e,t,name){
+  // fix済みの抽選条件はプリセット変更後も保持（固定）→新プリセットと差異が出て赤字になる
+  const keep={};
+  if(e.cond) for(const k of Object.keys(e.cond)){ const c=e.cond[k]; if(c&&c.fix&&(('range' in c)||Array.isArray(c.choice))) keep[k]={cond:clone(c), val:clone(e.params&&e.params[k])}; }
+  e.params={}; e.cond={};
   if(name && name!==DEF_KEY){ e.cond.preset=name; const pr=(PRESETS.presets[t]||{})[name]||{};
-    for(const [k,v] of Object.entries(pr)){ const cv=clone(v); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))){ cv.fix=false; e.cond[k]=cv; } else e.params[k]=cv; } }
+    for(const [k,v] of Object.entries(pr)){ if(keep[k]) continue; const cv=clone(v); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))){ cv.fix=false; e.cond[k]=cv; } else e.params[k]=cv; } }
+  for(const k of Object.keys(keep)){ e.cond[k]=keep[k].cond; if(keep[k].val!==undefined) e.params[k]=keep[k].val; } // 保持したfix条件を復元
   if(Object.keys(e.cond).some(k=>k!=='preset'&&k!=='seed')) e.cond.seed=Math.floor(Math.random()*1e9);
   normalizeEntry(e); rollEntry(e); cleanupCond(e); persist(); renderEntries(); renderTParams(); }
 function modesFor(ft){ if(ft==='int') return [['fixed','固定'],['range','範囲'],['choice','選択']]; return [['fixed','固定'],['choice','選択']]; }
 function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
   return 'form <select id="pbf-'+k+'">'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'">'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
-function blockspecChoiceEditor(k,arr){ let h='';
+function blockspecChoiceEditor(k,arr,fixed){ const D=fixed?' disabled':''; let h='';
   arr.forEach((s,idx)=>{ const sp=asSpec(s), mats=matsFor(sp.form);
-    h+='<div class="bcrow"><select data-bcf="'+k+'" data-i="'+idx+'">'+FORMS().map(f=>'<option'+(f===sp.form?' selected':'')+'>'+f+'</option>').join('')+'</select><select data-bcm="'+k+'" data-i="'+idx+'">'+mats.map(m=>'<option'+(m===sp.mat?' selected':'')+'>'+m+'</option>').join('')+'</select><button data-bcx="'+k+'" data-i="'+idx+'">×</button></div>'; });
-  h+='<button data-bca="'+k+'">＋候補</button>'; return h; }
-function valueEditor(e,t,k,f,mode){ const ft=f.type, cond=(e.cond&&e.cond[k])||null, val=e.params[k];
+    h+='<div class="bcrow"><select data-bcf="'+k+'" data-i="'+idx+'"'+D+'>'+FORMS().map(f=>'<option'+(f===sp.form?' selected':'')+'>'+f+'</option>').join('')+'</select><select data-bcm="'+k+'" data-i="'+idx+'"'+D+'>'+mats.map(m=>'<option'+(m===sp.mat?' selected':'')+'>'+m+'</option>').join('')+'</select><button data-bcx="'+k+'" data-i="'+idx+'"'+D+'>×</button></div>'; });
+  h+='<button data-bca="'+k+'"'+D+'>＋候補</button>'; return h; }
+// fixed=true の抽選条件は入力を無効化して可視的に固定
+function valueEditor(e,t,k,f,mode,fixed){ const ft=f.type, cond=(e.cond&&e.cond[k])||null, val=e.params[k], D=fixed?' disabled':'';
   if(mode==='fixed'){
     if(ft==='int'){ const v=(typeof val==='number')?val:(fieldVal(e,t,k)||0); return '<input type="number" id="pv-'+k+'" value="'+v+'">'; }
     if(ft==='bool'){ const v=(val===true); return '<select id="pv-'+k+'"><option value="true"'+(v?' selected':'')+'>true</option><option value="false"'+(!v?' selected':'')+'>false</option></select>'; }
     if(ft==='enum'){ const cur=(typeof val==='string')?val:effElem(e,t,k); return '<select id="pv-'+k+'">'+f.values.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
     if(ft==='blockspec') return blockspecEditor(k, (val&&val.form)?val:asSpec(effElem(e,t,k)));
   }
-  if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(cond&&cond.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'">'; }
+  if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(cond&&cond.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"'+D+'> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'"'+D+'>'; }
   if(mode==='choice'){ const arr=(cond&&cond.choice)||[];
     if(ft==='bool') return '<span class="muted">true/false からランダム</span>';
-    if(ft==='enum') return f.values.map(o=>'<label class="chk"><input type="checkbox" data-c="'+k+'" value="'+o+'"'+(arr.includes(o)?' checked':'')+'>'+o+'</label>').join(' ');
-    if(ft==='int') return '<input type="text" id="pv-'+k+'" placeholder="1,2,3" value="'+arr.join(',')+'">';
-    if(ft==='blockspec') return blockspecChoiceEditor(k,arr);
+    if(ft==='enum') return f.values.map(o=>'<label class="chk"><input type="checkbox" data-c="'+k+'" value="'+o+'"'+(arr.includes(o)?' checked':'')+D+'>'+o+'</label>').join(' ');
+    if(ft==='int') return '<input type="text" id="pv-'+k+'" placeholder="1,2,3" value="'+arr.join(',')+'"'+D+'>';
+    if(ft==='blockspec') return blockspecChoiceEditor(k,arr,fixed);
   }
   return '';
 }
 // 1行=1フィールド：左=設定（モード＋fix＋編集）/ 右=結果（params確定値）・上下位置が揃う
 // 共通の行テンプレ（基本・type別で統一）。fixセルは固定モードでは出さない（共通ルール）
-function frRow(name, modeHtml, editorHtml, resId, resVal, fixHtml){
-  return '<div class="fr"><div class="c-name">'+name+'</div><div class="c-set">'+modeHtml+editorHtml+'</div><div class="c-res"'+(resId?(' id="'+resId+'"'):'')+'>'+resVal+'</div><div class="c-fix">'+(fixHtml||'')+'</div></div>'; }
+function frRow(name, modeHtml, editorHtml, resId, resVal, fixHtml, rowId, rowClass){
+  return '<div class="fr'+(rowClass?' '+rowClass:'')+'"'+(rowId?(' id="'+rowId+'"'):'')+'><div class="c-name">'+name+'</div><div class="c-set">'+modeHtml+editorHtml+'</div><div class="c-res"'+(resId?(' id="'+resId+'"'):'')+'>'+resVal+'</div><div class="c-fix">'+(fixHtml||'')+'</div></div>'; }
 function fixCell(mode,id,checked){ return (mode==='range'||mode==='choice')?('<input type="checkbox" id="'+id+'" title="固定して抽選対象外"'+(checked?' checked':'')+'>'):''; }
-function fieldRow(e,t,k,f){ const mode=curMode(e,f,k), c=e.cond&&e.cond[k];
-  const modeSel='<select class="mode" id="pm-'+k+'">'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
-  return frRow(k, modeSel, '<span class="ped">'+valueEditor(e,t,k,f,mode)+'</span>', 'pres-'+k, effDisplay(e,t,k), fixCell(mode,'pfx-'+k, c&&c.fix));
+function fieldRow(e,t,k,f){ const mode=curMode(e,f,k), c=e.cond&&e.cond[k], fixed=!!(c&&c.fix);
+  const modeSel='<select class="mode" id="pm-'+k+'"'+(fixed?' disabled':'')+'>'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
+  return frRow(k, modeSel, '<span class="ped">'+valueEditor(e,t,k,f,mode,fixed)+'</span>', 'pres-'+k, effDisplay(e,t,k), fixCell(mode,'pfx-'+k, fixed), 'fr-'+k, fieldDirty(e,t,k)?'fdirty':'');
 }
 // 振れる条件が実在するか（fix でない range / 候補≥1 の choice）＝「適用・抽選」の可否
 function rollable(e){ if(!e.cond) return false; const fields=SCHEMA.builders[e.type]?SCHEMA.builders[e.type].fields:{}; return Object.keys(fields).some(k=>{ const c=e.cond[k]; return c && !c.fix && (('range' in c)||(Array.isArray(c.choice)&&c.choice.length>0)); }); }
@@ -458,7 +469,7 @@ function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
 function wireParamRows(e,t,fields){
   for(const [k,f] of Object.entries(fields)){
     const ms=$('#pm-'+k); if(ms) ms.onchange=ev=>setMode(e,t,k,f,ev.target.value);
-    const fx=$('#pfx-'+k); if(fx) fx.onchange=ev=>{ if(e.cond&&e.cond[k]) e.cond[k].fix=ev.target.checked; light(); }; // fix=抽選ロック（paramsはそのまま）
+    const fx=$('#pfx-'+k); if(fx) fx.onchange=ev=>{ if(e.cond&&e.cond[k]) e.cond[k].fix=ev.target.checked; persist(); renderEntries(); renderTParams(); }; // fix=抽選ロック＋条件を可視的に固定（再描画でエディタ無効化・赤字更新）
     const mode=curMode(e,f,k);
     if(mode==='fixed'){
       if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); refreshResolved(e,k); light(); }; }
