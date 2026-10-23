@@ -164,7 +164,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.24';
+const APP_VERSION='0.25';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -334,7 +334,7 @@ function renderEditor(){
     rows.push(['ground', '<input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:96px"> <span class="muted">FULLBLOCK</span>']);
   }
   const bm='<select class="mode" disabled><option>固定</option></select>';
-  ed.innerHTML=rows.map(([k,ved])=>frRow(k, bm, ved, 'br-'+k, basicVal(e,k), fixCell('fixed','',false))).join(''); // 固定なのでfixセルは空（共通ルール）
+  ed.innerHTML=rows.map(([k,ved])=>frRow(k, bm, ved, 'br-'+k, basicVal(e,k), '')).join(''); // 基本フィールドはfix対象外（fixセルは空）
   const upd=(k)=>{ if(k) refreshBasic(e,k); persist(); renderEntries(); };
   $('#e-d').oninput=ev=>{rp.d=+ev.target.value||0; upd('relPos');};
   $('#e-h').oninput=ev=>{rp.h=+ev.target.value||0; upd('relPos');};
@@ -379,12 +379,11 @@ function renderTParams(){
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); wireRandomEditor(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, pn=allPresets(t), canRoll=rollable(e);
-  const hasCondField=!!(e.cond&&Object.keys(fields).some(k=>{ const c=e.cond[k]; return c&&(('range' in c)||Array.isArray(c.choice)); })); // fix/解除の可否
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
   const hid=hiddenSizeFields(t,probe);
   const curP=(e.cond&&e.cond.preset)||DEF_KEY, dirty=presetDirty(e,t);
   // ヘッダ行のみ（パラメータ | プリセット名(モーダル・変更時は赤) | 抽選 | fix/解除）
-  if(ctrl) ctrl.innerHTML=meta+'<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-presetbtn"'+(dirty?' class="pdirty"':'')+' title="プリセット設定を開く'+(dirty?'（定義から変更あり）':'')+'">'+curP+'</button></div><div class="c-res"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-fix"><button id="p-fixtoggle"'+(hasCondField?'':' disabled')+' title="範囲/選択のfixをまとめてトグル">fix/解除</button></div></div>';
+  if(ctrl) ctrl.innerHTML=meta+'<div class="fr fr-head"><div class="c-name">パラメータ</div><div class="c-set"><button id="p-presetbtn"'+(dirty?' class="pdirty"':'')+' title="プリセット設定を開く'+(dirty?'（定義から変更あり）':'')+'">'+curP+'</button></div><div class="c-res"><button id="p-roll"'+(canRoll?'':' disabled')+' title="fix以外の範囲/選択を乱数で振り直し">抽選</button></div><div class="c-fix"><button id="p-fixtoggle" title="全フィールドのfixをまとめてトグル（プリセット変更で全保持/全解除）">fix/解除</button></div></div>';
   if(div) div.style.display='';
   const mb=$('#pmbody'); if(mb){ mb.innerHTML='<div class="pf"><span class="k">preset</span><select id="p-preset" style="flex:1;max-width:220px">'+pn.map(n=>'<option'+(n===curP?' selected':'')+'>'+n+'</option>').join('')+'</select></div><div class="pf" style="margin-top:10px"><button class="pri" id="p-apply">適用</button> <button id="p-pclose">閉じる</button></div>';
     $('#p-apply').onclick=()=>{ applyPreset(e,t,$('#p-preset').value); $('#presetmodal').classList.remove('on'); };
@@ -406,12 +405,18 @@ function curMode(e,f,k){ const c=e.cond&&e.cond[k]; if(c){ if('range' in c) retu
 function rollEntry(e){ if(!e.cond) return; if(e.cond.seed==null) e.cond.seed=Math.floor(Math.random()*1e9); const rng=mulberry32((e.cond.seed|0)||1); e.params=e.params||{}; const fields=SCHEMA.builders[e.type]?SCHEMA.builders[e.type].fields:{}; for(const k of Object.keys(fields)){ const c=e.cond[k]; if(c && !c.fix && (('range' in c)||Array.isArray(c.choice))) e.params[k]=rollElem(c,rng); } }
 function cleanupCond(e){ if(e.cond){ const ks=Object.keys(e.cond).filter(k=>k!=='seed'); if(!ks.length) delete e.cond; } }
 function refreshResolved(e,k){ const s=$('#pres-'+k); if(s) s.textContent=effDisplay(e,e.type,k); const row=$('#fr-'+k); if(row&&SCHEMA.builders[e.type]) row.classList.toggle('fdirty', fieldDirty(e,e.type,k)); }
-function setAllFix(e,on){ if(!e.cond||!SCHEMA.builders[e.type]) return; Object.keys(SCHEMA.builders[e.type].fields).forEach(k=>{ const c=e.cond[k]; if(c&&(('range' in c)||Array.isArray(c.choice))) c.fix=on; }); e.cond.seedFix=on; persist(); renderEntries(); renderTParams(); }
-function toggleAllFix(e){ if(!e.cond) return; const fields=SCHEMA.builders[e.type].fields; const conds=Object.keys(fields).map(k=>e.cond[k]).filter(c=>c&&(('range' in c)||Array.isArray(c.choice))); const anyUnfixed=conds.some(c=>!c.fix)||!e.cond.seedFix; setAllFix(e,anyUnfixed); } // 1つでも未fixなら全fix、全fixなら全解除
+function activeFields(e){ const t=e.type; if(!SCHEMA.builders[t]) return []; const fields=SCHEMA.builders[t].fields; const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k); const hid=hiddenSizeFields(t,probe); return Object.keys(fields).filter(k=>!hid.has(k)); }
+function setAllFix(e,on){ if(!SCHEMA.builders[e.type]) return; e.cond=e.cond||{};
+  activeFields(e).forEach(k=>{ const c=e.cond[k];
+    if(c&&(('range' in c)||Array.isArray(c.choice))){ c.fix=on; }   // 範囲/選択は fix フラグのみ
+    else if(on){ e.cond[k]=Object.assign(c||{},{fix:true}); }       // 固定→ピン(cond{fix:true})を作成
+    else if(c&&c.fix){ delete e.cond[k]; } });                       // 固定ピンを解除
+  persist(); renderEntries(); renderTParams(); }
+function toggleAllFix(e){ if(!SCHEMA.builders[e.type]) return; const anyUnfixed=activeFields(e).some(k=>{ const c=e.cond&&e.cond[k]; return !(c&&c.fix); }); setAllFix(e,anyUnfixed); } // 1つでも未fixなら全fix、全fixなら全解除
 function applyPreset(e,t,name){
   // fix済みの抽選条件はプリセット変更後も保持（固定）→新プリセットと差異が出て赤字になる
   const keep={};
-  if(e.cond) for(const k of Object.keys(e.cond)){ const c=e.cond[k]; if(c&&c.fix&&(('range' in c)||Array.isArray(c.choice))) keep[k]={cond:clone(c), val:clone(e.params&&e.params[k])}; }
+  if(e.cond) for(const k of Object.keys(e.cond)){ const c=e.cond[k]; if(c&&c.fix) keep[k]={cond:clone(c), val:clone(e.params&&e.params[k])}; } // fix済みは固定/範囲/選択いずれも保持
   e.params={}; e.cond={};
   if(name && name!==DEF_KEY){ e.cond.preset=name; const pr=(PRESETS.presets[t]||{})[name]||{};
     for(const [k,v] of Object.entries(pr)){ if(keep[k]) continue; const cv=clone(v); if(cv&&typeof cv==='object'&&(Array.isArray(cv.range)||Array.isArray(cv.choice))){ cv.fix=false; e.cond[k]=cv; } else e.params[k]=cv; } }
@@ -419,8 +424,8 @@ function applyPreset(e,t,name){
   if(Object.keys(e.cond).some(k=>k!=='preset'&&k!=='seed')) e.cond.seed=Math.floor(Math.random()*1e9);
   normalizeEntry(e); rollEntry(e); cleanupCond(e); persist(); renderEntries(); renderTParams(); }
 function modesFor(ft){ if(ft==='int') return [['fixed','固定'],['range','範囲'],['choice','選択']]; return [['fixed','固定'],['choice','選択']]; }
-function blockspecEditor(k,spec){ const mats=matsFor(spec.form);
-  return 'form <select id="pbf-'+k+'">'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'">'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
+function blockspecEditor(k,spec,fixed){ const mats=matsFor(spec.form), D=fixed?' disabled':'';
+  return 'form <select id="pbf-'+k+'"'+D+'>'+FORMS().map(f=>'<option'+(f===spec.form?' selected':'')+'>'+f+'</option>').join('')+'</select> mat <select id="pbm-'+k+'"'+D+'>'+(mats.length?'':'<option value="">(なし)</option>')+mats.map(m=>'<option'+(m===spec.mat?' selected':'')+'>'+m+'</option>').join('')+'</select>'; }
 function blockspecChoiceEditor(k,arr,fixed){ const D=fixed?' disabled':''; let h='';
   arr.forEach((s,idx)=>{ const sp=asSpec(s), mats=matsFor(sp.form);
     h+='<div class="bcrow"><select data-bcf="'+k+'" data-i="'+idx+'"'+D+'>'+FORMS().map(f=>'<option'+(f===sp.form?' selected':'')+'>'+f+'</option>').join('')+'</select><select data-bcm="'+k+'" data-i="'+idx+'"'+D+'>'+mats.map(m=>'<option'+(m===sp.mat?' selected':'')+'>'+m+'</option>').join('')+'</select><button data-bcx="'+k+'" data-i="'+idx+'"'+D+'>×</button></div>'; });
@@ -428,10 +433,10 @@ function blockspecChoiceEditor(k,arr,fixed){ const D=fixed?' disabled':''; let h
 // fixed=true の抽選条件は入力を無効化して可視的に固定
 function valueEditor(e,t,k,f,mode,fixed){ const ft=f.type, cond=(e.cond&&e.cond[k])||null, val=e.params[k], D=fixed?' disabled':'';
   if(mode==='fixed'){
-    if(ft==='int'){ const v=(typeof val==='number')?val:(fieldVal(e,t,k)||0); return '<input type="number" id="pv-'+k+'" value="'+v+'">'; }
-    if(ft==='bool'){ const v=(val===true); return '<select id="pv-'+k+'"><option value="true"'+(v?' selected':'')+'>true</option><option value="false"'+(!v?' selected':'')+'>false</option></select>'; }
-    if(ft==='enum'){ const cur=(typeof val==='string')?val:effElem(e,t,k); return '<select id="pv-'+k+'">'+f.values.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
-    if(ft==='blockspec') return blockspecEditor(k, (val&&val.form)?val:asSpec(effElem(e,t,k)));
+    if(ft==='int'){ const v=(typeof val==='number')?val:(fieldVal(e,t,k)||0); return '<input type="number" id="pv-'+k+'" value="'+v+'"'+D+'>'; }
+    if(ft==='bool'){ const v=(val===true); return '<select id="pv-'+k+'"'+D+'><option value="true"'+(v?' selected':'')+'>true</option><option value="false"'+(!v?' selected':'')+'>false</option></select>'; }
+    if(ft==='enum'){ const cur=(typeof val==='string')?val:effElem(e,t,k); return '<select id="pv-'+k+'"'+D+'>'+f.values.map(o=>'<option'+(o===cur?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
+    if(ft==='blockspec') return blockspecEditor(k, (val&&val.form)?val:asSpec(effElem(e,t,k)), fixed);
   }
   if(mode==='range'){ const b=fieldVal(e,t,k)||0, r=(cond&&cond.range)||[b,b]; return 'min <input type="number" id="pr0-'+k+'" value="'+r[0]+'"'+D+'> ~ max <input type="number" id="pr1-'+k+'" value="'+r[1]+'"'+D+'>'; }
   if(mode==='choice'){ const arr=(cond&&cond.choice)||[];
@@ -446,7 +451,7 @@ function valueEditor(e,t,k,f,mode,fixed){ const ft=f.type, cond=(e.cond&&e.cond[
 // 共通の行テンプレ（基本・type別で統一）。fixセルは固定モードでは出さない（共通ルール）
 function frRow(name, modeHtml, editorHtml, resId, resVal, fixHtml, rowId, rowClass){
   return '<div class="fr'+(rowClass?' '+rowClass:'')+'"'+(rowId?(' id="'+rowId+'"'):'')+'><div class="c-name">'+name+'</div><div class="c-set">'+modeHtml+editorHtml+'</div><div class="c-res"'+(resId?(' id="'+resId+'"'):'')+'>'+resVal+'</div><div class="c-fix">'+(fixHtml||'')+'</div></div>'; }
-function fixCell(mode,id,checked){ return (mode==='range'||mode==='choice')?('<input type="checkbox" id="'+id+'" title="固定して抽選対象外"'+(checked?' checked':'')+'>'):''; }
+function fixCell(mode,id,checked){ return '<input type="checkbox" id="'+id+'" title="固定（抽選対象外＋プリセット変更後も保持）"'+(checked?' checked':'')+'>'; }
 function fieldRow(e,t,k,f){ const mode=curMode(e,f,k), c=e.cond&&e.cond[k], fixed=!!(c&&c.fix);
   const modeSel='<select class="mode" id="pm-'+k+'"'+(fixed?' disabled':'')+'>'+modesFor(f.type).map(([v,l])=>'<option value="'+v+'"'+(v===mode?' selected':'')+'>'+l+'</option>').join('')+'</select>';
   return frRow(k, modeSel, '<span class="ped">'+valueEditor(e,t,k,f,mode,fixed)+'</span>', 'pres-'+k, effDisplay(e,t,k), fixCell(mode,'pfx-'+k, fixed), 'fr-'+k, fieldDirty(e,t,k)?'fdirty':'');
@@ -469,7 +474,9 @@ function setMode(e,t,k,f,mode){ e.params=e.params||{}; e.cond=e.cond||{};
 function wireParamRows(e,t,fields){
   for(const [k,f] of Object.entries(fields)){
     const ms=$('#pm-'+k); if(ms) ms.onchange=ev=>setMode(e,t,k,f,ev.target.value);
-    const fx=$('#pfx-'+k); if(fx) fx.onchange=ev=>{ if(e.cond&&e.cond[k]) e.cond[k].fix=ev.target.checked; persist(); renderEntries(); renderTParams(); }; // fix=抽選ロック＋条件を可視的に固定（再描画でエディタ無効化・赤字更新）
+    const fx=$('#pfx-'+k); if(fx) fx.onchange=ev=>{ e.cond=e.cond||{}; const on=ev.target.checked, c=e.cond[k]; // fix=抽選ロック＋プリセット変更で保持。固定フィールドは cond{fix:true} を作る
+      if(on){ e.cond[k]=Object.assign(c||{},{fix:true}); } else if(c&&(('range' in c)||Array.isArray(c.choice))){ c.fix=false; } else { delete e.cond[k]; }
+      persist(); renderEntries(); renderTParams(); }; // 再描画でエディタ/mode無効化・赤字更新
     const mode=curMode(e,f,k);
     if(mode==='fixed'){
       if(f.type==='int'){ const el=$('#pv-'+k); if(el) el.oninput=ev=>{ e.params[k]=Math.round(+ev.target.value||0); refreshResolved(e,k); light(); }; }
