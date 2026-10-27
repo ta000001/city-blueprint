@@ -216,7 +216,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.35';
+const APP_VERSION='0.36';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -366,7 +366,7 @@ function basicVal(e,k){ const rp=e.relPos||{};
   if(k==='relPos') return 'd'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0);
   if(k==='relDir') return e.relDir||'FRONT';
   if(k==='margin') return e.margin==null?'なし':(typeof e.margin==='number'?String(e.margin):('F'+(e.margin.front||0)+' B'+(e.margin.back||0)+' L'+(e.margin.left||0)+' R'+(e.margin.right||0)));
-  if(k==='ground') return (e.ground&&e.ground.mat)?('FULLBLOCK '+e.ground.mat):'なし';
+  if(k==='ground') return e.ground?specOrValStr(e.ground):'なし';
   return ''; }
 function refreshBasic(e,k){ const s=$('#br-'+k); if(s) s.textContent=basicVal(e,k); }
 function renderEditor(){
@@ -384,7 +384,9 @@ function renderEditor(){
     if(mm==='scalar') me+=' <input type="number" id="e-margin" value="'+(e.margin||0)+'">';
     else if(mm==='sides'){ const m=e.margin||{}; me+=' F<input type="number" id="e-mf" value="'+(m.front||0)+'"> B<input type="number" id="e-mb" value="'+(m.back||0)+'"> L<input type="number" id="e-ml" value="'+(m.left||0)+'"> R<input type="number" id="e-mr" value="'+(m.right||0)+'">'; }
     rows.push(['margin', me]);
-    rows.push(['ground', '<input id="e-ground" value="'+(e.ground&&e.ground.mat?e.ground.mat:'')+'" placeholder="mat(例 DIRT)" style="width:96px"> <span class="muted">FULLBLOCK</span>']);
+    rows.push(['ground', e.ground
+      ? (blockChip(asSpec(e.ground),' data-gnd="1"',false)+' <button data-gndclear="1" title="groundをなしに">なし</button>')
+      : ('<button data-gndset="1">ブロックを選択</button> <span class="muted">（なし）</span>')]);
   }
   const bm='<select class="mode" disabled><option>固定</option></select>';
   ed.innerHTML=rows.map(([k,ved])=>frRow(k, bm, ved, 'br-'+k, basicVal(e,k), '')).join(''); // 基本フィールドはfix対象外（fixセルは空）
@@ -396,7 +398,10 @@ function renderEditor(){
   if($('#e-mmode')) $('#e-mmode').onchange=ev=>{ const v=ev.target.value; if(v==='none') delete e.margin; else if(v==='scalar') e.margin=(typeof e.margin==='number'?e.margin:0); else e.margin={front:0,back:0,left:0,right:0}; persist(); renderEditor(); };
   if($('#e-margin')) $('#e-margin').oninput=ev=>{ e.margin=Math.max(0,Math.round(+ev.target.value||0)); refreshBasic(e,'margin'); persist(); };
   [['e-mf','front'],['e-mb','back'],['e-ml','left'],['e-mr','right']].forEach(([id,key])=>{ const el=$('#'+id); if(el) el.oninput=ev=>{ if(typeof e.margin!=='object') e.margin={front:0,back:0,left:0,right:0}; e.margin[key]=Math.max(0,Math.round(+ev.target.value||0)); refreshBasic(e,'margin'); persist(); }; });
-  if($('#e-ground')) $('#e-ground').oninput=ev=>{ const v=ev.target.value.trim(); if(v==='') delete e.ground; else e.ground={form:'FULLBLOCK',mat:v.toUpperCase()}; refreshBasic(e,'ground'); persist(); };
+  { const gs=ed.querySelector('[data-gndset]'), gc=ed.querySelector('[data-gnd]'), gx=ed.querySelector('[data-gndclear]'); // ground も blockspec と同じピッカーに統一
+    if(gs) gs.onclick=()=>openGroundPick(e);
+    if(gc) gc.onclick=()=>openGroundPick(e);
+    if(gx) gx.onclick=()=>{ delete e.ground; persist(); renderEditor(); render(); }; }
   renderTParams();
 }
 // type別パラメータ（選択中エントリの params / 参照 / randomarea 条件）をインライン表示
@@ -514,7 +519,11 @@ function blockspecChoiceEditor(k,arr,fixed){ let h='';
 let BP=null, bpForm=null; // BP={e,t,k,idx(-1=fixed)}, bpForm=選択中form（''=直接/formなし）
 function openBlockPick(e,t,k,idx){ const cur=(idx<0)?e.params[k]:((e.cond&&e.cond[k]&&e.cond[k].choice)||[])[idx]; const sp=asSpec(cur);
   BP={e,t,k,idx}; bpForm=sp.block?'':(sp.form||FORMS()[0]||'FULLBLOCK'); if($('#bp-search'))$('#bp-search').value=''; renderBlockPick(); $('#blockpick').classList.add('on'); }
-function bpSetSpec(sp){ if(!BP) return; const {e,k,idx}=BP; if(idx<0) e.params[k]=sp; else if(e.cond&&e.cond[k]&&Array.isArray(e.cond[k].choice)) e.cond[k].choice[idx]=sp; rollEntry(e); persist(); renderEntries(); renderTParams(); $('#blockpick').classList.remove('on'); }
+function bpSetSpec(sp){ if(!BP) return;
+  if(BP.ground){ BP.e.ground=sp; persist(); renderEditor(); render(); }
+  else { const {e,k,idx}=BP; if(idx<0) e.params[k]=sp; else if(e.cond&&e.cond[k]&&Array.isArray(e.cond[k].choice)) e.cond[k].choice[idx]=sp; rollEntry(e); persist(); renderEntries(); renderTParams(); }
+  $('#blockpick').classList.remove('on'); }
+function openGroundPick(e){ BP={e, ground:true}; const sp=e.ground?asSpec(e.ground):null; bpForm=(sp&&sp.block)?'':((sp&&sp.form)||FORMS()[0]||'FULLBLOCK'); if($('#bp-search'))$('#bp-search').value=''; renderBlockPick(); $('#blockpick').classList.add('on'); }
 function renderBlockPick(){
   const forms=FORMS();
   $('#bp-forms').innerHTML=forms.map(f=>'<button class="bpf'+(bpForm===f?' on':'')+'" data-bpf="'+f+'">'+f+'</button>').join('')+'<button class="bpf'+(bpForm===''?' on':'')+'" data-bpf="" title="formを介さずブロックを直接指定">直接(formなし)</button>';
