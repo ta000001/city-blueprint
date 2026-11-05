@@ -239,7 +239,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.50';
+const APP_VERSION='0.51';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -993,28 +993,38 @@ function scatterArea(m){
   // FRONTテンプレで候補位置の許容範囲を決める（全子同サイズ）
   const tParams={}; for(const sf of sizeFields){ if(sf in tmpl) tParams[sf]=tmpl[sf]; }
   const tChild={type:bt, relDir:'FRONT', relPos:{d:0,h:0,w:0}, params:tParams, group:id}; if(cm>0) tChild.margin=cm; normalizeEntry(tChild);
-  const tb=reservedBBox(tChild); if(!tb){ status('footprint が解決できません'); return; }
-  // 回転する facing(random/outward)は、候補位置の許容範囲を「最大辺の正方形」で見積もる（90°回転してもはみ出さない＝右上等の方向バイアス防止）
-  let tbFit=tb; if(fc!=='front'){ const cD=(tb.d0+tb.d1)/2, cW=(tb.w0+tb.w1)/2, mh=Math.max(tb.d1-tb.d0, tb.w1-tb.w0)/2; tbFit={d0:cD-mh, d1:cD+mh, w0:cW-mh, w1:cW+mh}; }
-  const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(12,K), CANDCAP=300000, EDGE=60, CORNER=25; // 候補数=密度knob
-  const placed=[]; let made=0, cand=0, empties=0;
-  const makeChild=(pos)=>{ // 候補位置→子（向き決定込み）。収まり&非重なりなら {child,rr,score}
-    const dir=(fc==='random')?['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)]:'FRONT';
+  // 向き別の reserved bbox（候補を「向き込み」で作り、その向きの実寸でぴったり配置＝はみ出し/スカスカを防ぐ）
+  const RD4=['FRONT','RIGHT','BACK','LEFT'], rdBox={}; for(const rd of RD4){ tChild.relDir=rd; rdBox[rd]=reservedBBox(tChild); } tChild.relDir='FRONT';
+  if(!rdBox.FRONT){ status('footprint が解決できません'); return; }
+  const ri=(lo,hi)=> lo>=hi?lo:lo+Math.floor(rng()*(hi-lo+1));
+  const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(16,K), CANDCAP=300000, EDGE=60, CORNER=25; // 候補数=密度knob
+  const placed=[]; let made=0, cand=0, empties=0, phase=0;
+  // 候補（向き込み）。outward の辺候補は「その辺を外周に向ける向き(BACK=ドア側)」で、その向きの実寸範囲に配置
+  const genCand=(eg,cn)=>{
+    if(fc!=='outward'){ const rd=fc==='front'?'FRONT':RD4[Math.floor(rng()*4)]; const pos=biasedFitPos(rdBox[rd],reg,rng,eg,cn); return pos&&{relDir:rd,pos}; }
+    const m=Math.floor(rng()*100);
+    if(m<eg && reg.shape==='RECT'){ const e=Math.floor(rng()*4), rd=['BACK','FRONT','LEFT','RIGHT'][e], bb=rdBox[rd]; // 0上+d,1下-d,2右+w,3左-w
+      const loD=reg.d0-bb.d0,hiD=reg.d1-bb.d1,loW=reg.w0-bb.w0,hiW=reg.w1-bb.w1; if(loD>hiD||loW>hiW) return null;
+      const jd=Math.min(2,hiD-loD), jw=Math.min(2,hiW-loW); let d,w;
+      if(e===0){ d=hiD-Math.floor(rng()*(jd+1)); w=ri(loW,hiW); } else if(e===1){ d=loD+Math.floor(rng()*(jd+1)); w=ri(loW,hiW); }
+      else if(e===2){ w=hiW-Math.floor(rng()*(jw+1)); d=ri(loD,hiD); } else { w=loW+Math.floor(rng()*(jw+1)); d=ri(loD,hiD); }
+      return {relDir:rd, pos:{d,w}}; }
+    const pos=biasedFitPos(rdBox.FRONT, reg, rng, 0, (m<eg+cn)?100:0); return pos&&{relDir:null,pos}; // 角/一様は位置→outwardDirで決定
+  };
+  const makeChild=(c)=>{ if(!c) return null;
     const params=rollParams(bt,src,rng); for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; }
-    const child={type:bt, relDir:dir, relPos:{d:pos.d,h:0,w:pos.w}, params, group:id}; if(cm>0) child.margin=cm; normalizeEntry(child);
-    if(fc==='outward'){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); }
+    const child={type:bt, relDir:c.relDir||'FRONT', relPos:{d:c.pos.d,h:0,w:c.pos.w}, params, group:id}; if(cm>0) child.margin=cm; normalizeEntry(child);
+    if(c.relDir==null){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); } // outward の角/一様
     if(!regionContains(reg,child)) return null;
     const rr=reservedRegion(child); if(!rr) return null;
     if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) return null;
     return {child, rr, score:boundaryScore(toBBox(rr), reg)};
   };
-  while(made<cap && cand<CANDCAP && empties<EMPTYTOL){ // 1ラウンド=K候補からスコア最小(角→辺密着)を1個採用
-    let best=null;
-    for(let c=0;c<K && cand<CANDCAP;c++){ cand++;
-      const pos=biasedFitPos(tbFit, reg, rng, EDGE, CORNER); if(!pos) continue;
-      const r=makeChild(pos); if(r && (!best || r.score<best.score)) best=r;
-    }
-    if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; } else empties++;
+  while(made<cap && cand<CANDCAP){ // phase0=辺/角寄せで詰め→詰まらなくなったら phase1=一様でgap埋め
+    const eg=phase===0?EDGE:0, cn=phase===0?CORNER:0; let best=null;
+    for(let c=0;c<K && cand<CANDCAP;c++){ cand++; const r=makeChild(genCand(eg,cn)); if(r && (!best || r.score<best.score)) best=r; }
+    if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; }
+    else { empties++; if(empties>=EMPTYTOL){ if(phase===0){ phase=1; empties=0; } else break; } }
   }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')));
