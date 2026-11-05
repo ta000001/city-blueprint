@@ -222,7 +222,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.38';
+const APP_VERSION='0.39';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -751,7 +751,9 @@ function candidatesAt(d,w,px,py){
 // ② footprint リサイズ（RECT=角→depth/width corner-anchorのみ / CIRCLE=縁→diameter）
 function unxform(D,W,dir){ if(dir==='RIGHT') return {ld:W,lw:-D}; if(dir==='BACK') return {ld:-D,lw:-W}; if(dir==='LEFT') return {ld:-W,lw:D}; return {ld:D,lw:W}; }
 // 4角のいずれか/縁に近いか。角は対角(opp)のworld座標を固定点として返す
-function resizeHandleAt(e,px,py){ const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;
+// サイズフィールド(depth/width/diameter)が1つでもfix済みなら GUI リサイズを禁止（入力無効化と整合）
+function sizeLocked(e){ if(e.type==='randomarea'||!e.cond) return false; const sf=sizeFieldsOf(e); return !!(sf&&sf.some(k=>e.cond[k]&&e.cond[k].fix)); }
+function resizeHandleAt(e,px,py){ if(sizeLocked(e)) return null; const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;
   if(sh.shape==='RECT'){ if(sh.body[0].d!==(rp.d||0)||sh.body[0].w!==(rp.w||0)) return null; // corner-anchorのみ
     for(let k=0;k<4;k++){ const c=sh.body[k]; const [hx,hy]=w2c(c.d,c.w); if(Math.hypot(px-hx,py-hy)<=R){ const o=sh.body[(k+2)%4]; return {type:'corner', opp:{d:o.d,w:o.w}}; } } return null; }
   const [cx,cy]=w2c(sh.center.d,sh.center.w+sh.r); return (Math.hypot(px-cx,py-cy)<=R)?{type:'rim'}:null; }
@@ -840,7 +842,7 @@ function render(){
   ctx.fillText((sel>=0?'sel ':'cursor ')+'d'+cp.d+' w'+cp.w, 8*devicePixelRatio, H-8*devicePixelRatio);
   // 選択中エントリのサイズハンドル（角/縁をドラッグで depth/width・diameter 編集）
   if(sel>=0&&plan.entries[sel]){ const se=plan.entries[sel], ssh=worldShape(se), HS=5*devicePixelRatio;
-    if(ssh){ ctx.fillStyle='#D4A93C';
+    if(ssh){ ctx.fillStyle=sizeLocked(se)?'#5a6b67':'#D4A93C'; // fix済みは灰色＝ロック可視化（ドラッグ不可）
       if(ssh.shape==='RECT'){ if(ssh.body[0].d===((se.relPos||{}).d||0)&&ssh.body[0].w===((se.relPos||{}).w||0)) ssh.body.forEach(c=>{ const [hx,hy]=w2c(c.d,c.w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); } // 全4角
       else { const [hx,hy]=w2c(ssh.center.d,ssh.center.w+ssh.r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } } }
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
