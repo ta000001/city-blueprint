@@ -222,7 +222,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.41';
+const APP_VERSION='0.42';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -931,11 +931,12 @@ function scatterArea(m){
   const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean); // 領域自身＋領域を内包する囲い(城壁等)は除外対象外
   const tmpl=rollParams(bt,src,rng);                   // footprint サイズ場は子ごとに振らず全子で固定（重なり/パッキング安定）
   const sizeFields=footprintSizeFields(bt, Object.assign({}, defaultsOf(bt), tmpl));
-  const placed=[], kids=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
-  const fc=p.facing||(p.rotate===false?'front':'random'); // front(全FRONT)/random(4方向)/outward(外側=後処理)
+  const placed=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
+  const fc=p.facing||(p.rotate===false?'front':'random'); // front(全FRONT)/random(4方向)/outward(外側)
+  const toBBox=rr=>rr.kind==='rect'?{d0:rr.d0,d1:rr.d1,w0:rr.w0,w1:rr.w1}:{d0:rr.cd-rr.r,d1:rr.cd+rr.r,w0:rr.cw-rr.r,w1:rr.cw+rr.r};
   while(attempts<maxA && (target===0 || made<target)){
     attempts++;
-    const dir=(fc==='random') ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT'; // outward/front はまず FRONT で配置
+    const dir=(fc==='random') ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT';
     const params=rollParams(bt,src,rng);
     for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; } // サイズは全子共通に固定
     const child={type:bt, relDir:dir, relPos:{d:0,h:0,w:0}, params, group:id};
@@ -943,13 +944,12 @@ function scatterArea(m){
     normalizeEntry(child); // 子は全フィールド確定値で充填（cond 無し＝完全固定）
     const pos=randomFitPos(child, reg, rng); if(!pos) continue;
     child.relPos={d:pos.d,h:0,w:pos.w};
+    if(fc==='outward'){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); } // 位置確定後・衝突判定前に向きを決定（配置後回転ではない。以降は回転後footprintで判定）
     if(!regionContains(reg, child)) continue;
     const rr=reservedRegion(child); if(!rr) continue;
     if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) continue;
-    plan.entries.push(child); placed.push(rr); kids.push(child); made++;
+    plan.entries.push(child); placed.push(rr); made++;
   }
-  if(fc==='outward'){ const boxes=kids.map(reservedBBox); // 全配置後に、各子の Front を「隙間が空いた最寄り外周」へ向ける
-    kids.forEach((kid,i)=>{ if(boxes[i]) kid.relDir=outwardDir(boxes[i], boxes.filter((_,j)=>j!==i&&boxes[j]), reg); }); }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置'+(target>0&&made<target?'（'+target+' に届かず・領域/間隔を確認）':''));
 }
