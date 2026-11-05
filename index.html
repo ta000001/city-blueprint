@@ -222,7 +222,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.40';
+const APP_VERSION='0.41';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -298,7 +298,8 @@ let history=[], histIdx=-1, lastHist=0;  // undo/redo
 function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
 function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
 // 旧 region:{shape,size} を flat(shape/depth/width/diameter) へ移行（⑫）
-function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT'; } return e; }
+function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT';
+    if(p.facing==null) p.facing=(p.rotate===false)?'front':'random'; if('rotate' in p) delete p.rotate; } return e; } // 旧 rotate(bool)→facing(enum)
 // undo/redo 履歴（plan スナップショット・連続操作は600msで合流）
 function snapshot(){ const s=JSON.stringify(plan), now=Date.now();
   if(histIdx>=0 && history[histIdx]===s) return;
@@ -336,7 +337,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, count:0, rotate:true, gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, count:0, facing:'random', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
@@ -908,6 +909,21 @@ function footprintSizeFields(type, probe){
   if(Array.isArray(fp)){ row=fp.find(r=>{const w=r.when||{}; return Object.keys(w).every(k=>String(probe[k])===String(w[k]));})||fp[0]; } else row=fp;
   return row.size||[];
 }
+// outward(外側)：子の Front を、他オブジェクトで塞がれていない中で一番近い外周方向へ。全方向塞がりなら全方向から最寄り外周。
+function outwardDir(b, others, reg){
+  const chord=(off)=>Math.sqrt(Math.max(0, reg.r*reg.r - off*off));
+  const cwC=(b.w0+b.w1)/2, cdC=(b.d0+b.d1)/2;
+  const pD1=reg.shape==='RECT'?reg.d1:reg.cd+chord(cwC-reg.cw), pD0=reg.shape==='RECT'?reg.d0:reg.cd-chord(cwC-reg.cw);
+  const pW1=reg.shape==='RECT'?reg.w1:reg.cw+chord(cdC-reg.cd), pW0=reg.shape==='RECT'?reg.w0:reg.cw-chord(cdC-reg.cd);
+  const cand=[
+    {rel:'FRONT', dist:pD1-b.d1, blocked:others.some(o=>o.w0<b.w1&&o.w1>b.w0 && o.d0>=b.d1)}, // +d
+    {rel:'RIGHT', dist:pW1-b.w1, blocked:others.some(o=>o.d0<b.d1&&o.d1>b.d0 && o.w0>=b.w1)}, // +w
+    {rel:'BACK',  dist:b.d0-pD0, blocked:others.some(o=>o.w0<b.w1&&o.w1>b.w0 && o.d1<=b.d0)}, // -d
+    {rel:'LEFT',  dist:b.w0-pW0, blocked:others.some(o=>o.d0<b.d1&&o.d1>b.d0 && o.w1<=b.w0)}, // -w
+  ];
+  const open=cand.filter(c=>!c.blocked && c.dist>=0), pool=open.length?open:cand;
+  pool.sort((a,c)=>a.dist-c.dist); return pool[0].rel;
+}
 function scatterArea(m){
   const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0, target=p.count|0;
   plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
@@ -915,10 +931,11 @@ function scatterArea(m){
   const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean); // 領域自身＋領域を内包する囲い(城壁等)は除外対象外
   const tmpl=rollParams(bt,src,rng);                   // footprint サイズ場は子ごとに振らず全子で固定（重なり/パッキング安定）
   const sizeFields=footprintSizeFields(bt, Object.assign({}, defaultsOf(bt), tmpl));
-  const placed=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
+  const placed=[], kids=[]; let made=0, attempts=0; const maxA=(target>0?target:150)*50+800;
+  const fc=p.facing||(p.rotate===false?'front':'random'); // front(全FRONT)/random(4方向)/outward(外側=後処理)
   while(attempts<maxA && (target===0 || made<target)){
     attempts++;
-    const dir=p.rotate ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT';
+    const dir=(fc==='random') ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT'; // outward/front はまず FRONT で配置
     const params=rollParams(bt,src,rng);
     for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; } // サイズは全子共通に固定
     const child={type:bt, relDir:dir, relPos:{d:0,h:0,w:0}, params, group:id};
@@ -929,8 +946,10 @@ function scatterArea(m){
     if(!regionContains(reg, child)) continue;
     const rr=reservedRegion(child); if(!rr) continue;
     if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) continue;
-    plan.entries.push(child); placed.push(rr); made++;
+    plan.entries.push(child); placed.push(rr); kids.push(child); made++;
   }
+  if(fc==='outward'){ const boxes=kids.map(reservedBBox); // 全配置後に、各子の Front を「隙間が空いた最寄り外周」へ向ける
+    kids.forEach((kid,i)=>{ if(boxes[i]) kid.relDir=outwardDir(boxes[i], boxes.filter((_,j)=>j!==i&&boxes[j]), reg); }); }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置'+(target>0&&made<target?'（'+target+' に届かず・領域/間隔を確認）':''));
 }
@@ -938,11 +957,11 @@ function scatterArea(m){
 // 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
 function raFields(e){ const rect=((e.params.shape||'RECT')==='RECT');
   return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']])
-    .concat([['builder','enum'],['source','enum'],['count','int'],['rotate','bool'],['gap','int'],['childMargin','int'],['seed','int']]); }
+    .concat([['builder','enum'],['source','enum'],['count','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]); }
 function raEditor(e,k,kind){ const p=e.params, v=p[k];
   if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
   if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
-  if(kind==='enum'){ const vals=(k==='builder')?builderTypes():allPresets(p.builder); return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
+  if(kind==='enum'){ const vals=k==='facing'?['front','random','outward']:(k==='builder')?builderTypes():allPresets(p.builder); return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
   if(kind==='bool') return '<label class="chk"><input type="checkbox" id="ra-'+k+'"'+(v?' checked':'')+'></label>';
   return '<input type="number" id="ra-'+k+'" value="'+(v||0)+'">'; }
 function randomEditorRows(e){
