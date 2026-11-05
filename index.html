@@ -78,6 +78,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .cfglbl{color:var(--brass);font-size:12px;font-weight:600}
 .cfgfill{font-size:14px;line-height:2.3;color:var(--chalk)}
 .cfgfill input{width:66px;margin:0 3px;text-align:right}
+.cfgval{font-size:11px;margin-top:5px}
 .cfhdtools{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}
 .cfgrst{font-size:10px;padding:3px 7px;border-color:var(--rule);color:var(--dim)}
 .cfgrst:hover{color:var(--brass);border-color:var(--brass)}
@@ -241,7 +242,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.47';
+const APP_VERSION='0.48';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1068,8 +1069,10 @@ function importPlan(text){
 /* ---------- wire ---------- */
 function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の試行上限</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="式の説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
-    +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div></div>';
-  const bind=(key)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(0,Math.round(+el.value||0)); saveSettings(); }; };
+    +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div>'
+    +'<div class="muted cfgval">「詰める」時の上限 ＝ <b id="cfg-val">'+(SETTINGS.scBase*SETTINGS.scPer+SETTINGS.scExtra)+'</b> 回</div></div>';
+  const refreshVal=()=>{ const v=$('#cfg-val'); if(v) v.textContent=(SETTINGS.scBase*SETTINGS.scPer+SETTINGS.scExtra); };
+  const bind=(key)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(0,Math.round(+el.value||0)); saveSettings(); refreshVal(); }; };
   bind('scBase'); bind('scPer'); bind('scExtra');
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
   if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ ['scBase','scPer','scExtra'].forEach(k=>SETTINGS[k]=CFG_DEF[k]); saveSettings(); renderCfg(); status('「散布 試行上限」を既定に戻しました'); }; // 項目ごとの既定リセット
