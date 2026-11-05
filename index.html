@@ -176,7 +176,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
         <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
-        <button id="zin">＋</button><button id="zout">－</button>
+        <button id="zin">＋</button><button id="zout">－</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
         <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
       </div>
     </div>
@@ -222,7 +222,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.37';
+const APP_VERSION='0.38';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -321,11 +321,14 @@ function unlinkSelected(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]);
   idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } });               // 子→自身
   if(n){ persist(); renderEntries(); renderEditor(); status('グループ解除 '+n+'件'); } else status('解除対象がありません'); }
 // 実行不可なボタンは非活性（可視的に）＝基本方針
+// 選択エントリの relDir を FRONT→RIGHT→BACK→LEFT と回す（Rキー・回転ボタン共通）
+function rotateSel(){ if(sel<0||sel>=plan.entries.length){ status('エントリを選択してください'); return; } const o=['FRONT','RIGHT','BACK','LEFT']; const en=plan.entries[sel]; en.relDir=o[(o.indexOf(en.relDir||'FRONT')+1)%4]; persist(); renderEntries(); renderEditor(); }
 function updateTools(){ const en=(id,ok)=>{ const b=$('#'+id); if(b) b.disabled=!ok; };
   en('unlink', selHasUnlinkTarget());
   en('del', selset.size>0||sel>=0);
   en('up', sel>0);
   en('down', sel>=0&&sel<plan.entries.length-1);
+  en('rot', sel>=0);
   en('undo', histIdx>0);
   en('redo', histIdx<history.length-1);
 }
@@ -1035,6 +1038,7 @@ function boot(){
   $('#fit').onclick=fitCam;
   $('#zin').onclick=()=>{camo.scale*=1.25;render();};
   $('#zout').onclick=()=>{camo.scale/=1.25;render();};
+  $('#rot').onclick=rotateSel; // 配置プレビューで回転（スマホ用・R キーと共通）
   $('#ver').textContent='v'+APP_VERSION; $('#ver').title='バージョン v'+APP_VERSION+'（タップで詳細）';
   $('#ver').onclick=()=>$('#vmodal').classList.add('on');
   $('#vmodal').onclick=e=>{if(e.target.id==='vmodal')$('#vmodal').classList.remove('on');};
@@ -1102,7 +1106,7 @@ function boot(){
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
     if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
     if((e.ctrlKey||e.metaKey)&&(e.key==='y'||e.key==='Y')){ e.preventDefault(); redo(); return; }
-    if((e.key==='r'||e.key==='R')&&sel>=0&&sel<plan.entries.length){ const o=['FRONT','RIGHT','BACK','LEFT']; const en=plan.entries[sel]; en.relDir=o[(o.indexOf(en.relDir||'FRONT')+1)%4]; persist(); renderEntries(); renderEditor(); }
+    if((e.key==='r'||e.key==='R')&&sel>=0&&sel<plan.entries.length){ rotateSel(); }
   });
   addEventListener('resize',render);
   // restore local plan
