@@ -74,7 +74,8 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .modal .hbody p{margin:0 0 7px}
 .modal .hbody b{color:var(--brass)}
 .cfgsec{border:1px solid var(--rule);border-radius:6px;padding:8px}
-.cfglbl{color:var(--brass);font-size:12px;font-weight:600;margin-bottom:2px}
+.cfghead{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.cfglbl{color:var(--brass);font-size:12px;font-weight:600}
 .cfgfill{font-size:14px;line-height:2.3;color:var(--chalk)}
 .cfgfill input{width:66px;margin:0 3px;text-align:right}
 .cfgfoot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
@@ -221,7 +222,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p><b>↑ 取込</b>：ファイルから取り込みます（集約ファイル／個別ファイルどちらも可）。</p>
 <p class="muted">画面の外（暗い部分）をタップで閉じます。</p>
 </div></div></div>
-<div class="modal" id="cfgmodal"><div class="m"><div class="mhead"><h3>各種設定</h3><span class="mtools"><span class="qbtn" id="cfg-help" role="button" tabindex="0" title="式の説明">?</span></span></div><div id="cfgbody"></div></div></div>
+<div class="modal" id="cfgmodal"><div class="m"><h3>各種設定</h3><div id="cfgbody"></div></div></div>
 <div class="modal" id="cfghelp"><div class="m"><h3>散布 試行上限の式</h3><div class="hbody">
 <p>randomarea の散布は、置き場所を1つ試すたびに回数を数え、<b>試行上限</b> に達したら打ち切ります（重なりで弾かれた試行も数えます）。各空欄の意味：</p>
 <p>式：<b>上限 ＝ ( 個数 または 〔基準〕 ) × 〔1個あたり〕 ＋ 〔下駄〕</b></p>
@@ -239,7 +240,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.45';
+const APP_VERSION='0.46';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1063,11 +1064,12 @@ function importPlan(text){
 
 /* ---------- wire ---------- */
 function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
-  b.innerHTML='<div class="cfgsec"><div class="cfglbl">散布（randomarea）の試行上限</div>'
+  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の試行上限</span><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="式の説明">?</span></div>'
     +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div></div>'
-    +'<div class="cfgfoot"><button id="cfg-reset">デフォルトに戻す</button><span class="muted">意味・例は右上の ?</span></div>';
+    +'<div class="cfgfoot"><button id="cfg-reset">デフォルトに戻す</button></div>';
   const bind=(key)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scBase'); bind('scPer'); bind('scExtra');
+  if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
   if($('#cfg-reset')) $('#cfg-reset').onclick=()=>{ SETTINGS={...CFG_DEF}; saveSettings(); renderCfg(); status('設定をデフォルトに戻しました'); };
 }
 function boot(){
@@ -1110,8 +1112,7 @@ function boot(){
   ['#bp-form','#bp-light','#bp-sort'].forEach(id=>{ const el=$(id); if(el) el.onchange=renderBlockPick; });
   $('#cfg-open').onclick=()=>{ renderCfg(); $('#cfgmodal').classList.add('on'); };
   $('#cfgmodal').onclick=e=>{if(e.target.id==='cfgmodal')$('#cfgmodal').classList.remove('on');};
-  $('#cfg-help').onclick=()=>$('#cfghelp').classList.add('on');
-  $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');};
+  $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
