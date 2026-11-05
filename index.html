@@ -225,14 +225,11 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p class="muted">画面の外（暗い部分）をタップで閉じます。</p>
 </div></div></div>
 <div class="modal" id="cfgmodal"><div class="m"><h3>各種設定</h3><div id="cfgbody"></div></div></div>
-<div class="modal" id="cfghelp"><div class="m"><h3>散布 試行上限の式</h3><div class="hbody">
-<p>randomarea の散布は、置き場所を1つ試すたびに回数を数え、<b>試行上限</b> に達したら打ち切ります（重なりで弾かれた試行も数えます）。各空欄の意味：</p>
-<p>式：<b>上限 ＝ ( 個数 または 〔基準〕 ) × 〔1個あたり〕 ＋ 〔下駄〕</b></p>
-<p><b>括弧内〔基準〕</b>（既定 150）：「詰める」（個数 0）の時だけ使う基準。大きいほど多く試す＝密に詰まる。</p>
-<p><b>× の値〔1個あたり〕</b>（既定 50）：1個あたりの試行回数。重なりで弾かれてもここまで置き直す。</p>
-<p><b>＋ の値〔下駄〕</b>（既定 800）：最低限の試行（下駄）。</p>
-<p class="muted">例：× =50・＋ =800 で 10個 → 10×50+800 ＝ <b>1300</b> 回。詰める（基準 150）→ 150×50+800 ＝ <b>8300</b> 回。</p>
-<p class="muted">outward で細長い建物が入りにくい時は「× の値」「基準」を上げると改善（その分遅くなります）。</p>
+<div class="modal" id="cfghelp"><div class="m"><h3>散布の密度（候補数）</h3><div class="hbody">
+<p>散布は、1棟置くごとに <b>候補数</b> だけ置き場所の候補を作り、その中から <b>角・辺にいちばん密着する</b>ものを選んで置きます（mcpipy 由来＝角→辺から詰める）。</p>
+<p><b>候補数</b>（既定 30）：多いほど隙間なく<b>密</b>に詰まります。少ないと速いがまばら。</p>
+<p class="muted">候補は「辺寄せ・角寄せ・一様」から生成し、最も近い外周2辺への距離が小さい＝ぴったり詰まる位置を優先します。これで外周リングから内側へ順に埋まります。</p>
+<p class="muted">置ける場所が無くなったら自動で打ち切り。個数は randomarea 側の「countMin〜countMax（0=詰める）」で制御します。</p>
 </div></div></div>
 <div class="modal" id="smodal"><div class="m"><h3>保存先フォルダ</h3>
   <div id="fs-rows"><div class="vrow" id="dirlabel-plan"></div>
@@ -242,7 +239,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.48';
+const APP_VERSION='0.49';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -263,7 +260,7 @@ function status(m){ $('#status').textContent=m; clearTimeout(status._t); status.
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scBase:150, scPer:50, scExtra:800 }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30 }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -949,35 +946,76 @@ function outwardDir(b, others, reg){
   const open=cand.filter(c=>!c.blocked && c.dist>=0), pool=open.length?open:cand;
   pool.sort((a,c)=>a.dist-c.dist); return pool[0].rel;
 }
+// 境界密着スコア（mcpipy c003 派生）：最も近い壁2つに密着＝小さいほど良い。大きい建物を優先(-面積)
+function boundaryScore(b, reg){
+  if(reg.shape==='RECT'){
+    const a=[reg.d1-b.d1, b.d0-reg.d0, reg.w1-b.w1, b.w0-reg.w0].map(x=>Math.max(0,x)).sort((x,y)=>x-y);
+    const n=a[0], s=a[1], area=(b.d1-b.d0+1)*(b.w1-b.w0+1);
+    return n*n*n*n + s*s*s*s + n*s*32 - area;
+  }
+  const cd=(b.d0+b.d1)/2, cw=(b.w0+b.w1)/2, half=Math.max((b.d1-b.d0)/2,(b.w1-b.w0)/2);
+  const rim=Math.max(0, reg.r-(Math.hypot(cd-reg.cd,cw-reg.cw)+half)), area=(b.d1-b.d0+1)*(b.w1-b.w0+1);
+  return rim*rim*rim*rim - area;
+}
+// 辺/角寄せの候補アンカー（tb=FRONTテンプレのreserved bbox）。edge%=辺(jitter2)/corner%=角(jitter1)/残り=一様
+function biasedFitPos(tb, reg, rng, edgePct, cornerPct){
+  const ri=(lo,hi)=> lo>=hi?lo:lo+Math.floor(rng()*(hi-lo+1));
+  if(reg.shape==='RECT'){
+    const loD=reg.d0-tb.d0, hiD=reg.d1-tb.d1, loW=reg.w0-tb.w0, hiW=reg.w1-tb.w1;
+    if(loD>hiD||loW>hiW) return null;
+    const mode=Math.floor(rng()*100), jd2=Math.min(2,hiD-loD), jw2=Math.min(2,hiW-loW), jd1=Math.min(1,hiD-loD), jw1=Math.min(1,hiW-loW); let d,w;
+    if(mode<edgePct){ const e=Math.floor(rng()*4);
+      if(e===0){ d=loD+Math.floor(rng()*(jd2+1)); w=ri(loW,hiW); }
+      else if(e===1){ d=hiD-Math.floor(rng()*(jd2+1)); w=ri(loW,hiW); }
+      else if(e===2){ w=loW+Math.floor(rng()*(jw2+1)); d=ri(loD,hiD); }
+      else { w=hiW-Math.floor(rng()*(jw2+1)); d=ri(loD,hiD); } }
+    else if(mode<edgePct+cornerPct){ const cr=Math.floor(rng()*4);
+      d=(cr<2)? loD+Math.floor(rng()*(jd1+1)) : hiD-Math.floor(rng()*(jd1+1));
+      w=(cr%2===0)? loW+Math.floor(rng()*(jw1+1)) : hiW-Math.floor(rng()*(jw1+1)); }
+    else { d=ri(loD,hiD); w=ri(loW,hiW); }
+    return {d,w};
+  }
+  const halfD=(tb.d1-tb.d0)/2, halfW=(tb.w1-tb.w0)/2, maxOff=reg.r-Math.max(halfD,halfW); if(maxOff<0) return null;
+  const mode=Math.floor(rng()*100), rad=(mode<edgePct+cornerPct)? maxOff*(1-rng()*0.12) : Math.sqrt(rng())*maxOff; // 外周寄せ or 一様
+  const ang=rng()*2*Math.PI, cx=reg.cd+rad*Math.cos(ang), cw=reg.cw+rad*Math.sin(ang);
+  return {d:Math.round(cx-(tb.d0+tb.d1)/2), w:Math.round(cw-(tb.w0+tb.w1)/2)};
+}
 function scatterArea(m){
   const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0;
   const cmin=p.countMin|0, cmax=p.countMax|0, cap=cmax>0?cmax:Infinity; // 下限~上限（上限0=無制限＝詰める）
   plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
   const rng=mulberry32((p.seed|0)||1), reg=regionWorld(m);
-  const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean); // 領域自身＋領域を内包する囲い(城壁等)は除外対象外
-  const tmpl=rollParams(bt,src,rng);                   // footprint サイズ場は子ごとに振らず全子で固定（重なり/パッキング安定）
+  const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean);
+  const tmpl=rollParams(bt,src,rng); // footprint サイズ場は全子固定
   const sizeFields=footprintSizeFields(bt, Object.assign({}, defaultsOf(bt), tmpl));
-  const placed=[]; let made=0, attempts=0; const maxA=(cmax>0?cmax:SETTINGS.scBase)*SETTINGS.scPer+SETTINGS.scExtra; // 試行上限（各種設定で係数変更可・上限cmaxを基準）
-  const fc=p.facing||(p.rotate===false?'front':'random'); // front(全FRONT)/random(4方向)/outward(外側)
+  const fc=p.facing||(p.rotate===false?'front':'random');
   const toBBox=rr=>rr.kind==='rect'?{d0:rr.d0,d1:rr.d1,w0:rr.w0,w1:rr.w1}:{d0:rr.cd-rr.r,d1:rr.cd+rr.r,w0:rr.cw-rr.r,w1:rr.cw+rr.r};
-  while(attempts<maxA && made<cap){
-    attempts++;
-    const dir=(fc==='random') ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT';
-    const params=rollParams(bt,src,rng);
-    for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; } // サイズは全子共通に固定
-    const child={type:bt, relDir:dir, relPos:{d:0,h:0,w:0}, params, group:id};
-    if(cm>0) child.margin=cm;
-    normalizeEntry(child); // 子は全フィールド確定値で充填（cond 無し＝完全固定）
-    const pos=randomFitPos(child, reg, rng); if(!pos) continue;
-    child.relPos={d:pos.d,h:0,w:pos.w};
-    if(fc==='outward'){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); } // 位置確定後・衝突判定前に向きを決定（配置後回転ではない。以降は回転後footprintで判定）
-    if(!regionContains(reg, child)) continue;
-    const rr=reservedRegion(child); if(!rr) continue;
-    if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) continue;
-    plan.entries.push(child); placed.push(rr); made++;
+  // FRONTテンプレで候補位置の許容範囲を決める（全子同サイズ）
+  const tParams={}; for(const sf of sizeFields){ if(sf in tmpl) tParams[sf]=tmpl[sf]; }
+  const tChild={type:bt, relDir:'FRONT', relPos:{d:0,h:0,w:0}, params:tParams, group:id}; if(cm>0) tChild.margin=cm; normalizeEntry(tChild);
+  const tb=reservedBBox(tChild); if(!tb){ status('footprint が解決できません'); return; }
+  const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(12,K), CANDCAP=300000, EDGE=60, CORNER=25; // 候補数=密度knob
+  const placed=[]; let made=0, cand=0, empties=0;
+  const makeChild=(pos)=>{ // 候補位置→子（向き決定込み）。収まり&非重なりなら {child,rr,score}
+    const dir=(fc==='random')?['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)]:'FRONT';
+    const params=rollParams(bt,src,rng); for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; }
+    const child={type:bt, relDir:dir, relPos:{d:pos.d,h:0,w:pos.w}, params, group:id}; if(cm>0) child.margin=cm; normalizeEntry(child);
+    if(fc==='outward'){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); }
+    if(!regionContains(reg,child)) return null;
+    const rr=reservedRegion(child); if(!rr) return null;
+    if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) return null;
+    return {child, rr, score:boundaryScore(toBBox(rr), reg)};
+  };
+  while(made<cap && cand<CANDCAP && empties<EMPTYTOL){ // 1ラウンド=K候補からスコア最小(角→辺密着)を1個採用
+    let best=null;
+    for(let c=0;c<K && cand<CANDCAP;c++){ cand++;
+      const pos=biasedFitPos(tb, reg, rng, EDGE, CORNER); if(!pos) continue;
+      const r=makeChild(pos); if(r && (!best || r.score<best.score)) best=r;
+    }
+    if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; } else empties++;
   }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
-  status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/上限を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')));
+  status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')));
 }
 // randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
 // 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
@@ -1068,14 +1106,13 @@ function importPlan(text){
 
 /* ---------- wire ---------- */
 function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
-  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の試行上限</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="式の説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
-    +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div>'
-    +'<div class="muted cfgval">「詰める」時の上限 ＝ <b id="cfg-val">'+(SETTINGS.scBase*SETTINGS.scPer+SETTINGS.scExtra)+'</b> 回</div></div>';
-  const refreshVal=()=>{ const v=$('#cfg-val'); if(v) v.textContent=(SETTINGS.scBase*SETTINGS.scPer+SETTINGS.scExtra); };
-  const bind=(key)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(0,Math.round(+el.value||0)); saveSettings(); refreshVal(); }; };
-  bind('scBase'); bind('scPer'); bind('scExtra');
+  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の密度</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+    +'<div class="cfgfill">1配置あたりの候補数 <input type="number" id="cfg-scCand" value="'+SETTINGS.scCand+'"></div>'
+    +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div></div>';
+  const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
+  bind('scCand',1);
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
-  if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ ['scBase','scPer','scExtra'].forEach(k=>SETTINGS[k]=CFG_DEF[k]); saveSettings(); renderCfg(); status('「散布 試行上限」を既定に戻しました'); }; // 項目ごとの既定リセット
+  if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
 }
 function boot(){
   $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); selOne(plan.entries.length-1); cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
