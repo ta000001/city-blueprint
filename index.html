@@ -239,7 +239,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.49';
+const APP_VERSION='0.50';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -994,6 +994,8 @@ function scatterArea(m){
   const tParams={}; for(const sf of sizeFields){ if(sf in tmpl) tParams[sf]=tmpl[sf]; }
   const tChild={type:bt, relDir:'FRONT', relPos:{d:0,h:0,w:0}, params:tParams, group:id}; if(cm>0) tChild.margin=cm; normalizeEntry(tChild);
   const tb=reservedBBox(tChild); if(!tb){ status('footprint が解決できません'); return; }
+  // 回転する facing(random/outward)は、候補位置の許容範囲を「最大辺の正方形」で見積もる（90°回転してもはみ出さない＝右上等の方向バイアス防止）
+  let tbFit=tb; if(fc!=='front'){ const cD=(tb.d0+tb.d1)/2, cW=(tb.w0+tb.w1)/2, mh=Math.max(tb.d1-tb.d0, tb.w1-tb.w0)/2; tbFit={d0:cD-mh, d1:cD+mh, w0:cW-mh, w1:cW+mh}; }
   const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(12,K), CANDCAP=300000, EDGE=60, CORNER=25; // 候補数=密度knob
   const placed=[]; let made=0, cand=0, empties=0;
   const makeChild=(pos)=>{ // 候補位置→子（向き決定込み）。収まり&非重なりなら {child,rr,score}
@@ -1009,7 +1011,7 @@ function scatterArea(m){
   while(made<cap && cand<CANDCAP && empties<EMPTYTOL){ // 1ラウンド=K候補からスコア最小(角→辺密着)を1個採用
     let best=null;
     for(let c=0;c<K && cand<CANDCAP;c++){ cand++;
-      const pos=biasedFitPos(tb, reg, rng, EDGE, CORNER); if(!pos) continue;
+      const pos=biasedFitPos(tbFit, reg, rng, EDGE, CORNER); if(!pos) continue;
       const r=makeChild(pos); if(r && (!best || r.score<best.score)) best=r;
     }
     if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; } else empties++;
