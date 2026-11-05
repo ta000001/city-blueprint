@@ -78,8 +78,9 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .cfglbl{color:var(--brass);font-size:12px;font-weight:600}
 .cfgfill{font-size:14px;line-height:2.3;color:var(--chalk)}
 .cfgfill input{width:66px;margin:0 3px;text-align:right}
-.cfgfoot{display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap}
-.cfgfoot .muted{font-size:11px}
+.cfhdtools{display:flex;align-items:center;gap:6px;margin-left:auto;flex:none}
+.cfgrst{font-size:10px;padding:3px 7px;border-color:var(--rule);color:var(--dim)}
+.cfgrst:hover{color:var(--brass);border-color:var(--brass)}
 .vrow{font-size:12px;color:var(--brass);line-height:1.9}
 .muted{color:var(--dim);font-size:11px}
 .modal .m.wide{min-width:340px;max-width:min(560px,94vw);width:560px;max-height:86vh;overflow:auto}
@@ -240,7 +241,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.46';
+const APP_VERSION='0.47';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -321,7 +322,8 @@ function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
 function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
 // 旧 region:{shape,size} を flat(shape/depth/width/diameter) へ移行（⑫）
 function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT';
-    if(p.facing==null) p.facing=(p.rotate===false)?'front':'random'; if('rotate' in p) delete p.rotate; } return e; } // 旧 rotate(bool)→facing(enum)
+    if(p.facing==null) p.facing=(p.rotate===false)?'front':'random'; if('rotate' in p) delete p.rotate; // 旧 rotate(bool)→facing(enum)
+    if(p.count!=null){ if(p.countMax==null)p.countMax=p.count; delete p.count; } if(p.countMin==null)p.countMin=0; if(p.countMax==null)p.countMax=0; } return e; } // 旧 count→countMin/countMax
 // undo/redo 履歴（plan スナップショット・連続操作は600msで合流）
 function snapshot(){ const s=JSON.stringify(plan), now=Date.now();
   if(histIdx>=0 && history[histIdx]===s) return;
@@ -359,7 +361,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, count:0, facing:'random', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'random', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
@@ -384,7 +386,7 @@ function renderEntries(){
     const rp=e.relPos||{};
     let ref='';
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
-    else if(e.type==='randomarea'){ const id=e.params&&e.params.id; const n=plan.entries.filter(x=>x.group===id).length; ref=(e.params.builder||'?')+'×'+((e.params.count||0)>0?e.params.count:'詰める')+' ('+n+'配置)'; }
+    else if(e.type==='randomarea'){ const id=e.params&&e.params.id; const n=plan.entries.filter(x=>x.group===id).length; const cmn=e.params.countMin|0, cmx=e.params.countMax|0; const ct=cmx>0?(cmn+'~'+cmx):(cmn>0?cmn+'~詰':'詰める'); ref=(e.params.builder||'?')+'×'+ct+' ('+n+'配置)'; }
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
@@ -947,16 +949,17 @@ function outwardDir(b, others, reg){
   pool.sort((a,c)=>a.dist-c.dist); return pool[0].rel;
 }
 function scatterArea(m){
-  const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0, target=p.count|0;
+  const p=m.params, id=p.id, bt=p.builder, src=p.source, cm=p.childMargin|0, gap=p.gap|0;
+  const cmin=p.countMin|0, cmax=p.countMax|0, cap=cmax>0?cmax:Infinity; // 下限~上限（上限0=無制限＝詰める）
   plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
   const rng=mulberry32((p.seed|0)||1), reg=regionWorld(m);
   const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean); // 領域自身＋領域を内包する囲い(城壁等)は除外対象外
   const tmpl=rollParams(bt,src,rng);                   // footprint サイズ場は子ごとに振らず全子で固定（重なり/パッキング安定）
   const sizeFields=footprintSizeFields(bt, Object.assign({}, defaultsOf(bt), tmpl));
-  const placed=[]; let made=0, attempts=0; const maxA=(target>0?target:SETTINGS.scBase)*SETTINGS.scPer+SETTINGS.scExtra; // 試行上限（各種設定で係数変更可）
+  const placed=[]; let made=0, attempts=0; const maxA=(cmax>0?cmax:SETTINGS.scBase)*SETTINGS.scPer+SETTINGS.scExtra; // 試行上限（各種設定で係数変更可・上限cmaxを基準）
   const fc=p.facing||(p.rotate===false?'front':'random'); // front(全FRONT)/random(4方向)/outward(外側)
   const toBBox=rr=>rr.kind==='rect'?{d0:rr.d0,d1:rr.d1,w0:rr.w0,w1:rr.w1}:{d0:rr.cd-rr.r,d1:rr.cd+rr.r,w0:rr.cw-rr.r,w1:rr.cw+rr.r};
-  while(attempts<maxA && (target===0 || made<target)){
+  while(attempts<maxA && made<cap){
     attempts++;
     const dir=(fc==='random') ? ['FRONT','RIGHT','BACK','LEFT'][Math.floor(rng()*4)] : 'FRONT';
     const params=rollParams(bt,src,rng);
@@ -973,13 +976,13 @@ function scatterArea(m){
     plan.entries.push(child); placed.push(rr); made++;
   }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
-  status('抽選: '+made+' 件配置'+(target>0&&made<target?'（'+target+' に届かず・領域/間隔を確認）':''));
+  status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/上限を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')));
 }
 // randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
 // 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
 function raFields(e){ const rect=((e.params.shape||'RECT')==='RECT');
   return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']])
-    .concat([['builder','enum'],['source','enum'],['count','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]); }
+    .concat([['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]); }
 function raEditor(e,k,kind){ const p=e.params, v=p[k];
   if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
   if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
@@ -1064,13 +1067,12 @@ function importPlan(text){
 
 /* ---------- wire ---------- */
 function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
-  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の試行上限</span><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="式の説明">?</span></div>'
-    +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div></div>'
-    +'<div class="cfgfoot"><button id="cfg-reset">デフォルトに戻す</button></div>';
+  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の試行上限</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="式の説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+    +'<div class="cfgfill">上限 ＝ ( 個数 または <input type="number" id="cfg-scBase" value="'+SETTINGS.scBase+'"> ) × <input type="number" id="cfg-scPer" value="'+SETTINGS.scPer+'"> ＋ <input type="number" id="cfg-scExtra" value="'+SETTINGS.scExtra+'"></div></div>';
   const bind=(key)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scBase'); bind('scPer'); bind('scExtra');
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
-  if($('#cfg-reset')) $('#cfg-reset').onclick=()=>{ SETTINGS={...CFG_DEF}; saveSettings(); renderCfg(); status('設定をデフォルトに戻しました'); };
+  if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ ['scBase','scPer','scExtra'].forEach(k=>SETTINGS[k]=CFG_DEF[k]); saveSettings(); renderCfg(); status('「散布 試行上限」を既定に戻しました'); }; // 項目ごとの既定リセット
 }
 function boot(){
   $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); selOne(plan.entries.length-1); cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
