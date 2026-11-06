@@ -244,9 +244,13 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p class="muted">mod の <b>data/.../transaction/plan/</b> を選ぶと、保存した plan.json をそのまま mod で読めます。</p>
 <p class="muted">この端末（iOS 等）が File System Access 非対応の場合は使えません（保存はダウンロード）。</p>
 </div></div></div>
+<div class="modal" id="pdirhelp"><div class="m"><h3>保存先フォルダ（preset）</h3><div class="hbody">
+<p>ユーザープリセットは常に端末内に保存されますが、このフォルダを設定すると <b>user_presets.json</b> を保存/削除/取込のたび自動で書き出し、起動時に読み込みます。端末間の共有/バックアップ向け。</p>
+<p class="muted">非対応端末（iOS 等）では使えません（端末内保存＋書出/取込アイコンで対応）。</p>
+</div></div></div>
 
 <script>
-const APP_VERSION='0.55';
+const APP_VERSION='0.56';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -849,7 +853,7 @@ function render(){
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
       ctx.fillStyle=on?'#D4A93C':'#4F8A7B'; ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill();
       ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(e.type,x+8,y-6);
-      { const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8.5*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+5); } // 各点の座標
+      { const rp=e.relPos||{}; ctx.fillStyle='#5f6d6a'; ctx.font=(6.5*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+5); } // 各点の座標
       return;
     }
     const ov=ovl.bodyBad.has(i)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり=赤 / マージンのみ重なり=橙
@@ -881,8 +885,8 @@ function render(){
     { const rp=e.relPos||{}, h=rp.h||0; // 4角すべての座標を外向きに小表示
       let pts; if(sh.shape==='RECT') pts=sh.body; else { const c=sh.center,r=sh.r; pts=[{d:c.d-r,w:c.w-r},{d:c.d+r,w:c.w-r},{d:c.d+r,w:c.w+r},{d:c.d-r,w:c.w+r}]; }
       const S=pts.map(p=>w2c(p.d,p.w)), ccx=S.reduce((a,s)=>a+s[0],0)/S.length, ccy=S.reduce((a,s)=>a+s[1],0)/S.length;
-      ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace';
-      pts.forEach((p,k)=>{ const sx=S[k][0], sy=S[k][1]; ctx.textAlign=sx<ccx?'right':'left'; ctx.textBaseline=sy<ccy?'bottom':'top'; ctx.fillText('d'+Math.round(p.d)+' h'+h+' w'+Math.round(p.w), sx+(sx<ccx?-2:2), sy+(sy<ccy?-2:2)); });
+      ctx.fillStyle='#5f6d6a'; ctx.font=(6.5*devicePixelRatio)+'px monospace';
+      pts.forEach((p,k)=>{ const sx=S[k][0], sy=S[k][1]; ctx.textAlign=sx<ccx?'right':'left'; ctx.textBaseline=sy<ccy?'bottom':'top'; ctx.fillText('d'+Math.round(p.d)+' h'+h+' w'+Math.round(p.w), sx+(sx<ccx?-1:1), sy+(sy<ccy?-1:1)); });
       ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
   });
   { const bn=ovl.bodyPairs, mn=ovl.marginPairs;
@@ -1045,7 +1049,7 @@ function scatterArea(m){
     const eg=phase===0?EDGE:0, cn=phase===0?CORNER:0; let best=null;
     for(let c=0;c<K && cand<CANDCAP;c++){ cand++; const r=makeChild(genCand(eg,cn)); if(r && (!best || r.score<best.score)) best=r; }
     if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; }
-    else { empties++; if(empties>=EMPTYTOL){ if(phase===0){ phase=1; empties=0; } else break; } }
+    else { empties++; if(empties>=EMPTYTOL){ if(phase===0){ phase=1; empties=0; } else if(made>=cmin) break; else empties=0; } } // 下限未達なら一様でさらに探す(CANDCAPまで)
   }
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')));
@@ -1096,8 +1100,12 @@ async function saveFile(text,fname){
 /* ---------- ユーザープリセット：端末保存(localStorage)＋ファイル書出/取込 ---------- */
 const safeName=s=>String(s).replace(/[^A-Za-z0-9_]/g,'_');
 const UP_KEY='city-blueprint:userpresets';
+let PDIR=null; // preset 用フォルダ（任意・対応環境）: user_presets.json を自動同期
 function loadUserPresets(){ try{ USER_PRESETS=JSON.parse(localStorage.getItem(UP_KEY))||{}; }catch(_){ USER_PRESETS={}; } }
-function saveUserPresets(){ try{ localStorage.setItem(UP_KEY, JSON.stringify(USER_PRESETS)); return true; }catch(err){ return err; } } // 成功=true / 失敗=Errorを返す
+function saveUserPresets(){ let ok=true; try{ localStorage.setItem(UP_KEY, JSON.stringify(USER_PRESETS)); }catch(err){ ok=err; } writePresetFile(); return ok; } // 端末(+設定時はフォルダへ自動書出)
+async function writePresetFile(){ if(!PDIR) return; try{ if(await ensurePerm(PDIR)){ const fh=await PDIR.getFileHandle('user_presets.json',{create:true}), w=await fh.createWritable(); await w.write(JSON.stringify({version:APP_VERSION,presets:USER_PRESETS},null,2)); await w.close(); } }catch(_){} }
+async function loadPresetFile(){ if(!PDIR) return; try{ if(await ensurePerm(PDIR)){ const fh=await PDIR.getFileHandle('user_presets.json'); const j=JSON.parse(await (await fh.getFile()).text()); if(j&&j.presets&&typeof j.presets==='object'){ for(const ty of Object.keys(j.presets)){ const mp=j.presets[ty]||{}; for(const nm of Object.keys(mp)){ if(mp[nm]&&typeof mp[nm]==='object') (USER_PRESETS[ty]=USER_PRESETS[ty]||{})[nm]=mp[nm]; } } try{localStorage.setItem(UP_KEY,JSON.stringify(USER_PRESETS));}catch(_){} } } }catch(_){} }
+async function pickPresetDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-presets'}); PDIR=h; try{await idbSet('dir_presets',h);}catch(_){} await loadPresetFile(); writePresetFile(); renderCfg(); if(sel>=0) renderTParams(); status('presetフォルダ: '+h.name); }catch(_){} }
 function errText(r){ return (r&&r.name?r.name+': ':'')+((r&&r.message)||String(r)); }
 function pmsg(m,err){ const el=$('#pmsg'); if(el){ el.textContent=m; el.classList.toggle('err',!!err); } status(m); } // モーダル内＋下部statusの両方に表示
 function downloadFile(text,fname){ const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); }
@@ -1150,6 +1158,11 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
         : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（保存はダウンロード／開くはファイル選択）</div>')
+    +'</div>'
+    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（preset）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-pdir" role="button" tabindex="0" title="説明">?</span></span></div>'
+      +(FS_OK
+        ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(PDIR?(PDIR.name+'/'):'未設定（端末内のみ）')+'</b></div><div class="cfgfoot"><button id="cfg-pickpdir">フォルダを選択</button>'+(PDIR?' <button id="cfg-clearpdir">解除</button>':'')+'</div>')
+        : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（プリセットは端末内に保存・書出/取込は可）</div>')
     +'</div>';
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scCand',1);
@@ -1158,6 +1171,9 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
   if($('#cfg-pickdir')) $('#cfg-pickdir').onclick=()=>pickDir();
   if($('#cfg-cleardir')) $('#cfg-cleardir').onclick=async()=>{ DIR=null; try{await idbSet('dir_plan',null);}catch(_){} renderCfg(); status('保存先フォルダを解除しました'); };
+  if($('#cfg-help-pdir')) $('#cfg-help-pdir').onclick=()=>$('#pdirhelp').classList.add('on');
+  if($('#cfg-pickpdir')) $('#cfg-pickpdir').onclick=()=>pickPresetDir();
+  if($('#cfg-clearpdir')) $('#cfg-clearpdir').onclick=async()=>{ PDIR=null; try{await idbSet('dir_presets',null);}catch(_){} renderCfg(); status('presetフォルダを解除しました'); };
 }
 function boot(){
   $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); selOne(plan.entries.length-1); cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
@@ -1203,6 +1219,7 @@ function boot(){
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
   $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
+  $('#pdirhelp').onclick=e=>{if(e.target.id==='pdirhelp')$('#pdirhelp').classList.remove('on');};
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン / 2本指でピンチズーム
   let drag=null, pointers=new Map(), pinch=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
@@ -1270,6 +1287,7 @@ boot();
 loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); normalizeAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存先は⚙設定モーダルで表示/変更
+if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadPresetFile(); if(sel>=0) renderTParams(); } }).catch(()=>{}); // preset同期フォルダ
 loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
 loadSettings(); // 各種設定を復元
 if('serviceWorker' in navigator){
