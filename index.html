@@ -169,7 +169,6 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <span class="ver" id="ver" title="バージョン">?</span>
   <span style="flex:1"></span>
   <button id="cfg-open" title="各種設定">⚙</button>
-  <button id="s-open" title="保存先">📁</button>
 </div>
 
 <div class="bar">
@@ -240,15 +239,14 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p class="muted">候補は「辺寄せ・角寄せ・一様」から生成し、最も近い外周2辺への距離が小さい＝ぴったり詰まる位置を優先します。これで外周リングから内側へ順に埋まります。</p>
 <p class="muted">置ける場所が無くなったら自動で打ち切り。個数は randomarea 側の「countMin〜countMax（0=詰める）」で制御します。</p>
 </div></div></div>
-<div class="modal" id="smodal"><div class="m"><h3>保存先フォルダ</h3>
-  <div id="fs-rows"><div class="vrow" id="dirlabel-plan"></div>
-    <div style="margin-top:8px"><button id="pick">plan フォルダを選ぶ</button></div>
-    <div class="muted" style="margin-top:6px">mod の data/transaction/plan/ を選ぶと直接保存されます</div></div>
-  <div class="muted" id="fs-note" style="display:none">この端末はフォルダ保存に非対応（ダウンロードになります）</div>
-</div></div>
+<div class="modal" id="dirhelp"><div class="m"><h3>保存先フォルダ（plan）</h3><div class="hbody">
+<p>plan の「保存」「開く」で使うフォルダです。設定すると「保存」がこのフォルダに直接書き込み、「開く」もここから選べます。<b>未設定</b>ならダウンロード／ファイル選択になります。</p>
+<p class="muted">mod の <b>data/.../transaction/plan/</b> を選ぶと、保存した plan.json をそのまま mod で読めます。</p>
+<p class="muted">この端末（iOS 等）が File System Access 非対応の場合は使えません（保存はダウンロード）。</p>
+</div></div></div>
 
 <script>
-const APP_VERSION='0.54';
+const APP_VERSION='0.55';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -880,7 +878,12 @@ function render(){
     ctx.save(); ctx.translate(lorg[0],lorg[1]); ctx.rotate(lang);
     ctx.fillStyle='#DCE5E2'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillText(e.type,4,-4); ctx.restore();
-    { const rp=e.relPos||{}, q=w2c(rp.d||0,rp.w||0); ctx.fillStyle='#8a9b97'; ctx.font=(8.5*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), q[0]+3, q[1]+3); } // 各点の座標
+    { const rp=e.relPos||{}, h=rp.h||0; // 4角すべての座標を外向きに小表示
+      let pts; if(sh.shape==='RECT') pts=sh.body; else { const c=sh.center,r=sh.r; pts=[{d:c.d-r,w:c.w-r},{d:c.d+r,w:c.w-r},{d:c.d+r,w:c.w+r},{d:c.d-r,w:c.w+r}]; }
+      const S=pts.map(p=>w2c(p.d,p.w)), ccx=S.reduce((a,s)=>a+s[0],0)/S.length, ccy=S.reduce((a,s)=>a+s[1],0)/S.length;
+      ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace';
+      pts.forEach((p,k)=>{ const sx=S[k][0], sy=S[k][1]; ctx.textAlign=sx<ccx?'right':'left'; ctx.textBaseline=sy<ccy?'bottom':'top'; ctx.fillText('d'+Math.round(p.d)+' h'+h+' w'+Math.round(p.w), sx+(sx<ccx?-2:2), sy+(sy<ccy?-2:2)); });
+      ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
   });
   { const bn=ovl.bodyPairs, mn=ovl.marginPairs;
     if(bn||mn){ ctx.fillStyle=bn?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('conflict: (body:'+bn+'、margin:'+mn+')', 8*devicePixelRatio, 20*devicePixelRatio); } }
@@ -1084,8 +1087,7 @@ function idb(mode,fn){ return new Promise((res,rej)=>{ const r=indexedDB.open('c
 const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k)), idbGet=k=>idb('readonly',s=>s.get(k));
 async function ensurePerm(h){ const o={mode:'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
 let DIR=null;
-function updateDirLabel(){ const el=$('#dirlabel-plan'); if(!el) return; el.textContent=FS_OK?(DIR?('plan → '+DIR.name+'/ に上書き保存'):'plan → 未設定（ダウンロード）'):''; $('#fs-note').style.display=FS_OK?'none':''; $('#fs-rows').style.display=FS_OK?'':'none'; }
-async function pickDir(){ if(!FS_OK){status('この端末は保存先指定に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} updateDirLabel(); status('保存先: '+h.name); }catch(_){} }
+async function pickDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} renderCfg(); status('保存先: '+h.name); }catch(_){} }
 async function saveFile(text,fname){
   if(DIR){ try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(fname,{create:true}); const w=await fh.createWritable(); await w.write(text); await w.close(); status('保存: '+DIR.name+'/'+fname); return; } }catch(_){} status('保存先に書けません→ダウンロード'); }
   const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); status('保存（ダウンロード）');
@@ -1143,11 +1145,19 @@ function importPlan(text){
 function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の密度</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
     +'<div class="cfgfill">1配置あたりの候補数 <input type="number" id="cfg-scCand" value="'+SETTINGS.scCand+'"></div>'
-    +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div></div>';
+    +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div></div>'
+    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（plan）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-dir" role="button" tabindex="0" title="説明">?</span></span></div>'
+      +(FS_OK
+        ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
+        : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（保存はダウンロード／開くはファイル選択）</div>')
+    +'</div>';
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scCand',1);
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
   if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
+  if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
+  if($('#cfg-pickdir')) $('#cfg-pickdir').onclick=()=>pickDir();
+  if($('#cfg-cleardir')) $('#cfg-cleardir').onclick=async()=>{ DIR=null; try{await idbSet('dir_plan',null);}catch(_){} renderCfg(); status('保存先フォルダを解除しました'); };
 }
 function boot(){
   $('#add').onclick=()=>{ if(!SCHEMA){status('データ未読込');return;} const pos=(sel>=0&&plan.entries[sel])?plan.entries[sel].relPos:{d:cursor.d,h:0,w:cursor.w}; const ne=newEntry($('#addtype').value); ne.relPos={d:pos.d||0,h:pos.h||0,w:pos.w||0}; plan.entries.push(ne); selOne(plan.entries.length-1); cursor={d:ne.relPos.d,w:ne.relPos.w}; persist(); renderEntries(); renderEditor(); render(); };
@@ -1192,9 +1202,7 @@ function boot(){
   $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
   $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
-  $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
-  $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
-  $('#pick').onclick=pickDir;
+  $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン / 2本指でピンチズーム
   let drag=null, pointers=new Map(), pinch=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
@@ -1261,8 +1269,7 @@ function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_
 boot();
 loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); normalizeAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
-updateDirLabel();
-if(FS_OK) idbGet('dir_plan').then(h=>{ if(h){ DIR=h; updateDirLabel(); } }).catch(()=>{});
+if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存先は⚙設定モーダルで表示/変更
 loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
 loadSettings(); // 各種設定を復元
 if('serviceWorker' in navigator){
