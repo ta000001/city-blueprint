@@ -29,7 +29,10 @@ h1{font-weight:800;font-size:20px;letter-spacing:-.02em;line-height:1;margin:0;c
 .ver{font-size:11px;color:var(--brass);border:1px solid var(--brass-dim);border-radius:9px;
   padding:1px 7px;line-height:16px;text-align:center;cursor:pointer;flex:none;white-space:nowrap}
 button,select,input{font-family:inherit;font-size:12px}
-button{background:var(--panel2);color:var(--chalk);border:1px solid var(--rule);border-radius:6px;padding:5px 9px;cursor:pointer}
+button{background:var(--panel2);color:var(--chalk);border:1px solid var(--rule);border-radius:6px;padding:5px 9px;cursor:pointer;transition:transform .06s,background .1s,border-color .1s}
+button:active:not(:disabled){transform:scale(.93);background:var(--brass-dim);border-color:var(--brass)}
+@keyframes btnflash{0%{background:var(--brass);color:#1a1205}100%{}}
+button.flash{animation:btnflash .4s ease-out}
 button:hover{border-color:var(--brass-dim)}
 button.pri{background:var(--brass-dim);border-color:var(--brass);color:#fff}
 button:disabled{opacity:.4;cursor:default}
@@ -183,12 +186,11 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div class="cols">
   <div class="col">
     <div class="panel p-preview">
-      <div class="ph"><h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
+      <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
         <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
         <button id="zin">＋</button><button id="zout">－</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
-        <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
       </div>
     </div>
     <div class="panel p-entries">
@@ -226,6 +228,12 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p class="muted">画面の外（暗い部分）をタップで閉じます。</p>
 </div></div></div>
 <div class="modal" id="cfgmodal"><div class="m"><h3>各種設定</h3><div id="cfgbody"></div></div></div>
+<div class="modal" id="pvhelp"><div class="m"><h3>配置プレビューの見方</h3><div class="hbody">
+<p><b>座標</b>：上＝d＋ ／ 下＝d− ／ 右＝w＋ ／ 左＝w− ／ <b>原点＝左下</b>（d0,w0）。h＝高さ（上下、プレビューは上から見た図）。</p>
+<p><b>図の記号</b>：<b>footprint＝本体</b>（塗りの四角）／<b>破線＝margin</b>（確保領域）／<b>塗り＝ground</b>（地面）。</p>
+<p><b>type ラベル</b>：文字の天（上）が建物の <b>front</b> 方向。outward などで回転して表示されます。</p>
+<p class="muted">操作：ドラッグで移動／角をドラッグでサイズ変更（fix した軸は不可）／2本指ピンチでズーム／↻で回転。</p>
+</div></div></div>
 <div class="modal" id="cfghelp"><div class="m"><h3>散布の密度（候補数）</h3><div class="hbody">
 <p>散布は、1棟置くごとに <b>候補数</b> だけ置き場所の候補を作り、その中から <b>角・辺にいちばん密着する</b>ものを選んで置きます（mcpipy 由来＝角→辺から詰める）。</p>
 <p><b>候補数</b>（既定 30）：多いほど隙間なく<b>密</b>に詰まります。少ないと速いがまばら。</p>
@@ -240,7 +248,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.53';
+const APP_VERSION='0.54';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -257,6 +265,7 @@ const APP_VERSION='0.53';
    ===================================================================== */
 const $=s=>document.querySelector(s);
 function status(m){ $('#status').textContent=m; clearTimeout(status._t); status._t=setTimeout(()=>{$('#status').textContent='';},4000); }
+function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),420); } // 押下成功の視覚フィードバック
 
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
@@ -360,7 +369,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'random', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(type==='randomarea') e.params={ id:genId(), shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'outward', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
   else e.params={};
   return e;
 }
@@ -841,7 +850,8 @@ function render(){
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
       ctx.fillStyle=on?'#D4A93C':'#4F8A7B'; ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill();
-      ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.fillText(e.type,x+8,y-6);
+      ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(e.type,x+8,y-6);
+      { const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8.5*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+5); } // 各点の座標
       return;
     }
     const ov=ovl.bodyBad.has(i)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり=赤 / マージンのみ重なり=橙
@@ -870,6 +880,7 @@ function render(){
     ctx.save(); ctx.translate(lorg[0],lorg[1]); ctx.rotate(lang);
     ctx.fillStyle='#DCE5E2'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
     ctx.fillText(e.type,4,-4); ctx.restore();
+    { const rp=e.relPos||{}, q=w2c(rp.d||0,rp.w||0); ctx.fillStyle='#8a9b97'; ctx.font=(8.5*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), q[0]+3, q[1]+3); } // 各点の座標
   });
   { const bn=ovl.bodyPairs, mn=ovl.marginPairs;
     if(bn||mn){ ctx.fillStyle=bn?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('conflict: (body:'+bn+'、margin:'+mn+')', 8*devicePixelRatio, 20*devicePixelRatio); } }
@@ -1097,10 +1108,15 @@ function savePreset(e,t,name){ name=(name||'').trim();
   if(r!==true){ delete USER_PRESETS[t][name]; pmsg('保存失敗：端末に保存できません（'+errText(r)+'）',1); return; } // localStorage失敗（容量/プライベート等）を明示
   pmsg('保存しました：'+name+'（'+Object.keys(def).length+'項目）'); renderTParams(); }
 // 全ユーザープリセットを1ファイルに書き出す（master presets.json と同形式 {version,presets:{type:{name:def}}}）
-function exportAllPresets(){ const has=Object.keys(USER_PRESETS).some(t=>Object.keys(USER_PRESETS[t]||{}).length); if(!has){ pmsg('書出不可：ユーザープリセットがありません',1); return; }
-  let name=prompt('書き出すファイル名', 'user_presets'); if(name===null) return; // キャンセル
+async function exportAllPresets(){ const has=Object.keys(USER_PRESETS).some(t=>Object.keys(USER_PRESETS[t]||{}).length); if(!has){ pmsg('書出不可：ユーザープリセットがありません',1); return; }
+  const text=JSON.stringify({version:APP_VERSION, presets:USER_PRESETS},null,2);
+  if(window.showSaveFilePicker){ // 対応環境：保存先ファイルを指定して保存
+    try{ const h=await window.showSaveFilePicker({suggestedName:'user_presets.json', types:[{description:'JSON',accept:{'application/json':['.json']}}]}); const w=await h.createWritable(); await w.write(text); await w.close(); pmsg('書き出しました：'+h.name); }
+    catch(err){ if(err&&err.name!=='AbortError') pmsg('書出失敗：'+errText(err),1); } return;
+  }
+  let name=prompt('書き出すファイル名', 'user_presets'); if(name===null) return; // 非対応(iOS等)は名前指定ダウンロード
   name=(name||'').trim().replace(/\.json$/i,'').replace(/[\/\\:*?"<>|]+/g,'_')||'user_presets';
-  try{ downloadFile(JSON.stringify({version:APP_VERSION, presets:USER_PRESETS},null,2), name+'.json'); pmsg('書き出しました：'+name+'.json'); }catch(err){ pmsg('書出失敗：'+errText(err),1); } }
+  try{ downloadFile(text, name+'.json'); pmsg('書き出しました：'+name+'.json'); }catch(err){ pmsg('書出失敗：'+errText(err),1); } }
 function deletePreset(t,name){ if(!userPresetsOf(t)[name]) return; if(!confirm('プリセット「'+name+'」を削除しますか？')) return; delete USER_PRESETS[t][name]; const r=saveUserPresets(); if(r!==true){ pmsg('削除の保存に失敗：'+errText(r),1); } else { pmsg('削除しました：'+name); } renderTParams(); }
 // 取込：集約形式 {presets:{type:{name:def}}}（＝書出/presets.json 形）と 旧 per-preset {type,name,fields} の両対応
 function importPresetsPrompt(){ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.multiple=true;
@@ -1142,7 +1158,7 @@ function boot(){
   $('#unlink').onclick=unlinkSelected;
   $('#undo').onclick=undo;
   $('#redo').onclick=redo;
-  $('#save').onclick=()=>{ const n=($('#name').value||'my_plan').replace(/\.json$/,''); saveFile(buildPlanJson(), n+'.json'); };
+  $('#save').onclick=(ev)=>{ const n=($('#name').value||'my_plan').replace(/\.json$/,''); saveFile(buildPlanJson(), n+'.json'); flashBtn(ev.currentTarget); };
   $('#open').onclick=async ()=>{
     if(FS_OK){
       try{
@@ -1174,6 +1190,8 @@ function boot(){
   $('#cfg-open').onclick=()=>{ renderCfg(); $('#cfgmodal').classList.add('on'); };
   $('#cfgmodal').onclick=e=>{if(e.target.id==='cfgmodal')$('#cfgmodal').classList.remove('on');};
   $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
+  $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
+  $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
   $('#s-open').onclick=()=>{updateDirLabel();$('#smodal').classList.add('on');};
   $('#smodal').onclick=e=>{if(e.target.id==='smodal')$('#smodal').classList.remove('on');};
   $('#pick').onclick=pickDir;
