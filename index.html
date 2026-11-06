@@ -61,7 +61,6 @@ input[type=number]{width:56px}
 .ed .r{margin-bottom:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 canvas{width:100%;height:52vh;background:#0C1214;border:1px solid var(--rule);border-radius:8px;display:block;touch-action:none}
 .canbar{display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap}
-.cbgrp{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
 textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--chalk);border:1px solid var(--rule);border-radius:8px;
   font-family:ui-monospace,monospace;font-size:11px;padding:8px;margin-top:8px;white-space:pre;overflow:auto}
 #status{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);max-width:90vw;z-index:60;font-size:12px;color:var(--chalk);background:var(--panel2);padding:7px 14px;border-radius:9px;border:1px solid var(--rule);box-shadow:0 6px 20px rgba(0,0,0,.45);text-align:center}
@@ -190,12 +189,10 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
-        <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button></span></div>
+        <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
-        <span class="cbgrp" title="視点操作"><button id="zin">＋</button><button id="zout">－</button><button id="fit">全体表示</button></span>
-        <span style="flex:1"></span>
-        <span class="cbgrp" title="エントリ操作"><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button></span>
+        <button id="zin">＋</button><button id="zout">－</button><button id="fit">全体表示</button>
       </div>
     </div>
     <div class="panel p-entries">
@@ -256,7 +253,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.60';
+const APP_VERSION='0.61';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -278,7 +275,7 @@ function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scCand:30, scFill:20, showCoords:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30, scTries:12, showCoords:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -1027,42 +1024,56 @@ function scatterArea(m){
   // 向き別の reserved bbox（候補を「向き込み」で作り、その向きの実寸でぴったり配置＝はみ出し/スカスカを防ぐ）
   const RD4=['FRONT','RIGHT','BACK','LEFT'], rdBox={}; for(const rd of RD4){ tChild.relDir=rd; rdBox[rd]=reservedBBox(tChild); } tChild.relDir='FRONT';
   if(!rdBox.FRONT){ status('footprint が解決できません'); return; }
-  const ri=(lo,hi)=> lo>=hi?lo:lo+Math.floor(rng()*(hi-lo+1));
-  const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(16,K), EDGE=60, CORNER=25; // 候補数=密度knob
-  const FILL=Math.max(1, SETTINGS.scFill|0)||20, CANDCAP=Math.max(300000, EMPTYTOL*FILL*K+100000); // 下限確保の粘り(⚙)。連続空振り上限=EMPTYTOL*FILL、CANDCAPはそれより大きく
-  const placed=[]; let made=0, cand=0, empties=0, phase=0;
-  // 候補（向き込み）。outward の辺候補は「その辺を外周に向ける向き(BACK=ドア側)」で、その向きの実寸範囲に配置
-  const genCand=(eg,cn)=>{
-    if(fc!=='outward'){ const rd=fc==='front'?'FRONT':RD4[Math.floor(rng()*4)]; const pos=biasedFitPos(rdBox[rd],reg,rng,eg,cn); return pos&&{relDir:rd,pos}; }
-    const m=Math.floor(rng()*100);
-    if(m<eg && reg.shape==='RECT'){ const e=Math.floor(rng()*4), rd=['BACK','FRONT','LEFT','RIGHT'][e], bb=rdBox[rd]; // 0上+d,1下-d,2右+w,3左-w
-      const loD=reg.d0-bb.d0,hiD=reg.d1-bb.d1,loW=reg.w0-bb.w0,hiW=reg.w1-bb.w1; if(loD>hiD||loW>hiW) return null;
-      const jd=Math.min(2,hiD-loD), jw=Math.min(2,hiW-loW); let d,w;
-      if(e===0){ d=hiD-Math.floor(rng()*(jd+1)); w=ri(loW,hiW); } else if(e===1){ d=loD+Math.floor(rng()*(jd+1)); w=ri(loW,hiW); }
-      else if(e===2){ w=hiW-Math.floor(rng()*(jw+1)); d=ri(loD,hiD); } else { w=loW+Math.floor(rng()*(jw+1)); d=ri(loD,hiD); }
-      return {relDir:rd, pos:{d,w}}; }
-    const pos=biasedFitPos(rdBox.FRONT, reg, rng, 0, (m<eg+cn)?100:0); return pos&&{relDir:null,pos}; // 角/一様は位置→outwardDirで決定
-  };
-  const makeChild=(c)=>{ if(!c) return null;
-    const params=rollParams(bt,src,rng); for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; }
-    const child={type:bt, relDir:c.relDir||'FRONT', relPos:{d:c.pos.d,h:0,w:c.pos.w}, params, group:id}; if(cm>0) child.margin=cm; normalizeEntry(child);
-    if(c.relDir==null){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); } // outward の角/一様
-    if(!regionContains(reg,child)) return null;
-    const rr=reservedRegion(child); if(!rr) return null;
-    if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) return null;
-    return {child, rr, score:boundaryScore(toBBox(rr), reg)};
-  };
-  while(made<cap && cand<CANDCAP){ // phase0=辺/角寄せで詰め→詰まらなくなったら phase1=一様でgap埋め
-    const eg=phase===0?EDGE:0, cn=phase===0?CORNER:0; let best=null;
-    for(let c=0;c<K && cand<CANDCAP;c++){ cand++; const r=makeChild(genCand(eg,cn)); if(r && (!best || r.score<best.score)) best=r; }
-    if(best){ plan.entries.push(best.child); placed.push(best.rr); made++; empties=0; }
-    else { empties++; // phase0で詰まったら phase1(一様)へ。phase1は連続空振り上限で打ち切り
-      if(phase===0){ if(empties>=EMPTYTOL){ phase=1; empties=0; } }
-      else if(empties>=(made<cmin?EMPTYTOL*FILL:EMPTYTOL)) break; // 下限未達なら追加探索するが上限あり(⚙の粘り)＝物理的に入らない場合の半永久抽選を防ぐ
+  const K=Math.max(1, SETTINGS.scCand|0)||30, EMPTYTOL=Math.max(16,K), EDGE=60, CORNER=25; // 候補数=1配置あたりの探索（密度knob）
+  const TRIES=Math.max(1, SETTINGS.scTries|0)||12, CANDCAP=300000; // ⚙試行回数（最も密な結果を採用）／1試行の候補上限(安全弁)
+  // 1試行＝1回の貪欲配置。plan は変更せず {children,made} を返す（複数試行して最良を採用するため）
+  function attempt(rng){
+    const ri=(lo,hi)=> lo>=hi?lo:lo+Math.floor(rng()*(hi-lo+1));
+    const placed=[], children=[]; let made=0, cand=0, empties=0, phase=0;
+    // 候補（向き込み）。outward の辺候補は「その辺を外周に向ける向き(BACK=ドア側)」で、その向きの実寸範囲に配置
+    const genCand=(eg,cn)=>{
+      if(fc!=='outward'){ const rd=fc==='front'?'FRONT':RD4[Math.floor(rng()*4)]; const pos=biasedFitPos(rdBox[rd],reg,rng,eg,cn); return pos&&{relDir:rd,pos}; }
+      const mm=Math.floor(rng()*100);
+      if(mm<eg && reg.shape==='RECT'){ const e=Math.floor(rng()*4), rd=['BACK','FRONT','LEFT','RIGHT'][e], bb=rdBox[rd]; // 0上+d,1下-d,2右+w,3左-w
+        const loD=reg.d0-bb.d0,hiD=reg.d1-bb.d1,loW=reg.w0-bb.w0,hiW=reg.w1-bb.w1; if(loD>hiD||loW>hiW) return null;
+        const jd=Math.min(2,hiD-loD), jw=Math.min(2,hiW-loW); let d,w;
+        if(e===0){ d=hiD-Math.floor(rng()*(jd+1)); w=ri(loW,hiW); } else if(e===1){ d=loD+Math.floor(rng()*(jd+1)); w=ri(loW,hiW); }
+        else if(e===2){ w=hiW-Math.floor(rng()*(jw+1)); d=ri(loD,hiD); } else { w=loW+Math.floor(rng()*(jw+1)); d=ri(loD,hiD); }
+        return {relDir:rd, pos:{d,w}}; }
+      const pos=biasedFitPos(rdBox.FRONT, reg, rng, 0, (mm<eg+cn)?100:0); return pos&&{relDir:null,pos}; // 角/一様は位置→outwardDirで決定
+    };
+    const makeChild=(c)=>{ if(!c) return null;
+      const params=rollParams(bt,src,rng); for(const sf of sizeFields){ if(sf in tmpl) params[sf]=tmpl[sf]; }
+      const child={type:bt, relDir:c.relDir||'FRONT', relPos:{d:c.pos.d,h:0,w:c.pos.w}, params, group:id}; if(cm>0) child.margin=cm; normalizeEntry(child);
+      if(c.relDir==null){ const b=reservedBBox(child); if(b) child.relDir=outwardDir(b, placed.map(toBBox), reg); } // outward の角/一様
+      if(!regionContains(reg,child)) return null;
+      const rr=reservedRegion(child); if(!rr) return null;
+      if(exclude.some(x=>regOverlap(inflate(rr,gap),x)) || placed.some(x=>regOverlap(inflate(rr,gap),x))) return null;
+      return {child, rr, score:boundaryScore(toBBox(rr), reg)};
+    };
+    while(made<cap && cand<CANDCAP){ // phase0=辺/角寄せで詰め→詰まらなくなったら phase1=一様でgap埋め
+      const eg=phase===0?EDGE:0, cn=phase===0?CORNER:0; let best=null;
+      for(let c=0;c<K && cand<CANDCAP;c++){ cand++; const r=makeChild(genCand(eg,cn)); if(r && (!best || r.score<best.score)) best=r; }
+      if(best){ children.push(best.child); placed.push(best.rr); made++; empties=0; }
+      else { empties++;
+        if(phase===0){ if(empties>=EMPTYTOL){ phase=1; empties=0; } }
+        else if(empties>=EMPTYTOL) break; // 一様フェーズでも詰まらなくなったらこの試行を終了
+      }
     }
+    return {children, made};
   }
+  // 複数回フル試行し「最も密（made最大・下限達成を優先）」＝試した中で最大を採用
+  let bestAtt=null;
+  for(let t=0;t<TRIES;t++){
+    const a=attempt(mulberry32((((p.seed|0)||1)+t*0x9E3779B1)>>>0)); // 試行ごとに別シード（seedで再現可）
+    if(!bestAtt){ bestAtt=a; }
+    else { const aM=a.made>=cmin, bM=bestAtt.made>=cmin; if(aM!==bM){ if(aM) bestAtt=a; } else if(a.made>bestAtt.made) bestAtt=a; }
+    if(cmax>0 && bestAtt.made>=cmax) break; // 上限到達で十分
+  }
+  const made=bestAtt?bestAtt.made:0;
+  for(const c of (bestAtt?bestAtt.children:[])) plan.entries.push(c);
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
-  status('抽選: '+made+' 件配置'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/⚙の粘りを確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')), made<cmin?8000:4000);
+  status('抽選: '+made+' 件配置（'+TRIES+'回試行の最良）'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/⚙の試行回数を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')), made<cmin?8000:4000);
 }
 // randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
 // 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
@@ -1169,8 +1180,8 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の密度</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
     +'<div class="cfgfill">1配置あたりの候補数 <input type="number" id="cfg-scCand" value="'+SETTINGS.scCand+'"></div>'
     +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div>'
-    +'<div class="cfgfill">下限確保の粘り（追加探索の上限倍率） <input type="number" id="cfg-scFill" value="'+SETTINGS.scFill+'"></div>'
-    +'<div class="muted cfgval">countMin に届かないとき、どれだけ粘って追加配置を試すか。大きいほど下限を満たしやすい（その分遅い）。既定 20。</div></div>'
+    +'<div class="cfgfill">試行回数（最も密な結果を採用） <input type="number" id="cfg-scTries" value="'+SETTINGS.scTries+'"></div>'
+    +'<div class="muted cfgval">配置をこの回数だけやり直し、いちばん多く入った結果を採用します。大きいほど密になりやすい（その分遅い）。既定 12。</div></div>'
     +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">座標の表示</span></div>'
     +'<div class="cfgfill"><label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="cfg-showCoords"'+(SETTINGS.showCoords?' checked':'')+'> プレビューに各点の座標(d,h,w)を表示</label></div>'
     +'<div class="muted cfgval">エントリの4角と原点に座標を小さく重ねます。既定 表示。</div></div>'
@@ -1185,10 +1196,10 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
         : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（プリセットは端末内に保存・書出/取込は可）</div>')
     +'</div>';
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
-  bind('scCand',1); bind('scFill',1);
+  bind('scCand',1); bind('scTries',1);
   if($('#cfg-showCoords')) $('#cfg-showCoords').onchange=e=>{ SETTINGS.showCoords=e.target.checked; saveSettings(); render(); }; // 座標 表示/非表示
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
-  if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; SETTINGS.scFill=CFG_DEF.scFill; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
+  if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; SETTINGS.scTries=CFG_DEF.scTries; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
   if($('#cfg-pickdir')) $('#cfg-pickdir').onclick=()=>pickDir();
   if($('#cfg-cleardir')) $('#cfg-cleardir').onclick=async()=>{ DIR=null; try{await idbSet('dir_plan',null);}catch(_){} renderCfg(); status('保存先フォルダを解除しました'); };
