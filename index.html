@@ -259,7 +259,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.65';
+const APP_VERSION='0.66';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -718,6 +718,10 @@ function renderJson(){ $('#json').value=buildPlanJson(); }
 const cv=$('#cv'); const ctx=cv.getContext('2d');
 let camo={x:40,y:0,scale:5}; // 原点位置(px)・scale=px/block
 let cursor={d:0,w:0};        // 空セル選択カーソル（追加のデフォルト位置）
+const CAM_KEY='city-blueprint:cam'; // プレビューの表示状態（ワールド中心＋ズーム）を端末に記憶
+function saveCam(){ try{ const W=cv.width,H=cv.height; if(!W||!H||!camo.scale) return; const cw=(W/2-camo.x)/camo.scale, cd=(camo.y-H/2)/camo.scale; localStorage.setItem(CAM_KEY, JSON.stringify({scale:camo.scale, cd, cw})); }catch(_){} }
+let _camT; function saveCamDebounced(){ clearTimeout(_camT); _camT=setTimeout(saveCam,300); } // パン/ズーム/フィットのたびに保存（連続操作はまとめて）
+function restoreCam(){ try{ const s=JSON.parse(localStorage.getItem(CAM_KEY)); if(!s||!s.scale) return false; const W=cv.width=cv.clientWidth*devicePixelRatio, H=cv.height=cv.clientHeight*devicePixelRatio; camo.scale=s.scale; camo.x=W/2-s.cw*s.scale; camo.y=H/2+s.cd*s.scale; render(); return true; }catch(_){ return false; } }
 function fitCam(){
   const pts=[]; plan.entries.forEach(e=>{ const w=worldShape(e); if(w) w.pts.forEach(p=>pts.push(p)); else { const c=xform(0,0,e.relPos||{},e.relDir); pts.push({d:c.d,w:c.w}); } });
   pts.push({d:0,w:0});
@@ -843,6 +847,7 @@ function syncEditorPos(){ const e=plan.entries[sel]; if(!e||!e.relPos) return; c
 function render(){
   const W=cv.width=cv.clientWidth*devicePixelRatio, H=cv.height=cv.clientHeight*devicePixelRatio;
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,W,H);
+  saveCamDebounced(); // 表示状態を記憶
   if(!SCHEMA) return;
   // grid
   ctx.strokeStyle='#16211F'; ctx.lineWidth=1;
@@ -1329,7 +1334,7 @@ function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
-loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); normalizeAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(fitCam); status('schema/presets 読込 OK'); })
+loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); normalizeAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(()=>{ if(!restoreCam()) fitCam(); }); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存先は⚙設定モーダルで表示/変更
 if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadPresetFile(); if(sel>=0) renderTParams(); } }).catch(()=>{}); // preset同期フォルダ
