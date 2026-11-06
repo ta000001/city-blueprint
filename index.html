@@ -40,7 +40,8 @@ input[type=number]{width:56px}
 @media(max-width:720px){.wrap{grid-template-columns:1fr}}
 .cols{display:flex;gap:10px;align-items:flex-start}
 .cols .col{flex:1;min-width:0;display:flex;flex-direction:column;gap:10px}
-@media(max-width:860px){.cols{flex-direction:column}}
+@media(max-width:860px){.cols{flex-direction:column;align-items:stretch}.cols .col{display:contents}
+  .p-preview{order:1}.p-params{order:2}.p-entries{order:3}.p-json{order:4}} /* スマホ: プレビュー→パラメータ→エントリ→JSON */
 .sub2{font-size:10px;color:var(--brass);letter-spacing:.08em;margin:8px 0 2px;font-weight:600}
 .divider{border-top:1px solid var(--brass);margin:8px 0 6px}
 .panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px;padding:8px}
@@ -181,7 +182,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 
 <div class="cols">
   <div class="col">
-    <div class="panel">
+    <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー（上=d+ / 右=w+ / 原点=左下）</h2>
         <span class="htools"><select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button></span></div>
       <canvas id="cv"></canvas>
@@ -190,21 +191,21 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
         <span class="muted" id="hint">footprint=本体 / 破線=margin(確保領域) / 塗り=ground</span>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel p-entries">
       <div class="ph"><h2>エントリ（記載順）</h2>
         <span class="htools"><button id="up" title="上へ">↑</button><button id="down" title="下へ">↓</button></span></div>
       <ul id="entries"></ul>
     </div>
   </div>
   <div class="col">
-    <div class="panel">
+    <div class="panel p-params">
       <h2>パラメータ（選択中エントリ）</h2>
       <div id="pctrl"></div>
       <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
       <div class="divider" id="pdiv" style="display:none"></div>
       <div class="ed" id="tparams"></div>
     </div>
-    <div class="panel">
+    <div class="panel p-json">
       <h2>plan.json</h2>
       <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
     </div>
@@ -239,7 +240,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div>
 
 <script>
-const APP_VERSION='0.51';
+const APP_VERSION='0.52';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
