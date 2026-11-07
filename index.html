@@ -262,7 +262,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.78';
+const APP_VERSION='0.79';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -351,8 +351,9 @@ function selParentChildren(i){ selOne(i); const ch=childIdxsOf(i);
   if(ch.length){ ch.forEach(j=>selset.add(j)); if(!multiMode){ multiMode=true; updateMultiBtn(); } } }
 // 複数選択モード中のトグル：親を選択に加えたら子も追加、親を外したら子も外す
 function selToggleParentChildren(i){ const willSelect=!selset.has(i); selToggle(i); const ch=childIdxsOf(i);
-  ch.forEach(j=>{ if(willSelect) selset.add(j); else selset.delete(j); }); }
-function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
+  ch.forEach(j=>{ if(willSelect) selset.add(j); else selset.delete(j); });
+  sel=willSelect?i:(selset.size?[...selset][selset.size-1]:-1); } // 解除時は残りの選択を primary に
+function selToggle(i){ if(selset.has(i)){ selset.delete(i); sel=selset.size?[...selset][selset.size-1]:-1; } else { selset.add(i); sel=i; } } // 解除したら primary を付け替え（i===sel の強調残りを防ぐ）
 // ---- コピー / 切り取り / 貼り付け（エントリ単位・選択は複数可・貼り付け後もモード継続で連続配置） ----
 function updateCopyBtn(){ const b=$('#copy'); if(b){ const on=copyMode&&clip&&clip.mode==='copy'; b.classList.toggle('pri',on); b.textContent=on?'取消':'⧉ コピー'; b.setAttribute('aria-pressed',on?'true':'false'); } }
 function updateCutBtn(){ const b=$('#cut'); if(b){ const on=copyMode&&clip&&clip.mode==='cut'; b.classList.toggle('pri',on); b.textContent=on?'取消':'✂ 切り取り'; b.setAttribute('aria-pressed',on?'true':'false'); } }
@@ -1379,7 +1380,7 @@ function boot(){
     if(drag&&drag.mode==='resize'){ persist(); renderEntries(); renderEditor(); }
     else if(drag&&drag.mode==='entry'){
       if(drag.moved){ persist(); renderEntries(); renderEditor(); }
-      else if(drag.additive&&drag.wasSel){ selToggle(drag.hit); renderEntries(); renderEditor(); render(); } // 追加選択のタップ(無移動)で解除
+      else if(drag.additive&&drag.wasSel){ selToggleParentChildren(drag.hit); renderEntries(); renderEditor(); render(); } // 追加選択のタップ(無移動)で解除（親なら子も）
       else { renderEntries(); renderEditor(); render(); }
     }
     else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); if(multiMode){ multiMode=false; updateMultiBtn(); } renderEntries(); renderEditor(); render(); } // 空セル選択+複数選択モード終了
