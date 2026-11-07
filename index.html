@@ -60,10 +60,9 @@ input[type=number]{width:56px}
 .ed label{display:inline-block;color:var(--dim);min-width:44px}
 .ed .r{margin-bottom:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 canvas{width:100%;height:52vh;background:#0C1214;border:1px solid var(--rule);border-radius:8px;display:block;touch-action:none}
-.cvwrap{position:relative}
-.canov{position:absolute;right:10px;bottom:10px;display:flex;gap:6px;z-index:5}
-.canov button{background:rgba(29,42,44,.92);border-color:var(--rule);box-shadow:0 2px 8px rgba(0,0,0,.45)}
-.canov button:disabled{opacity:.4}
+.histfix{position:fixed;right:12px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:65;display:flex;gap:6px}
+.histfix button{background:rgba(29,42,44,.94);border-color:var(--rule);box-shadow:0 3px 12px rgba(0,0,0,.5)}
+.histfix button:disabled{opacity:.4}
 .canbar{display:flex;gap:10px;margin-top:8px;align-items:flex-end;flex-wrap:wrap}
 .cbg{display:inline-flex;flex-direction:column;gap:3px}
 .cbg+.cbg{border-left:1px solid var(--rule);padding-left:10px}
@@ -190,7 +189,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <h1>city-blueprint</h1>
   <span class="ver" id="ver" title="バージョン">?</span>
   <span style="flex:1"></span>
-  <span class="icobtn" id="save" role="button" tabindex="0" title="plan を保存（押下時にファイル名を入力）" aria-label="保存"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
+  <span class="icobtn" id="save" role="button" tabindex="0" title="plan を保存（押下時にファイル名を入力・Ctrl/⌘+S）" aria-label="保存"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M8 11l4 4 4-4"/><path d="M5 20h14"/></svg></span>
   <span class="icobtn" id="open" role="button" tabindex="0" title="plan を開く" aria-label="開く"><svg viewBox="0 0 24 24"><path d="M12 20V9"/><path d="M8 13l4-4 4 4"/><path d="M5 4h14"/></svg></span>
   <input type="file" id="file" accept=".json" style="display:none">
   <span class="icobtn" id="cfg-open" role="button" tabindex="0" title="各種設定" aria-label="設定"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/><circle cx="9" cy="7" r="2.1"/><circle cx="15" cy="12" r="2.1"/><circle cx="8" cy="17" r="2.1"/></svg></span>
@@ -201,9 +200,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
         <span class="htools"><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
-      <div class="cvwrap"><canvas id="cv"></canvas>
-        <div class="canov"><button class="icotxt hundo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt hredo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></div>
-      </div>
+      <canvas id="cv"></canvas>
       <div class="canbar">
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
         <span class="cbg"><span class="cbl">選択</span><span class="cbr"><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button></span></span>
@@ -219,19 +216,20 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   </div>
   <div class="col">
     <div class="panel p-params">
-      <div class="ph"><h2>パラメータ（選択中エントリ）</h2><span class="htools"><span id="phdtools"></span><button class="icotxt hundo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt hredo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></span></div>
+      <div class="ph"><h2>パラメータ（選択中エントリ）</h2><span class="htools" id="phdtools"></span></div>
       <div id="pctrl"></div>
       <div class="ed" id="editor"><span class="muted">エントリを選択</span></div>
       <div class="divider" id="pdiv" style="display:none"></div>
       <div class="ed" id="tparams"></div>
     </div>
     <div class="panel p-json">
-      <div class="ph"><h2>plan.json</h2><span class="htools"><button class="icotxt hundo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt hredo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></span></div>
+      <h2>plan.json</h2>
       <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
     </div>
   </div>
 </div>
 <div id="status"></div>
+<div class="histfix"><button class="icotxt hundo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt hredo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></div>
 <div id="busy" class="busy"><div class="spin"></div><div class="busytxt" id="busytxt">抽選中…</div></div>
 
 <div class="modal" id="vmodal"><div class="m"><h3>version</h3><div class="vsub">plan.json editor</div><div id="vbody"></div></div></div>
@@ -257,6 +255,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <li><b>R</b>：選択エントリを回転</li>
 <li><b>Ctrl/⌘+Z</b>：戻る　／　<b>Ctrl/⌘+Shift+Z</b>・<b>Ctrl/⌘+Y</b>：進む</li>
 <li><b>Ctrl/⌘+C</b>：コピー　／　<b>Ctrl/⌘+X</b>：切り取り　／　<b>Ctrl/⌘+V</b>：貼り付け</li>
+<li><b>Ctrl/⌘+S</b>：plan を保存</li>
 <li><b>Esc</b>：コピー／切り取りを取消</li>
 <li><b>Ctrl/⌘+クリック</b>：追加選択（複数選択）　／　<b>ダブルクリック</b>：複数選択モード切替</li>
 <li><b>ホイール</b>：ズーム（PC）　／　<b>2本指ピンチ</b>：ズーム</li>
@@ -280,7 +279,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.85';
+const APP_VERSION='0.86';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1443,6 +1442,7 @@ function boot(){
   cv.ondblclick=e=>{ if(copyMode){ cancelCopy(); return; } const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); multiMode=!multiMode; updateMultiBtn(); if(multiMode&&hit>=0){ if(!selset.has(hit)) selToggle(hit); sel=hit; } renderEntries(); renderEditor(); render(); }; // ダブルクリックで複数選択モードを切替（コピー中は取消）
   // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
   addEventListener('keydown',e=>{
+    if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')){ e.preventDefault(); const b=$('#save'); if(b) b.click(); return; } // Ctrl/⌘+S で保存（フォーカス位置を問わず）
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
     if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
     if((e.ctrlKey||e.metaKey)&&(e.key==='y'||e.key==='Y')){ e.preventDefault(); redo(); return; }
