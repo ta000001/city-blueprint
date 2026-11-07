@@ -267,7 +267,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.80';
+const APP_VERSION='0.81';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -345,12 +345,22 @@ function xform(ld,lw,rp,dir){
 let plan={entries:[]}, sel=-1;
 let selset=new Set();   // 複数選択（一括削除/移動）。sel=プライマリ（param編集対象）
 let multiMode=false;    // 複数選択モード（タップで追加）
+let rangeMode=false;    // 範囲選択モード（複数選択ボタンで起動・ドラッグで矩形指定）
+let rangeBand=null;     // 描画用ラバーバンド {sd,sw,cd,cw}（world座標）
 let copyMode=false;     // コピーモード：コピー元を保持し、貼り付け先を可視化（もう一度/ダブルクリックで取消）
 let clip=null;          // {entries:[deepClone...], anchor:{d,w}} コピー内容と基準点
 let pasteCursor={d:0,w:0}; // 貼り付け先の基準点（ポインタ追従）
 let history=[], histIdx=-1, lastHist=0;  // undo/redo
 function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
 function childIdxsOf(i){ const e=plan.entries[i]; if(!e||e.type!=='randomarea') return []; const id=e.params&&e.params.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
+// エントリの world 上の外接矩形（範囲選択の内包判定用）
+function entryBBox(e){
+  if(e.type==='randomarea'){ const r=regionWorld(e); return r.shape==='RECT'?{d0:r.d0,d1:r.d1,w0:r.w0,w1:r.w1}:{d0:r.cd-r.r,d1:r.cd+r.r,w0:r.cw-r.r,w1:r.cw+r.r}; }
+  const sh=worldShape(e);
+  if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir); return {d0:c.d,d1:c.d,w0:c.w,w1:c.w}; }
+  if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w); return {d0:Math.min(...ds),d1:Math.max(...ds),w0:Math.min(...ws),w1:Math.max(...ws)}; }
+  return {d0:sh.center.d-sh.r,d1:sh.center.d+sh.r,w0:sh.center.w-sh.r,w1:sh.center.w+sh.r};
+}
 // 親(randomarea)を選んだら複数選択モードONにして子も選択状態にする（primaryは親のまま）
 function selParentChildren(i){ selOne(i); const ch=childIdxsOf(i);
   if(ch.length){ ch.forEach(j=>selset.add(j)); if(!multiMode){ multiMode=true; updateMultiBtn(); } } }
@@ -965,6 +975,11 @@ function render(){
     ctx.lineWidth=1.4; ctx.setLineDash([]);
     ctx.strokeStyle='#D4A93C'; ctx.beginPath(); ctx.moveTo(sa[0]-7,sa[1]);ctx.lineTo(sa[0]+7,sa[1]);ctx.moveTo(sa[0],sa[1]-7);ctx.lineTo(sa[0],sa[1]+7); ctx.stroke();
     ctx.strokeStyle='#7AD79A'; ctx.beginPath(); ctx.moveTo(da[0]-7,da[1]);ctx.lineTo(da[0]+7,da[1]);ctx.moveTo(da[0],da[1]-7);ctx.lineTo(da[0],da[1]+7); ctx.stroke(); }
+  // 範囲選択のラバーバンド
+  if(rangeBand){ const a=w2c(rangeBand.sd,rangeBand.sw), b=w2c(rangeBand.cd,rangeBand.cw);
+    const x=Math.min(a[0],b[0]), y=Math.min(a[1],b[1]), w=Math.abs(a[0]-b[0]), h=Math.abs(a[1]-b[1]);
+    ctx.setLineDash([6,4]); ctx.lineWidth=1.5; ctx.strokeStyle='#D4A93C'; ctx.fillStyle='rgba(212,169,60,.10)';
+    ctx.fillRect(x,y,w,h); ctx.strokeRect(x,y,w,h); ctx.setLineDash([]); }
   // 空セル選択カーソル＋現在座標
   const cp=(sel>=0&&plan.entries[sel]&&plan.entries[sel].relPos)?{d:plan.entries[sel].relPos.d||0,w:plan.entries[sel].relPos.w||0}:{d:cursor.d,w:cursor.w};
   if(sel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
@@ -1300,7 +1315,9 @@ function boot(){
   $('#del').onclick=deleteSelected;
   $('#up').onclick=()=>{ if(sel>0){ [plan.entries[sel-1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel-1]]; selOne(sel-1); persist(); renderEntries(); } };
   $('#down').onclick=()=>{ if(sel>=0&&sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; selOne(sel+1); persist(); renderEntries(); } };
-  $('#multi').onclick=()=>{ multiMode=!multiMode; if(!multiMode&&selset.size>1) selOne(sel); updateMultiBtn(); };
+  $('#multi').onclick=()=>{
+    if(multiMode||rangeMode){ multiMode=false; rangeMode=false; rangeBand=null; if(selset.size>1) selOne(sel); updateMultiBtn(); render(); } // 解除
+    else { rangeMode=true; updateMultiBtn(); render(); status('範囲選択モード: ドラッグで範囲を囲む（内包したエントリを選択）。クリックのみで通常の複数選択へ', 6000); } };
   $('#unlink').onclick=unlinkSelected;
   $('#copy').onclick=()=>{ if(copyMode&&clip&&clip.mode==='copy') cancelCopy(); else startClip('copy'); };
   $('#cut').onclick=()=>{ if(copyMode&&clip&&clip.mode==='cut') cancelCopy(); else startClip('cut'); };
@@ -1350,8 +1367,9 @@ function boot(){
   function zoomAround(mx,my,ns){ ns=Math.max(.2,Math.min(400,ns)); const ww=(mx-camo.x)/camo.scale, dd=(camo.y-my)/camo.scale; camo.scale=ns; camo.x=mx-ww*ns; camo.y=my+dd*ns; render(); } // (mx,my)の下のワールド点を固定して拡大縮小
   cv.onpointerdown=e=>{
     pointers.set(e.pointerId,{x:e.clientX,y:e.clientY}); try{cv.setPointerCapture(e.pointerId);}catch(_){}
-    if(pointers.size>=2){ drag=null; pinch={startDist:pinchMeasure().dist||1, startScale:camo.scale}; cv.style.cursor='default'; return; } // 2本指=ピンチ開始
+    if(pointers.size>=2){ drag=null; if(rangeBand){ rangeBand=null; render(); } pinch={startDist:pinchMeasure().dist||1, startScale:camo.scale}; cv.style.cursor='default'; return; } // 2本指=ピンチ開始
     if(copyMode){ const q=ptWorld(e); pasteCursor={d:Math.round(q.d),w:Math.round(q.w)}; drag={mode:'pastemove'}; render(); return; } // コピーモード中は貼り付け先を指定
+    if(rangeMode){ const q=ptWorld(e); drag={mode:'range', sd:q.d, sw:q.w, sx:e.clientX, sy:e.clientY, moved:false}; rangeBand={sd:q.d,sw:q.w,cd:q.d,cw:q.w}; render(); return; } // 範囲選択の矩形開始
     const p=ptWorld(e);
     if(sel>=0&&plan.entries[sel]){ const hz=resizeHandleAt(plan.entries[sel],p.px,p.py); if(hz){ drag={mode:'resize', handle:hz, idx:sel}; return; } } // ② サイズハンドル
     const hit=pickAt(p.d,p.w,p.px,p.py);
@@ -1369,6 +1387,8 @@ function boot(){
     if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pinch&&pointers.size>=2){ const m=pinchMeasure(); zoomAround(m.mx,m.my, pinch.startScale*(m.dist/pinch.startDist)); return; } // ピンチズーム
     if(copyMode){ cv.style.cursor='copy'; if(drag&&drag.mode==='pastemove'){ const q=ptWorld(e); pasteCursor={d:Math.round(q.d),w:Math.round(q.w)}; render(); } return; } // コピーモード中はドラッグ中のみ貼り付け先が追従（ホバーでは動かさない）
+    if(drag&&drag.mode==='range'){ const q=ptWorld(e); rangeBand.cd=q.d; rangeBand.cw=q.w; if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4) drag.moved=true; render(); return; } // 範囲選択の矩形更新
+    if(rangeMode&&!drag){ cv.style.cursor='crosshair'; return; }
     if(!drag){ const p=ptWorld(e); if(sel>=0&&plan.entries[sel]&&resizeHandleAt(plan.entries[sel],p.px,p.py)){ cv.style.cursor='nwse-resize'; return; } cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
     if(drag.mode==='resize'){ const p=ptWorld(e); applyResize(plan.entries[drag.idx],p,drag.handle); drag.moved=true; render(); syncEditorPos(); return; }
     if(drag.mode==='pan'){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true; camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
@@ -1382,6 +1402,20 @@ function boot(){
     pointers.delete(e.pointerId); if(pointers.size<2) pinch=null;
     if(pointers.size>0){ drag=null; return; } // ピンチ後に指が残る間はドラッグ/パン暴発を抑止
     if(copyMode){ drag=null; cv.style.cursor='default'; return; } // 貼り付け先は pasteCursor に確定（貼り付けボタンで実行）
+    if(drag&&drag.mode==='range'){ // 範囲選択の確定
+      const sd=drag.sd, sw=drag.sw, cd=rangeBand?rangeBand.cd:sd, cw=rangeBand?rangeBand.cw:sw;
+      rangeBand=null; rangeMode=false; multiMode=true;
+      if(drag.moved){ const rd0=Math.min(sd,cd),rd1=Math.max(sd,cd),rw0=Math.min(sw,cw),rw1=Math.max(sw,cw);
+        const inRect=[]; plan.entries.forEach((en,i)=>{ const b=entryBBox(en); if(b.d0>=rd0&&b.d1<=rd1&&b.w0>=rw0&&b.w1<=rw1) inRect.push(i); });
+        selset=new Set(inRect); sel=inRect.length?inRect[inRect.length-1]:-1;
+        status('範囲選択: '+inRect.length+'件を選択（複数選択モード）');
+      } else { // ドラッグなし＝クリックのみ：通常の複数選択モードへ（当たりがあれば選択）
+        const q=ptWorld(e), hit=pickAt(q.d,q.w,q.px,q.py);
+        if(hit>=0){ if(!selset.has(hit)) selToggleParentChildren(hit); else sel=hit; }
+        status('複数選択モード');
+      }
+      updateMultiBtn(); drag=null; renderEntries(); renderEditor(); render(); return;
+    }
     if(drag&&drag.mode==='resize'){ persist(); renderEntries(); renderEditor(); }
     else if(drag&&drag.mode==='entry'){
       if(drag.moved){ persist(); renderEntries(); renderEditor(); }
@@ -1391,7 +1425,7 @@ function boot(){
     else if(drag&&drag.mode==='pan'&&!drag.moved){ cursor={d:drag.cd,w:drag.cw}; selOne(-1); if(multiMode){ multiMode=false; updateMultiBtn(); } renderEntries(); renderEditor(); render(); } // 空セル選択+複数選択モード終了
     drag=null; cv.style.cursor='default';
   };
-  cv.onpointercancel=e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; if(pointers.size===0){ drag=null; cv.style.cursor='default'; } };
+  cv.onpointercancel=e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; if(pointers.size===0){ if(drag&&drag.mode==='range') rangeBand=null; drag=null; cv.style.cursor='default'; render(); } };
   cv.onwheel=e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(); const mx=(e.clientX-r.left)*devicePixelRatio, my=(e.clientY-r.top)*devicePixelRatio; zoomAround(mx,my, camo.scale*(e.deltaY<0?1.1:1/1.1)); }; // ホイールズーム(デスクトップ・カーソル軸)
   cv.ondblclick=e=>{ if(copyMode){ cancelCopy(); return; } const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); multiMode=!multiMode; updateMultiBtn(); if(multiMode&&hit>=0){ if(!selset.has(hit)) selToggle(hit); sel=hit; } renderEntries(); renderEditor(); render(); }; // ダブルクリックで複数選択モードを切替（コピー中は取消）
   // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
@@ -1410,7 +1444,7 @@ function boot(){
   try{ const raw=localStorage.getItem('city-blueprint:plan'); if(raw){ const d=JSON.parse(raw); if(d&&Array.isArray(d.entries)){ d.entries.forEach(migEntry); plan=d; } } }catch(_){}
   updateMultiBtn(); snapshot(); // 初期状態を履歴に
 }
-function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',multiMode); b.textContent=multiMode?'複数:ON':'複数選択'; } }
+function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',multiMode||rangeMode); b.textContent=rangeMode?'範囲選択:ドラッグ':(multiMode?'複数:ON':'複数選択'); } }
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
