@@ -197,7 +197,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
         <span class="htools"><button id="zin">＋</button><button id="zout">－</button><button id="fit">全体表示</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
-        <select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="copy" title="選択エントリをコピー(複数可・親は子も)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可・親は子も)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け（連続可） (Ctrl/⌘+V)">貼り付け</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
+        <select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="copy" title="選択エントリをコピー(複数可・親は子も)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可・親は子も)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
       </div>
     </div>
     <div class="panel p-entries">
@@ -259,7 +259,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.70';
+const APP_VERSION='0.71';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -360,7 +360,7 @@ function startClip(mode){ const base=selset.size?[...selset]:(sel>=0?[sel]:[]); 
   copyMode=true; pasteCursor={d:anchor.d, w:anchor.w};
   updateClipBtns(); updateTools(); render();
   const extra=idxs.length>base.length?'（子'+(idxs.length-base.length)+'件含む）':'';
-  status((mode==='cut'?'切り取り':'コピー')+'モード: '+clip.entries.length+'件'+extra+' — 位置を指定して「貼り付け」（連続可）。再押下/ダブルクリック/Escで取消', 6000); }
+  status((mode==='cut'?'切り取り':'コピー')+'モード: '+clip.entries.length+'件'+extra+' — 位置を指定して「貼り付け」。再押下/ダブルクリック/Escで取消', 6000); }
 function cancelCopy(msg){ if(!copyMode) return; copyMode=false; updateClipBtns(); updateTools(); render(); if(msg!==false) status(msg||'取消しました'); }
 function doPaste(){ if(!copyMode||!clip){ status('先にコピー/切り取りしてください'); return; }
   const off={ d: pasteCursor.d-clip.anchor.d, w: pasteCursor.w-clip.anchor.w };
@@ -374,8 +374,8 @@ function doPaste(){ if(!copyMode||!clip){ status('先にコピー/切り取り�
   clones.forEach(c=>{ if(c.group&&idmap[c.group]) c.group=idmap[c.group]; });
   const newIdxs=[]; clones.forEach(c=>{ c.relPos=c.relPos||{d:0,h:0,w:0}; c.relPos.d=(c.relPos.d||0)+off.d; c.relPos.w=(c.relPos.w||0)+off.w; plan.entries.push(c); newIdxs.push(plan.entries.length-1); });
   sel=newIdxs[newIdxs.length-1]; selset=new Set(newIdxs);
-  persist(); renderEntries(); renderEditor(); updateClipBtns(); updateTools(); render(); // copyMode は継続（連続貼り付け）
-  status('貼り付け '+newIdxs.length+'件（d'+pasteCursor.d+' w'+pasteCursor.w+'）— 続けて貼り付け可', 5000); }
+  copyMode=false; persist(); renderEntries(); renderEditor(); updateClipBtns(); updateTools(); render(); // 貼り付け後はコピーモード解除
+  status('貼り付け '+newIdxs.length+'件（d'+pasteCursor.d+' w'+pasteCursor.w+'）'); }
 // 旧 region:{shape,size} を flat(shape/depth/width/diameter) へ移行（⑫）
 function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT';
     if(p.facing==null) p.facing=(p.rotate===false)?'front':'random'; if('rotate' in p) delete p.rotate; // 旧 rotate(bool)→facing(enum)
