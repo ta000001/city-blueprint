@@ -262,7 +262,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.74';
+const APP_VERSION='0.75';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -345,6 +345,9 @@ let clip=null;          // {entries:[deepClone...], anchor:{d,w}} コピー内�
 let pasteCursor={d:0,w:0}; // 貼り付け先の基準点（ポインタ追従）
 let history=[], histIdx=-1, lastHist=0;  // undo/redo
 function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
+// 親(randomarea)を選んだら複数選択モードONにして子も選択状態にする（primaryは親のまま）
+function selParentChildren(i){ selOne(i); const e=plan.entries[i];
+  if(e&&e.type==='randomarea'){ const id=e.params&&e.params.id; if(id){ let any=false; plan.entries.forEach((x,j)=>{ if(x.group===id){ selset.add(j); any=true; } }); if(any&&!multiMode){ multiMode=true; updateMultiBtn(); } } } }
 function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
 // ---- コピー / 切り取り / 貼り付け（エントリ単位・選択は複数可・貼り付け後もモード継続で連続配置） ----
 function updateCopyBtn(){ const b=$('#copy'); if(b){ const on=copyMode&&clip&&clip.mode==='copy'; b.classList.toggle('pri',on); b.textContent=on?'取消':'⧉ コピー'; b.setAttribute('aria-pressed',on?'true':'false'); } }
@@ -452,7 +455,7 @@ function renderEntries(){
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
-    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggle(i); else selOne(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
+    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggle(i); else selParentChildren(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
     li.ondblclick=()=>{ multiMode=!multiMode; updateMultiBtn(); if(multiMode) selToggle(i); renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
@@ -1351,7 +1354,7 @@ function boot(){
     const hit=pickAt(p.d,p.w,p.px,p.py);
     if(hit>=0){
       const additive=e.ctrlKey||e.metaKey||multiMode, wasSel=selset.has(hit);
-      if(additive){ if(!wasSel) selToggle(hit); else sel=hit; } else { if(!wasSel) selOne(hit); else sel=hit; }
+      if(additive){ if(!wasSel) selToggle(hit); else sel=hit; } else { if(!wasSel) selParentChildren(hit); else sel=hit; }
       const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0};
       const grp=(selset.size>1&&selset.has(hit))?[...selset].map(idx=>({idx,d:plan.entries[idx].relPos.d||0,w:plan.entries[idx].relPos.w||0})):null;
       drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp, additive, wasSel, hit, moved:false};
