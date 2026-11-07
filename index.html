@@ -60,6 +60,10 @@ input[type=number]{width:56px}
 .ed label{display:inline-block;color:var(--dim);min-width:44px}
 .ed .r{margin-bottom:5px;display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 canvas{width:100%;height:52vh;background:#0C1214;border:1px solid var(--rule);border-radius:8px;display:block;touch-action:none}
+.cvwrap{position:relative}
+.canov{position:absolute;right:10px;bottom:10px;display:flex;gap:6px;z-index:5}
+.canov button{background:rgba(29,42,44,.92);border-color:var(--rule);box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.canov button:disabled{opacity:.4}
 .canbar{display:flex;gap:10px;margin-top:8px;align-items:flex-end;flex-wrap:wrap}
 .cbg{display:inline-flex;flex-direction:column;gap:3px}
 .cbg+.cbg{border-left:1px solid var(--rule);padding-left:10px}
@@ -194,13 +198,14 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
         <span class="htools"><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
-      <canvas id="cv"></canvas>
+      <div class="cvwrap"><canvas id="cv"></canvas>
+        <div class="canov"><button class="icotxt" id="undo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt" id="redo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></div>
+      </div>
       <div class="canbar">
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
         <span class="cbg"><span class="cbl">選択</span><span class="cbr"><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button></span></span>
         <span class="cbg"><span class="cbl">編集</span><span class="cbr"><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="del" title="選択エントリを削除(親は子も)">削除</button></span></span>
         <span class="cbg"><span class="cbl">コピー / 移動</span><span class="cbr"><button id="copy" title="選択エントリをコピー(複数可)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button></span></span>
-        <span class="cbg"><span class="cbl">履歴</span><span class="cbr"><button class="icotxt" id="undo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt" id="redo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></span></span>
       </div>
     </div>
     <div class="panel p-entries">
@@ -262,7 +267,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.79';
+const APP_VERSION='0.80';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
