@@ -197,7 +197,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
         <span class="htools"><button id="zin">＋</button><button id="zout">－</button><button id="fit">全体表示</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
-        <select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="copy" title="選択エントリをコピー(複数可)。もう一度押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
+        <select id="addtype"></select><button id="add">＋追加</button><button id="del">削除</button><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="copy" title="選択エントリをコピー(複数可・親は子も)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可・親は子も)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け（連続可） (Ctrl/⌘+V)">貼り付け</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button>
       </div>
     </div>
     <div class="panel p-entries">
@@ -259,7 +259,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.68';
+const APP_VERSION='0.69';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -343,18 +343,29 @@ let pasteCursor={d:0,w:0}; // 貼り付け先の基準点（ポインタ追従�
 let history=[], histIdx=-1, lastHist=0;  // undo/redo
 function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
 function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
-// ---- コピー / 貼り付け（エントリ単位・選択は複数可） ----
-function updateCopyBtn(){ const b=$('#copy'); if(b){ b.classList.toggle('pri',copyMode); b.textContent=copyMode?'取消':'⧉ コピー'; b.setAttribute('aria-pressed',copyMode?'true':'false'); } }
-function startCopy(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!idxs.length){ status('コピーするエントリを選択してください'); return; }
-  const lead=(sel>=0&&(selset.size===0||selset.has(sel)))?sel:idxs[0]; const la=plan.entries[lead].relPos||{};
+// ---- コピー / 切り取り / 貼り付け（エントリ単位・選択は複数可・貼り付け後もモード継続で連続配置） ----
+function updateCopyBtn(){ const b=$('#copy'); if(b){ const on=copyMode&&clip&&clip.mode==='copy'; b.classList.toggle('pri',on); b.textContent=on?'取消':'⧉ コピー'; b.setAttribute('aria-pressed',on?'true':'false'); } }
+function updateCutBtn(){ const b=$('#cut'); if(b){ const on=copyMode&&clip&&clip.mode==='cut'; b.classList.toggle('pri',on); b.textContent=on?'取消':'✂ 切り取り'; b.setAttribute('aria-pressed',on?'true':'false'); } }
+function updateClipBtns(){ updateCopyBtn(); updateCutBtn(); }
+// 親 randomarea を選ぶと、その id を group 参照する子も対象に含める
+function expandWithChildren(idxs){ const set=new Set(idxs);
+  const pids=idxs.map(i=>plan.entries[i]).filter(e=>e&&e.type==='randomarea').map(e=>e.params&&e.params.id).filter(Boolean);
+  if(pids.length) plan.entries.forEach((e,i)=>{ if(e.group&&pids.includes(e.group)) set.add(i); });
+  return [...set]; }
+function startClip(mode){ const base=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!base.length){ status((mode==='cut'?'切り取る':'コピーする')+'エントリを選択してください'); return; }
+  const idxs=expandWithChildren(base);
+  const lead=(sel>=0&&idxs.includes(sel))?sel:base[0]; const la=plan.entries[lead].relPos||{};
   const anchor={d:la.d||0, w:la.w||0};
-  clip={ entries: idxs.map(i=>JSON.parse(JSON.stringify(plan.entries[i]))), anchor };
+  clip={ entries: idxs.map(i=>JSON.parse(JSON.stringify(plan.entries[i]))), anchor, mode, srcIdxs:[...idxs] };
   copyMode=true; pasteCursor={d:anchor.d, w:anchor.w};
-  updateCopyBtn(); updateTools(); render();
-  status('コピーモード: '+clip.entries.length+'件 — 位置を指定して「貼り付け」。もう一度コピー/ダブルクリックで取消', 6000); }
-function cancelCopy(msg){ if(!copyMode) return; copyMode=false; updateCopyBtn(); updateTools(); render(); if(msg!==false) status(msg||'コピーを取消しました'); }
-function doPaste(){ if(!copyMode||!clip){ status('先にコピーしてください'); return; }
+  updateClipBtns(); updateTools(); render();
+  const extra=idxs.length>base.length?'（子'+(idxs.length-base.length)+'件含む）':'';
+  status((mode==='cut'?'切り取り':'コピー')+'モード: '+clip.entries.length+'件'+extra+' — 位置を指定して「貼り付け」（連続可）。再押下/ダブルクリック/Escで取消', 6000); }
+function cancelCopy(msg){ if(!copyMode) return; copyMode=false; updateClipBtns(); updateTools(); render(); if(msg!==false) status(msg||'取消しました'); }
+function doPaste(){ if(!copyMode||!clip){ status('先にコピー/切り取りしてください'); return; }
   const off={ d: pasteCursor.d-clip.anchor.d, w: pasteCursor.w-clip.anchor.w };
+  // 切り取りの初回貼り付け：元を削除（以後はコピーとして連続配置）
+  if(clip.mode==='cut'){ const rm=new Set(clip.srcIdxs); plan.entries=plan.entries.filter((e,i)=>!rm.has(i)); clip.mode='copy'; }
   const clones=clip.entries.map(s=>JSON.parse(JSON.stringify(s)));
   // クリップ内の randomarea は id を採番し直し、子の group 参照を張り替える（重複id防止）
   let base=0; plan.entries.forEach(e=>{ const m=((e.type==='randomarea'&&e.params&&e.params.id)||'').match(/^r(\d+)$/); if(m) base=Math.max(base,+m[1]); });
@@ -362,8 +373,8 @@ function doPaste(){ if(!copyMode||!clip){ status('先にコピーしてくださ
   clones.forEach(c=>{ if(c.group&&idmap[c.group]) c.group=idmap[c.group]; });
   const newIdxs=[]; clones.forEach(c=>{ c.relPos=c.relPos||{d:0,h:0,w:0}; c.relPos.d=(c.relPos.d||0)+off.d; c.relPos.w=(c.relPos.w||0)+off.w; plan.entries.push(c); newIdxs.push(plan.entries.length-1); });
   sel=newIdxs[newIdxs.length-1]; selset=new Set(newIdxs);
-  copyMode=false; updateCopyBtn(); persist(); renderEntries(); renderEditor(); updateTools(); render();
-  status('貼り付け '+newIdxs.length+'件（d'+pasteCursor.d+' w'+pasteCursor.w+'）'); }
+  persist(); renderEntries(); renderEditor(); updateClipBtns(); updateTools(); render(); // copyMode は継続（連続貼り付け）
+  status('貼り付け '+newIdxs.length+'件（d'+pasteCursor.d+' w'+pasteCursor.w+'）— 続けて貼り付け可', 5000); }
 // 旧 region:{shape,size} を flat(shape/depth/width/diameter) へ移行（⑫）
 function migRA(e){ if(e&&e.type==='randomarea'&&e.params&&e.params.region){ const r=e.params.region||{}; e.params.shape=r.shape||'RECT'; if((r.shape||'RECT')==='CIRCLE') e.params.diameter=(r.size&&r.size[0])||20; else { e.params.depth=(r.size&&r.size[0])||20; e.params.width=(r.size&&r.size[1])||20; } delete e.params.region; } if(e&&e.type==='randomarea'&&e.params){ const p=e.params; if(p.depth==null)p.depth=20; if(p.width==null)p.width=20; if(p.diameter==null)p.diameter=20; if(!p.shape)p.shape='RECT';
     if(p.facing==null) p.facing=(p.rotate===false)?'front':'random'; if('rotate' in p) delete p.rotate; // 旧 rotate(bool)→facing(enum)
@@ -396,6 +407,7 @@ function updateTools(){ const en=(id,ok)=>{ const b=$('#'+id); if(b) b.disabled=
   en('unlink', selHasUnlinkTarget());
   en('del', selset.size>0||sel>=0);
   en('copy', copyMode||selset.size>0||sel>=0);
+  en('cut', copyMode||selset.size>0||sel>=0);
   en('paste', !!(copyMode&&clip));
   en('up', sel>0);
   en('down', sel>=0&&sel<plan.entries.length-1);
@@ -942,11 +954,7 @@ function render(){
     const sa=w2c(clip.anchor.d,clip.anchor.w), da=w2c(clip.anchor.d+off.d,clip.anchor.w+off.w);
     ctx.lineWidth=1.4; ctx.setLineDash([]);
     ctx.strokeStyle='#D4A93C'; ctx.beginPath(); ctx.moveTo(sa[0]-7,sa[1]);ctx.lineTo(sa[0]+7,sa[1]);ctx.moveTo(sa[0],sa[1]-7);ctx.lineTo(sa[0],sa[1]+7); ctx.stroke();
-    ctx.strokeStyle='#7AD79A'; ctx.beginPath(); ctx.moveTo(da[0]-7,da[1]);ctx.lineTo(da[0]+7,da[1]);ctx.moveTo(da[0],da[1]-7);ctx.lineTo(da[0],da[1]+7); ctx.stroke();
-    ctx.font='bold '+(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom';
-    ctx.fillStyle='#D4A93C'; ctx.fillText('コピー元', sa[0]+5, sa[1]-5);
-    ctx.fillStyle='#7AD79A'; ctx.fillText('貼り付け先 d'+(clip.anchor.d+off.d)+' w'+(clip.anchor.w+off.w), da[0]+5, da[1]-5);
-    ctx.textBaseline='alphabetic'; }
+    ctx.strokeStyle='#7AD79A'; ctx.beginPath(); ctx.moveTo(da[0]-7,da[1]);ctx.lineTo(da[0]+7,da[1]);ctx.moveTo(da[0],da[1]-7);ctx.lineTo(da[0],da[1]+7); ctx.stroke(); }
   // 空セル選択カーソル＋現在座標
   const cp=(sel>=0&&plan.entries[sel]&&plan.entries[sel].relPos)?{d:plan.entries[sel].relPos.d||0,w:plan.entries[sel].relPos.w||0}:{d:cursor.d,w:cursor.w};
   if(sel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
@@ -1284,7 +1292,8 @@ function boot(){
   $('#down').onclick=()=>{ if(sel>=0&&sel<plan.entries.length-1){ [plan.entries[sel+1],plan.entries[sel]]=[plan.entries[sel],plan.entries[sel+1]]; selOne(sel+1); persist(); renderEntries(); } };
   $('#multi').onclick=()=>{ multiMode=!multiMode; if(!multiMode&&selset.size>1) selOne(sel); updateMultiBtn(); };
   $('#unlink').onclick=unlinkSelected;
-  $('#copy').onclick=()=>{ if(copyMode) cancelCopy(); else startCopy(); };
+  $('#copy').onclick=()=>{ if(copyMode&&clip&&clip.mode==='copy') cancelCopy(); else startClip('copy'); };
+  $('#cut').onclick=()=>{ if(copyMode&&clip&&clip.mode==='cut') cancelCopy(); else startClip('cut'); };
   $('#paste').onclick=doPaste;
   $('#undo').onclick=undo;
   $('#redo').onclick=redo;
@@ -1380,7 +1389,8 @@ function boot(){
     const t=(e.target.tagName||'').toLowerCase(); if(t==='input'||t==='select'||t==='textarea') return;
     if((e.ctrlKey||e.metaKey)&&(e.key==='z'||e.key==='Z')){ e.preventDefault(); if(e.shiftKey) redo(); else undo(); return; }
     if((e.ctrlKey||e.metaKey)&&(e.key==='y'||e.key==='Y')){ e.preventDefault(); redo(); return; }
-    if((e.ctrlKey||e.metaKey)&&(e.key==='c'||e.key==='C')){ e.preventDefault(); startCopy(); return; }
+    if((e.ctrlKey||e.metaKey)&&(e.key==='c'||e.key==='C')){ e.preventDefault(); startClip('copy'); return; }
+    if((e.ctrlKey||e.metaKey)&&(e.key==='x'||e.key==='X')){ e.preventDefault(); startClip('cut'); return; }
     if((e.ctrlKey||e.metaKey)&&(e.key==='v'||e.key==='V')){ e.preventDefault(); doPaste(); return; }
     if(e.key==='Escape'&&copyMode){ e.preventDefault(); cancelCopy(); return; }
     if((e.key==='r'||e.key==='R')&&(selset.size>0||sel>=0)){ rotateSel(); }
