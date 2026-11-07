@@ -199,7 +199,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
         <span class="cbg"><span class="cbl">選択</span><span class="cbr"><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button></span></span>
         <span class="cbg"><span class="cbl">編集</span><span class="cbr"><button id="rot" title="選択エントリを回転 (R)">↻ 回転</button><button id="unlink" title="選択中の子/親のgroupを解除">グループ解除</button><button id="del" title="選択エントリを削除(親は子も)">削除</button></span></span>
-        <span class="cbg"><span class="cbl">コピー / 移動</span><span class="cbr"><button id="copy" title="選択エントリをコピー(複数可・親は子も)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可・親は子も)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button></span></span>
+        <span class="cbg"><span class="cbl">コピー / 移動</span><span class="cbr"><button id="copy" title="選択エントリをコピー(複数可)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button></span></span>
         <span class="cbg"><span class="cbl">履歴</span><span class="cbr"><button class="icotxt" id="undo" title="戻る (Ctrl+Z)" aria-label="戻る">↶</button><button class="icotxt" id="redo" title="進む (Ctrl+Y)" aria-label="進む">↷</button></span></span>
       </div>
     </div>
@@ -262,7 +262,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.75';
+const APP_VERSION='0.76';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -345,28 +345,25 @@ let clip=null;          // {entries:[deepClone...], anchor:{d,w}} コピー内�
 let pasteCursor={d:0,w:0}; // 貼り付け先の基準点（ポインタ追従）
 let history=[], histIdx=-1, lastHist=0;  // undo/redo
 function selOne(i){ sel=i; selset=new Set(i>=0?[i]:[]); }
+function childIdxsOf(i){ const e=plan.entries[i]; if(!e||e.type!=='randomarea') return []; const id=e.params&&e.params.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
 // 親(randomarea)を選んだら複数選択モードONにして子も選択状態にする（primaryは親のまま）
-function selParentChildren(i){ selOne(i); const e=plan.entries[i];
-  if(e&&e.type==='randomarea'){ const id=e.params&&e.params.id; if(id){ let any=false; plan.entries.forEach((x,j)=>{ if(x.group===id){ selset.add(j); any=true; } }); if(any&&!multiMode){ multiMode=true; updateMultiBtn(); } } } }
+function selParentChildren(i){ selOne(i); const ch=childIdxsOf(i);
+  if(ch.length){ ch.forEach(j=>selset.add(j)); if(!multiMode){ multiMode=true; updateMultiBtn(); } } }
+// 複数選択モード中のトグル：親を選択に加えたら子も追加、親を外したら子も外す
+function selToggleParentChildren(i){ const willSelect=!selset.has(i); selToggle(i); const ch=childIdxsOf(i);
+  ch.forEach(j=>{ if(willSelect) selset.add(j); else selset.delete(j); }); }
 function selToggle(i){ if(selset.has(i)) selset.delete(i); else selset.add(i); sel=i; }
 // ---- コピー / 切り取り / 貼り付け（エントリ単位・選択は複数可・貼り付け後もモード継続で連続配置） ----
 function updateCopyBtn(){ const b=$('#copy'); if(b){ const on=copyMode&&clip&&clip.mode==='copy'; b.classList.toggle('pri',on); b.textContent=on?'取消':'⧉ コピー'; b.setAttribute('aria-pressed',on?'true':'false'); } }
 function updateCutBtn(){ const b=$('#cut'); if(b){ const on=copyMode&&clip&&clip.mode==='cut'; b.classList.toggle('pri',on); b.textContent=on?'取消':'✂ 切り取り'; b.setAttribute('aria-pressed',on?'true':'false'); } }
 function updateClipBtns(){ updateCopyBtn(); updateCutBtn(); }
-// 親 randomarea を選ぶと、その id を group 参照する子も対象に含める
-function expandWithChildren(idxs){ const set=new Set(idxs);
-  const pids=idxs.map(i=>plan.entries[i]).filter(e=>e&&e.type==='randomarea').map(e=>e.params&&e.params.id).filter(Boolean);
-  if(pids.length) plan.entries.forEach((e,i)=>{ if(e.group&&pids.includes(e.group)) set.add(i); });
-  return [...set]; }
-function startClip(mode){ const base=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!base.length){ status((mode==='cut'?'切り取る':'コピーする')+'エントリを選択してください'); return; }
-  const idxs=expandWithChildren(base);
-  const lead=(sel>=0&&idxs.includes(sel))?sel:base[0]; const la=plan.entries[lead].relPos||{};
+function startClip(mode){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!idxs.length){ status((mode==='cut'?'切り取る':'コピーする')+'エントリを選択してください'); return; } // 選択されているものだけ（子の自動追加はしない）
+  const lead=(sel>=0&&idxs.includes(sel))?sel:idxs[0]; const la=plan.entries[lead].relPos||{};
   const anchor={d:la.d||0, w:la.w||0};
   clip={ entries: idxs.map(i=>JSON.parse(JSON.stringify(plan.entries[i]))), anchor, mode, srcIdxs:[...idxs] };
   copyMode=true; pasteCursor={d:anchor.d, w:anchor.w};
   updateClipBtns(); updateTools(); render();
-  const extra=idxs.length>base.length?'（子'+(idxs.length-base.length)+'件含む）':'';
-  status((mode==='cut'?'切り取り':'コピー')+'モード: '+clip.entries.length+'件'+extra+' — 位置を指定して「貼り付け」。再押下/ダブルクリック/Escで取消', 6000); }
+  status((mode==='cut'?'切り取り':'コピー')+'モード: '+clip.entries.length+'件 — 位置を指定して「貼り付け」。再押下/ダブルクリック/Escで取消', 6000); }
 function cancelCopy(msg){ if(!copyMode) return; copyMode=false; updateClipBtns(); updateTools(); render(); if(msg!==false) status(msg||'取消しました'); }
 function doPaste(){ if(!copyMode||!clip){ status('先にコピー/切り取りしてください'); return; }
   const off={ d: pasteCursor.d-clip.anchor.d, w: pasteCursor.w-clip.anchor.w };
@@ -455,7 +452,7 @@ function renderEntries(){
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+e.type+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
-    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggle(i); else selParentChildren(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
+    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggleParentChildren(i); else selParentChildren(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
     li.ondblclick=()=>{ multiMode=!multiMode; updateMultiBtn(); if(multiMode) selToggle(i); renderEntries(); renderEditor(); render(); };
     ul.appendChild(li);
   });
@@ -1354,7 +1351,7 @@ function boot(){
     const hit=pickAt(p.d,p.w,p.px,p.py);
     if(hit>=0){
       const additive=e.ctrlKey||e.metaKey||multiMode, wasSel=selset.has(hit);
-      if(additive){ if(!wasSel) selToggle(hit); else sel=hit; } else { if(!wasSel) selParentChildren(hit); else sel=hit; }
+      if(additive){ if(!wasSel) selToggleParentChildren(hit); else sel=hit; } else { if(!wasSel) selParentChildren(hit); else sel=hit; }
       const rp=plan.entries[hit].relPos||(plan.entries[hit].relPos={d:0,h:0,w:0}); cursor={d:rp.d||0,w:rp.w||0};
       const grp=(selset.size>1&&selset.has(hit))?[...selset].map(idx=>({idx,d:plan.entries[idx].relPos.d||0,w:plan.entries[idx].relPos.w||0})):null;
       drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp, additive, wasSel, hit, moved:false};
