@@ -40,6 +40,12 @@ button.pri{background:var(--brass-dim);border-color:var(--brass);color:#fff}
 button:disabled{opacity:.4;cursor:default}
 select,input{background:var(--panel);color:var(--chalk);border:1px solid var(--rule);border-radius:6px;padding:4px 6px}
 input[type=number]{width:56px}
+.stp{display:inline-flex;align-items:stretch;vertical-align:middle}
+.stp button{padding:4px 8px;font-size:14px;line-height:1;border-radius:0;background:var(--panel2);min-width:30px}
+.stp button:first-child{border-radius:6px 0 0 6px;border-right:none}
+.stp button:last-child{border-radius:0 6px 6px 0;border-left:none}
+.stp input[type=number]{width:46px;border-radius:0;text-align:center;-moz-appearance:textfield}
+.stp input[type=number]::-webkit-outer-spin-button,.stp input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 .bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
 .wrap{display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:10px;align-items:start}
 @media(max-width:720px){.wrap{grid-template-columns:1fr}}
@@ -262,6 +268,11 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </ul>
 <p class="muted">コピー/切り取り中はドラッグで貼り付け先を指定、再押下・ダブルクリック・Esc で取消。</p>
 </div></div></div>
+<div class="modal" id="fphelp"><div class="m"><h3>footprint（この plan 自身）</h3><div class="hbody">
+<p>この plan が<b>親から参照された時</b>に使われる外形です。plan 全体で1つ持ちます。</p>
+<p><b>RECT</b>＝四角 ／ <b>CIRCLE</b>＝円。<b>範囲ドラッグ</b>（プレビューをドラッグ）または<b>候補</b>（全エントリの min/max を目安に自動設定）で指定し、<b>消去</b>で未設定に戻します。</p>
+<p><b>h</b>＝高さ（min〜max）。footprint は <b>mod では無視</b>され、アプリの表示と親側の領域計算にだけ使われます。JSON で直接編集したい場合は <b>json タブ</b>で。</p>
+</div></div></div>
 <div class="modal" id="cfghelp"><div class="m"><h3>散布の密度（候補数）</h3><div class="hbody">
 <p>散布は、1棟置くごとに <b>候補数</b> だけ置き場所の候補を作り、その中から <b>角・辺にいちばん密着する</b>ものを選んで置きます（mcpipy 由来＝角→辺から詰める）。</p>
 <p><b>候補数</b>（既定 30）：多いほど隙間なく<b>密</b>に詰まります。少ないと速いがまばら。</p>
@@ -279,7 +290,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.93';
+const APP_VERSION='0.94';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -619,13 +630,14 @@ function buildPresetDef(e,t){ const fields=SCHEMA.builders[t].fields, def={}; co
     if(('range' in c)||Array.isArray(c.choice)) def[k]=stripFix(c);
     else if(JSON.stringify(e.params[k])!==JSON.stringify(defaultsOf(t)[k])) def[k]=clone(e.params[k]); }
   return def; }
-// この plan 自身の footprint（top-level plan.footprint）を編集する UI（非選択時に #tparams に表示）
-function planFpRows(){ const fp=plan.footprint, shp=(fp&&fp.shape)||'RECT', fpjson=fp?JSON.stringify(fp):'';
-  const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-  return '<div class="muted" style="margin-bottom:6px">この plan 自身の footprint（親から参照された時に使われる・mod は無視）</div>'
-   +'<div class="r"><label>footprint</label><select id="pfp-shape"><option value="RECT"'+(shp==='RECT'?' selected':'')+'>RECT</option><option value="CIRCLE"'+(shp==='CIRCLE'?' selected':'')+'>CIRCLE</option></select> <button id="pfp-draw" style="padding:5px 8px;font-size:11px" title="プレビューをドラッグして範囲を指定">範囲ドラッグ</button> <button id="pfp-cand" style="padding:5px 8px;font-size:11px" title="全エントリのmin/maxを目安に入れる">候補</button>'+(fp?' <button id="pfp-clear" style="padding:5px 8px;font-size:11px">消去</button>':'')+'</div>'
-   +'<div class="r"><label>h</label>min<input type="number" id="pfp-h0" value="'+((fp&&fp.h&&fp.h[0])||0)+'" style="width:64px">max<input type="number" id="pfp-h1" value="'+((fp&&fp.h&&fp.h[1])||0)+'" style="width:64px"></div>'
-   +'<div class="r"><label>JSON</label><input id="pfp-json" value="'+esc(fpjson)+'" placeholder="{&quot;shape&quot;:&quot;RECT&quot;,&quot;d&quot;:[0,10],&quot;h&quot;:[0,8],&quot;w&quot;:[0,8]}" spellcheck="false" style="flex:1;min-width:160px"></div>'; }
+// 増減ボタン付き数値入力（増減加減できるテキストボックス）。idで取得でき、+/−で step 刻み。
+function numStepper(id,val,step){ step=step||1; return '<span class="stp"><button type="button" data-stp="'+id+'" data-d="'+(-step)+'">−</button><input type="number" id="'+id+'" value="'+(val||0)+'" step="'+step+'"><button type="button" data-stp="'+id+'" data-d="'+step+'">＋</button></span>'; }
+function wireSteppers(root){ (root||document).querySelectorAll('button[data-stp]').forEach(b=>{ b.onclick=()=>{ const inp=document.getElementById(b.dataset.stp); if(!inp) return; inp.value=Math.round((+inp.value||0)+(+b.dataset.d)); inp.dispatchEvent(new Event('input',{bubbles:true})); }; }); }
+// この plan 自身の footprint（top-level plan.footprint）を編集する UI（非選択時に #tparams に表示）。説明は ? のみ。
+function planFpRows(){ const fp=plan.footprint, shp=(fp&&fp.shape)||'RECT';
+  return '<div class="r"><label>footprint</label><select id="pfp-shape"><option value="RECT"'+(shp==='RECT'?' selected':'')+'>RECT</option><option value="CIRCLE"'+(shp==='CIRCLE'?' selected':'')+'>CIRCLE</option></select><span class="qbtn" id="pfp-help" role="button" tabindex="0" title="説明">?</span></div>'
+   +'<div class="r"><button id="pfp-draw">範囲ドラッグ</button><button id="pfp-cand">候補</button>'+(fp?'<button id="pfp-clear">消去</button>':'')+'</div>'
+   +'<div class="r"><label>h</label><span class="muted">min</span>'+numStepper('pfp-h0',(fp&&fp.h&&fp.h[0])||0)+'<span class="muted">max</span>'+numStepper('pfp-h1',(fp&&fp.h&&fp.h[1])||0)+'</div>'; }
 function wirePlanFp(){ const g=()=>plan.footprint;
   if($('#pfp-shape')) $('#pfp-shape').onchange=ev=>{ const v=ev.target.value, h=(g()&&g().h)||defaultFpH(), f=g();
     if(v==='CIRCLE'){ let dia=8; if(f&&f.shape==='RECT'&&f.d) dia=Math.max(f.d[1]-f.d[0], f.w[1]-f.w[0]); else if(f&&f.diameter) dia=f.diameter; plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(dia)),h}; }
@@ -636,7 +648,8 @@ function wirePlanFp(){ const g=()=>plan.footprint;
   if($('#pfp-clear')) $('#pfp-clear').onclick=()=>{ delete plan.footprint; fpMode=false; persist(); renderTParams(); render(); };
   const setH=()=>{ const h0=Math.round(+$('#pfp-h0').value||0), h1=Math.round(+$('#pfp-h1').value||0); if(!plan.footprint) plan.footprint={shape:($('#pfp-shape')?$('#pfp-shape').value:'RECT'),d:[0,0],w:[0,0]}; plan.footprint.h=[Math.min(h0,h1),Math.max(h0,h1)]; persist(); render(); };
   if($('#pfp-h0')) $('#pfp-h0').oninput=setH; if($('#pfp-h1')) $('#pfp-h1').oninput=setH;
-  if($('#pfp-json')) $('#pfp-json').oninput=ev=>{ const s=ev.target.value.trim(); if(!s) return; try{ const o=JSON.parse(s); if(o&&(o.shape==='RECT'||o.shape==='CIRCLE')){ plan.footprint=o; persist(); render(); } }catch(_){} }; }
+  if($('#pfp-help')) $('#pfp-help').onclick=()=>$('#fphelp').classList.add('on');
+  wireSteppers($('#tparams')); }
 function renderTParams(){
   const box=$('#tparams'), ctrl=$('#pctrl'), div=$('#pdiv'); if(!box) return;
   if(ctrl) ctrl.innerHTML=''; if(div) div.style.display='none';
@@ -1491,6 +1504,7 @@ function boot(){
   $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
   $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
+  $('#fphelp').onclick=e=>{if(e.target.id==='fphelp')$('#fphelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
   $('#pdirhelp').onclick=e=>{if(e.target.id==='pdirhelp')$('#pdirhelp').classList.remove('on');};
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン / 2本指でピンチズーム
