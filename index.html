@@ -141,6 +141,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .fr-head button{border-color:var(--brass);color:var(--brass);background:transparent;padding:3px 8px;font-size:11px}
 .fr-head button.pdirty{border-color:#D24B4B;color:#D24B4B}
 .fr.fdirty .c-name{color:#D24B4B}
+.fr.fp .c-res{display:none}
 .c-set :disabled{opacity:.5;cursor:not-allowed}
 .pfolder{font-size:11px;color:var(--dim);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .plist{max-height:42vh;overflow:auto;border:1px solid var(--rule);border-radius:6px;margin-bottom:8px}
@@ -290,7 +291,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.94';
+const APP_VERSION='0.95';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -633,11 +634,26 @@ function buildPresetDef(e,t){ const fields=SCHEMA.builders[t].fields, def={}; co
 // 増減ボタン付き数値入力（増減加減できるテキストボックス）。idで取得でき、+/−で step 刻み。
 function numStepper(id,val,step){ step=step||1; return '<span class="stp"><button type="button" data-stp="'+id+'" data-d="'+(-step)+'">−</button><input type="number" id="'+id+'" value="'+(val||0)+'" step="'+step+'"><button type="button" data-stp="'+id+'" data-d="'+step+'">＋</button></span>'; }
 function wireSteppers(root){ (root||document).querySelectorAll('button[data-stp]').forEach(b=>{ b.onclick=()=>{ const inp=document.getElementById(b.dataset.stp); if(!inp) return; inp.value=Math.round((+inp.value||0)+(+b.dataset.d)); inp.dispatchEvent(new Event('input',{bubbles:true})); }; }); }
-// この plan 自身の footprint（top-level plan.footprint）を編集する UI（非選択時に #tparams に表示）。説明は ? のみ。
+// この plan 自身の footprint（top-level plan.footprint）を編集する UI（非選択時に #tparams に表示）。
+// 他のパラメータと同じ共通行テンプレ frRow で描画。説明は ? のみ。
+function fpAxisRow(axis,id0,id1,arr){ const v0=(arr&&arr[0])||0,v1=(arr&&arr[1])||0;
+  return frRow(axis,'','<span class="muted">min</span>'+numStepper(id0,v0)+'<span class="muted">max</span>'+numStepper(id1,v1),'','','','','fp'); }
 function planFpRows(){ const fp=plan.footprint, shp=(fp&&fp.shape)||'RECT';
-  return '<div class="r"><label>footprint</label><select id="pfp-shape"><option value="RECT"'+(shp==='RECT'?' selected':'')+'>RECT</option><option value="CIRCLE"'+(shp==='CIRCLE'?' selected':'')+'>CIRCLE</option></select><span class="qbtn" id="pfp-help" role="button" tabindex="0" title="説明">?</span></div>'
-   +'<div class="r"><button id="pfp-draw">範囲ドラッグ</button><button id="pfp-cand">候補</button>'+(fp?'<button id="pfp-clear">消去</button>':'')+'</div>'
-   +'<div class="r"><label>h</label><span class="muted">min</span>'+numStepper('pfp-h0',(fp&&fp.h&&fp.h[0])||0)+'<span class="muted">max</span>'+numStepper('pfp-h1',(fp&&fp.h&&fp.h[1])||0)+'</div>'; }
+  const shapeSel='<select id="pfp-shape"><option value="RECT"'+(shp==='RECT'?' selected':'')+'>RECT</option><option value="CIRCLE"'+(shp==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
+  const help='<span class="qbtn" id="pfp-help" role="button" tabindex="0" title="説明">?</span>';
+  let rows=frRow('footprint','',shapeSel,'','',help,'','fp'); // ? は footprint 行にかかる（fix セル＝右端）
+  if(shp==='CIRCLE'){ rows+=frRow('diameter','',numStepper('pfp-dia',(fp&&fp.diameter)||0),'','','','','fp'); rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); }
+  else { rows+=fpAxisRow('d','pfp-d0','pfp-d1',fp&&fp.d); rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); rows+=fpAxisRow('w','pfp-w0','pfp-w1',fp&&fp.w); }
+  const btns='<button id="pfp-draw">範囲ドラッグ</button><button id="pfp-cand">候補</button>'+(fp?'<button id="pfp-clear">消去</button>':'');
+  rows+=frRow('操作','',btns,'','','','','fp');
+  return rows; }
+// 数値入力（d/h/w/diameter）→ plan.footprint へ反映（min/max は保存時に正規化）
+function readFpInputs(){ const shp=$('#pfp-shape')?$('#pfp-shape').value:'RECT';
+  const g=id=>{ const el=$('#'+id); return el?Math.round(+el.value||0):0; }, mm=(a,b)=>[Math.min(a,b),Math.max(a,b)];
+  const h=mm(g('pfp-h0'),g('pfp-h1'));
+  if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,g('pfp-dia')),h};
+  else plan.footprint={shape:'RECT',d:mm(g('pfp-d0'),g('pfp-d1')),h,w:mm(g('pfp-w0'),g('pfp-w1'))};
+  persist(); render(); }
 function wirePlanFp(){ const g=()=>plan.footprint;
   if($('#pfp-shape')) $('#pfp-shape').onchange=ev=>{ const v=ev.target.value, h=(g()&&g().h)||defaultFpH(), f=g();
     if(v==='CIRCLE'){ let dia=8; if(f&&f.shape==='RECT'&&f.d) dia=Math.max(f.d[1]-f.d[0], f.w[1]-f.w[0]); else if(f&&f.diameter) dia=f.diameter; plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(dia)),h}; }
@@ -646,8 +662,7 @@ function wirePlanFp(){ const g=()=>plan.footprint;
   if($('#pfp-draw')) $('#pfp-draw').onclick=()=>{ if(!(plan.footprint&&plan.footprint.shape)) plan.footprint={shape:$('#pfp-shape').value,d:[0,0],h:defaultFpH(),w:[0,0]}; fpMode=true; status('プレビューをドラッグして plan の footprint を指定（'+$('#pfp-shape').value+'）'); };
   if($('#pfp-cand')) $('#pfp-cand').onclick=()=>{ const c=fpCandidate(); if(!c){ status('候補にできるエントリがありません'); return; } const shp=(plan.footprint&&plan.footprint.shape)||'RECT'; if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(Math.max(c.d[1]-c.d[0],c.w[1]-c.w[0]))),h:c.h}; else plan.footprint={shape:'RECT',d:c.d,h:c.h,w:c.w}; persist(); renderTParams(); render(); status('候補を適用（目安・要調整）'); };
   if($('#pfp-clear')) $('#pfp-clear').onclick=()=>{ delete plan.footprint; fpMode=false; persist(); renderTParams(); render(); };
-  const setH=()=>{ const h0=Math.round(+$('#pfp-h0').value||0), h1=Math.round(+$('#pfp-h1').value||0); if(!plan.footprint) plan.footprint={shape:($('#pfp-shape')?$('#pfp-shape').value:'RECT'),d:[0,0],w:[0,0]}; plan.footprint.h=[Math.min(h0,h1),Math.max(h0,h1)]; persist(); render(); };
-  if($('#pfp-h0')) $('#pfp-h0').oninput=setH; if($('#pfp-h1')) $('#pfp-h1').oninput=setH;
+  ['pfp-d0','pfp-d1','pfp-h0','pfp-h1','pfp-w0','pfp-w1','pfp-dia'].forEach(id=>{ const el=$('#'+id); if(el) el.oninput=readFpInputs; });
   if($('#pfp-help')) $('#pfp-help').onclick=()=>$('#fphelp').classList.add('on');
   wireSteppers($('#tparams')); }
 function renderTParams(){
