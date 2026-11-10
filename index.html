@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.03';
+const APP_VERSION='1.04';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -711,13 +711,13 @@ function renderTParams(){
   if(title) title.textContent='パラメータ（'+idOf(e)+'）';
   if(t==='plan'||t==='structure'){ const kind=t, refv=(kind==='plan'?e.plan:e.structure)||'';
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-    const fp=e.footprint, fpinfo = fp ? FP.info(fp) : '（未読込＝マーカー表示）';
+    const fp=e.footprint, fpinfo = fp ? (FP.info(fp)+(e.footprintOverflow?' <span style="color:#D24B4B">⚠はみ出しあり</span>':'')) : '（未読込＝マーカー表示）';
     box.innerHTML=meta
      +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" title="タップして子ファイルを選択（名前＋footprintを読込）" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px" title="子ファイルのfootprintを読み直す">再読込</button>':'')+'</div>'
      +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'（子ファイルから読込・mod無視）</span></div>';
-    const applyPick=async()=>{ const r=await pickRefFile(); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint) e.footprint=r.footprint; else delete e.footprint; persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり）'):('読込: '+r.name+'（footprintなし＝マーカー）')); };
+    const applyPick=async()=>{ const r=await pickRefFile(); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
     $('#e-ref').onclick=applyPick;
-    if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const fp2=await readChildFp(name); if(fp2){ e.footprint=fp2; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name); } else { applyPick(); } };
+    if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
     wireGroupSel(e); return; }
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); if(ht) ht.innerHTML='<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'; wireRandomEditor(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
@@ -905,7 +905,7 @@ function entryLine(e){
   if(e.type==='plan') p.push('"plan": '+JSON.stringify(e.plan||''));
   else if(e.type==='structure') p.push('"structure": '+JSON.stringify(e.structure||''));
   else p.push('"params": '+JSON.stringify(e.params||{}));
-  if((e.type==='plan'||e.type==='structure') && e.footprint) p.push('"footprint": '+JSON.stringify(e.footprint)); // 子から読んだ footprint のキャッシュ（mod は無視）
+  if((e.type==='plan'||e.type==='structure') && e.footprint){ p.push('"footprint": '+JSON.stringify(e.footprint)); if(e.footprintOverflow) p.push('"footprintOverflow": true'); } // 子から読んだ footprint＋はみ出しフラグのキャッシュ（mod は無視）
   if(e.cond && Object.keys(e.cond).length) p.push('"cond": '+JSON.stringify(e.cond)); // 抽選メタ(preset/seed/条件/fix)・mod は無視
   if(e.group) p.push('"group": '+JSON.stringify(e.group)); // 機能3 グルーピング（mod は無視）
   return '{'+p.join(', ')+'}';
@@ -921,7 +921,7 @@ function metaLine(e){ const rp=e.relPos||{}; const p=[];
 function buildPlanJson(){
   const ents=plan.entries.filter(e=>e.type!=='randomarea'), metas=plan.entries.filter(e=>e.type==='randomarea');
   let s='{\n  "entries": [\n'+ents.map(e=>'    '+entryLine(e)).join(',\n')+(ents.length?'\n':'')+'  ]';
-  if(plan.footprint) s+=',\n  "footprint": '+JSON.stringify(plan.footprint); // この plan 自身の footprint（親から参照された時用・mod は無視）
+  if(plan.footprint){ s+=',\n  "footprint": '+JSON.stringify(plan.footprint); if(planOverflow()) s+=',\n  "footprintOverflow": true'; } // この plan 自身の footprint＋はみ出しフラグ（親の警告用・mod は無視）
   if(metas.length) s+=',\n  "meta": [\n'+metas.map(e=>'    '+metaLine(e)).join(',\n')+'\n  ]'; // アプリ専用（mod は entries のみ読む）
   return s+'\n}\n';
 }
@@ -980,6 +980,15 @@ function regOverlap(a,b){
   const nd=Math.max(r.d0,Math.min(c.cd,r.d1)), nw=Math.max(r.w0,Math.min(c.cw,r.w1));
   return Math.hypot(c.cd-nd,c.cw-nw) < c.r;
 }
+// ---- plan 自身の footprint からのはみ出し判定（本体が footprint 内に収まっているか） ----
+function fpWorldShape(){ return plan.footprint ? FP.shape(plan.footprint, {d:0,h:0,w:0}, 'FRONT', {front:0,back:0,left:0,right:0,radial:0}) : null; }
+function ptInFp(d,w,sh){ const EPS=1e-6; // 点が footprint 形状の内側か（RECT=bbox / CIRCLE=中心距離）
+  if(sh.shape==='CIRCLE') return Math.hypot(d-sh.center.d, w-sh.center.w) <= sh.r+EPS;
+  const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
+  return d>=Math.min(...ds)-EPS && d<=Math.max(...ds)+EPS && w>=Math.min(...ws)-EPS && w<=Math.max(...ws)+EPS; }
+function entryProtrudes(e, fpSh){ if(e.type==='randomarea') return false; const sh=worldShape(e); if(!sh) return false; // 本体の全頂点/周が内側なら収まっている
+  const pts=(sh.shape==='RECT')?sh.body:sh.pts; return pts.some(p=>!ptInFp(p.d,p.w,fpSh)); }
+function planOverflow(){ const fpSh=fpWorldShape(); if(!fpSh) return false; return plan.entries.some(e=>entryProtrudes(e,fpSh)); } // 保存フラグ用
 function computeOverlaps(){
   const bodies=plan.entries.map(bodyRegion), reserved=plan.entries.map(reservedRegion);
   const bodyBad=new Set(), marginBad=new Set(); let bodyPairs=0, marginPairs=0;
@@ -987,7 +996,9 @@ function computeOverlaps(){
     if(regOverlap(bodies[i],bodies[j])){ bodyBad.add(i); bodyBad.add(j); bodyPairs++; }               // 本体(footprint)が重なる=物理的衝突
     else if(regOverlap(reserved[i],reserved[j])){ marginBad.add(i); marginBad.add(j); marginPairs++; } // 本体は離れているがマージン(確保領域)だけ重なる
   }
-  return {bodyBad, marginBad, bodyPairs, marginPairs};
+  const fpBad=new Set(), fpSh=fpWorldShape(); // plan footprint からのはみ出し=赤
+  if(fpSh) plan.entries.forEach((e,i)=>{ if(entryProtrudes(e,fpSh)) fpBad.add(i); });
+  return {bodyBad, marginBad, bodyPairs, marginPairs, fpBad};
 }
 // クリック位置にある全エントリ（面積が小さい順）→ 完全に重なっても小さい方を掴める
 function entryArea(e){
@@ -1088,7 +1099,7 @@ function render(){
       if(SETTINGS.showCoords){ const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+7); } // 各点の座標（⚙で表示/非表示）
       return;
     }
-    const ov=ovl.bodyBad.has(i)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり=赤 / マージンのみ重なり=橙
+    const ov=(ovl.bodyBad.has(i)||ovl.fpBad.has(i)||e.footprintOverflow)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり/footprintはみ出し/子はみ出し=赤 ・ マージンのみ重なり=橙
     const ovCol=ov==='body'?'#D24B4B':ov==='margin'?'#D9902B':null;
     const ovFill=ov==='body'?'rgba(210,75,75,.16)':ov==='margin'?'rgba(217,144,43,.16)':null;
     if(sh.shape==='RECT'){
@@ -1390,7 +1401,8 @@ async function saveFile(text,fname){
   const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); status('保存（ダウンロード）');
 }
 // plan/structure の参照：ファイルピッカーで .json を選び、{ファイル名, その子ファイルが持つ footprint} を返す（footprint は top-level から読込・無ければ null）。
-function parseFp(text){ try{ const j=JSON.parse(text); if(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE')) return FP.norm(j.footprint); }catch(_){} return null; } // 子ファイルの footprint も FP 正準形へ正規化
+// 子ファイルから footprint（FP 正準形）＋はみ出しフラグを読む
+function parseChild(text){ try{ const j=JSON.parse(text); const fp=(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE'))?FP.norm(j.footprint):null; return {footprint:fp, overflow:!!(j&&j.footprintOverflow)}; }catch(_){} return {footprint:null, overflow:false}; }
 async function pickRefFile(){
   let file=null;
   if(window.showOpenFilePicker){
@@ -1401,10 +1413,10 @@ async function pickRefFile(){
     file=await new Promise(res=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=()=>res((inp.files&&inp.files[0])||null); inp.click(); });
   }
   if(!file) return null;
-  return { name:file.name, footprint:parseFp(await file.text()) };
+  const m=parseChild(await file.text()); return { name:file.name, footprint:m.footprint, overflow:m.overflow };
 }
-// 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。無ければ null。
-async function readChildFp(name){ if(!DIR||!name) return null; try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseFp(await (await fh.getFile()).text()); } }catch(_){} return null; }
+// 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
+async function readChildFp(name){ if(!DIR||!name) return null; try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} return null; }
 // plan 保存：対応環境は OS 保存ダイアログ(showSaveFilePicker)でフォルダを辿り、既存.jsonを選べば上書き／名前欄で新規。非対応(iOS等)は名前入力→保存。
 async function savePlanPicker(){
   const text=buildPlanJson();
