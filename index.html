@@ -271,7 +271,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 <div class="modal" id="fphelp"><div class="m"><h3>footprint（この plan 自身）</h3><div class="hbody">
 <p>この plan が<b>親から参照された時</b>に使われる外形です。plan 全体で1つ持ちます。</p>
-<p><b>RECT</b>＝四角 ／ <b>CIRCLE</b>＝円。<b>範囲ドラッグ</b>（プレビューをドラッグ）または<b>候補</b>（全エントリの min/max を目安に自動設定）で指定し、<b>消去</b>で未設定に戻します。</p>
+<p><b>RECT</b>＝四角 ／ <b>CIRCLE</b>＝円。<b>外接</b>（全エントリに外接する大きさを自動設定）で下地を作り、プレビューのドラッグや d/w・center の数値で調整します。<b>消去</b>で未設定に戻します。</p>
 <p><b>h</b>＝高さ（min〜max）。footprint は <b>mod では無視</b>され、アプリの表示と親側の領域計算にだけ使われます。JSON で直接編集したい場合は <b>json タブ</b>で。</p>
 <p><b>プレビュー操作</b>：RECT は本体ドラッグで移動・四隅でサイズ変更。CIRCLE は本体ドラッグで移動・縁で径変更（中心は center で持ちます）。</p>
 </div></div></div>
@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='0.98';
+const APP_VERSION='0.99';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -372,7 +372,6 @@ let selset=new Set();   // 複数選択（一括削除/移動）。sel=プライ
 let multiMode=false;    // 複数選択モード（タップで追加）
 let rangeMode=false;    // 範囲選択モード（複数選択ボタンで起動・ドラッグで矩形指定）
 let rangeBand=null;     // 描画用ラバーバンド {sd,sw,cd,cw}（world座標）
-let fpMode=false;       // この plan 自身の footprint を範囲ドラッグで指定するモード（plan原点=world原点基準）
 let copyMode=false;     // コピーモード：コピー元を保持し、貼り付け先を可視化（もう一度/ダブルクリックで取消）
 let clip=null;          // {entries:[deepClone...], anchor:{d,w}} コピー内容と基準点
 let pasteCursor={d:0,w:0}; // 貼り付け先の基準点（ポインタ追従）
@@ -647,7 +646,7 @@ function planFpRows(){ const fp=plan.footprint, shp=(fp&&fp.shape)||'RECT';
     rows+=frRow('center','','<span class="muted">d</span>'+numStepper('pfp-cd',cen.d||0)+'<span class="muted">w</span>'+numStepper('pfp-cw',cen.w||0),'','','','','fp'); // 中心位置（原点基準）
     rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); }
   else { rows+=fpAxisRow('d','pfp-d0','pfp-d1',fp&&fp.d); rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); rows+=fpAxisRow('w','pfp-w0','pfp-w1',fp&&fp.w); }
-  const btns='<button id="pfp-draw">範囲ドラッグ</button><button id="pfp-cand">候補</button>'+(fp?'<button id="pfp-clear">消去</button>':'');
+  const btns='<button id="pfp-cand">外接</button>'+(fp?'<button id="pfp-clear">消去</button>':'');
   rows+=frRow('操作','',btns,'','','','','fp');
   return rows; }
 // 数値入力（d/h/w/diameter）→ plan.footprint へ反映（min/max は保存時に正規化）
@@ -662,9 +661,8 @@ function wirePlanFp(){ const g=()=>plan.footprint;
     if(v==='CIRCLE'){ let dia=8, cen={d:0,w:0}; if(f&&f.shape==='RECT'&&f.d){ dia=Math.max(f.d[1]-f.d[0], f.w[1]-f.w[0]); cen={d:Math.round((f.d[0]+f.d[1])/2), w:Math.round((f.w[0]+f.w[1])/2)}; } else if(f&&f.diameter){ dia=f.diameter; cen=f.center||{d:0,w:0}; } plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(dia)),h,center:cen}; }
     else { let d=[0,8],w=[0,8]; if(f&&f.shape==='CIRCLE'){ const r=Math.round((f.diameter||8)/2), cen=f.center||{d:0,w:0}; d=[(cen.d||0)-r,(cen.d||0)+r]; w=[(cen.w||0)-r,(cen.w||0)+r]; } else if(f&&f.d){ d=f.d; w=f.w; } plan.footprint={shape:'RECT',d,h,w}; }
     persist(); renderTParams(); render(); };
-  if($('#pfp-draw')) $('#pfp-draw').onclick=()=>{ if(!(plan.footprint&&plan.footprint.shape)) plan.footprint={shape:$('#pfp-shape').value,d:[0,0],h:defaultFpH(),w:[0,0]}; fpMode=true; status('プレビューをドラッグして plan の footprint を指定（'+$('#pfp-shape').value+'）'); };
-  if($('#pfp-cand')) $('#pfp-cand').onclick=()=>{ const c=fpCandidate(); if(!c){ status('候補にできるエントリがありません'); return; } const shp=(plan.footprint&&plan.footprint.shape)||'RECT'; if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(Math.max(c.d[1]-c.d[0],c.w[1]-c.w[0]))),h:c.h,center:{d:Math.round((c.d[0]+c.d[1])/2),w:Math.round((c.w[0]+c.w[1])/2)}}; else plan.footprint={shape:'RECT',d:c.d,h:c.h,w:c.w}; persist(); renderTParams(); render(); status('候補を適用（目安・要調整）'); };
-  if($('#pfp-clear')) $('#pfp-clear').onclick=()=>{ delete plan.footprint; fpMode=false; persist(); renderTParams(); render(); };
+  if($('#pfp-cand')) $('#pfp-cand').onclick=()=>{ const c=fpCandidate(); if(!c){ status('外接できるエントリがありません'); return; } const shp=(plan.footprint&&plan.footprint.shape)||'RECT'; if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(Math.max(c.d[1]-c.d[0],c.w[1]-c.w[0]))),h:c.h,center:{d:Math.round((c.d[0]+c.d[1])/2),w:Math.round((c.w[0]+c.w[1])/2)}}; else plan.footprint={shape:'RECT',d:c.d,h:c.h,w:c.w}; persist(); renderTParams(); render(); status('全エントリに外接（要調整）'); };
+  if($('#pfp-clear')) $('#pfp-clear').onclick=()=>{ delete plan.footprint; persist(); renderTParams(); render(); };
   ['pfp-d0','pfp-d1','pfp-h0','pfp-h1','pfp-w0','pfp-w1','pfp-dia','pfp-cd','pfp-cw'].forEach(id=>{ const el=$('#'+id); if(el) el.oninput=readFpInputs; });
   if($('#pfp-help')) $('#pfp-help').onclick=()=>$('#fphelp').classList.add('on');
   wireSteppers($('#tparams')); }
@@ -1550,7 +1548,6 @@ function boot(){
     if(pointers.size>=2){ drag=null; if(rangeBand){ rangeBand=null; render(); } pinch={startDist:pinchMeasure().dist||1, startScale:camo.scale}; cv.style.cursor='default'; return; } // 2本指=ピンチ開始
     if(copyMode){ const q=ptWorld(e); pasteCursor={d:Math.round(q.d),w:Math.round(q.w)}; drag={mode:'pastemove'}; render(); return; } // コピーモード中は貼り付け先を指定
     if(rangeMode){ const q=ptWorld(e); drag={mode:'range', sd:q.d, sw:q.w, sx:e.clientX, sy:e.clientY, moved:false}; rangeBand={sd:q.d,sw:q.w,cd:q.d,cw:q.w}; render(); return; } // 範囲選択の矩形開始
-    if(fpMode){ const q=ptWorld(e); if(!(plan.footprint&&plan.footprint.shape)) plan.footprint={shape:($('#pfp-shape')?$('#pfp-shape').value:'RECT'),d:[0,0],h:defaultFpH(),w:[0,0]}; drag={mode:'fp', startD:q.d, startW:q.w, moved:false}; return; } // plan 自身の footprint 範囲ドラッグ開始
     const p=ptWorld(e);
     if(sel>=0&&plan.entries[sel]){ const hz=resizeHandleAt(plan.entries[sel],p.px,p.py); if(hz){ drag={mode:'resize', handle:hz, idx:sel}; return; } } // ② サイズハンドル
     if(sel<0&&plan.footprint){ const fz=fpHandleAt(p.px,p.py); if(fz){ if(fz.rim) drag={mode:'fpresize', circle:true, moved:false}; else { const cs=fpWorldCorners(); drag={mode:'fpresize', opp:cs[(fz.corner+2)%4], moved:false}; } cv.style.cursor='nwse-resize'; return; } } // plan footprint サイズハンドル
@@ -1571,17 +1568,13 @@ function boot(){
     if(pinch&&pointers.size>=2){ const m=pinchMeasure(); zoomAround(m.mx,m.my, pinch.startScale*(m.dist/pinch.startDist)); return; } // ピンチズーム
     if(copyMode){ cv.style.cursor='copy'; if(drag&&drag.mode==='pastemove'){ const q=ptWorld(e); pasteCursor={d:Math.round(q.d),w:Math.round(q.w)}; render(); } return; } // コピーモード中はドラッグ中のみ貼り付け先が追従（ホバーでは動かさない）
     if(drag&&drag.mode==='range'){ const q=ptWorld(e); rangeBand.cd=q.d; rangeBand.cw=q.w; if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4) drag.moved=true; render(); return; } // 範囲選択の矩形更新
-    if(drag&&drag.mode==='fp'){ const q=ptWorld(e), h=(plan.footprint&&plan.footprint.h)||defaultFpH(), shp=(plan.footprint&&plan.footprint.shape)||'RECT'; // plan footprint 範囲更新（plan原点=world原点基準・ライブ反映）
-      if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(2*Math.hypot(q.d-drag.startD,q.w-drag.startW))),h,center:{d:Math.round(drag.startD),w:Math.round(drag.startW)}};
-      else plan.footprint={shape:'RECT',d:[Math.round(Math.min(drag.startD,q.d)),Math.round(Math.max(drag.startD,q.d))],h,w:[Math.round(Math.min(drag.startW,q.w)),Math.round(Math.max(drag.startW,q.w))]};
-      drag.moved=true; cv.style.cursor='crosshair'; render(); return; }
     if(drag&&drag.mode==='fpresize'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } // plan footprint サイズ変更（RECT=対角固定・CIRCLE=中心固定で径）
       if(drag.circle){ const cen=fp.center||{d:0,w:0}; fp.diameter=Math.max(1,Math.round(2*Math.hypot(q.d-(cen.d||0),q.w-(cen.w||0)))); }
       else { const Pd=Math.round(q.d),Pw=Math.round(q.w),o=drag.opp; fp.d=[Math.min(Pd,o.d),Math.max(Pd,o.d)]; fp.w=[Math.min(Pw,o.w),Math.max(Pw,o.w)]; }
       drag.moved=true; cv.style.cursor='nwse-resize'; render(); return; }
     if(drag&&drag.mode==='fpmove'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } const dd=Math.round(q.d-drag.startD), dw=Math.round(q.w-drag.startW); // plan footprint 平行移動（サイズ保持）
       if(fp.shape==='CIRCLE'){ const o=drag.orig.center||{d:0,w:0}; fp.center={d:o.d+dd, w:o.w+dw}; } else { fp.d=[drag.orig.d[0]+dd, drag.orig.d[1]+dd]; fp.w=[drag.orig.w[0]+dw, drag.orig.w[1]+dw]; } if(dd||dw) drag.moved=true; cv.style.cursor='move'; render(); return; }
-    if((rangeMode||fpMode)&&!drag){ cv.style.cursor='crosshair'; return; }
+    if(rangeMode&&!drag){ cv.style.cursor='crosshair'; return; }
     if(!drag){ const p=ptWorld(e);
       if(sel<0&&plan.footprint){ if(fpHandleAt(p.px,p.py)){ cv.style.cursor=(plan.footprint.shape==='CIRCLE')?'ns-resize':'nwse-resize'; return; } if(fpBodyHit(p.d,p.w)){ cv.style.cursor='move'; return; } }
       if(sel>=0&&plan.entries[sel]&&resizeHandleAt(plan.entries[sel],p.px,p.py)){ cv.style.cursor='nwse-resize'; return; } cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
@@ -1597,7 +1590,6 @@ function boot(){
     pointers.delete(e.pointerId); if(pointers.size<2) pinch=null;
     if(pointers.size>0){ drag=null; return; } // ピンチ後に指が残る間はドラッグ/パン暴発を抑止
     if(copyMode){ drag=null; cv.style.cursor='default'; return; } // 貼り付け先は pasteCursor に確定（貼り付けボタンで実行）
-    if(drag&&drag.mode==='fp'){ const moved=drag.moved; fpMode=false; if(moved) persist(); drag=null; cv.style.cursor='default'; renderTParams(); render(); status(moved?'plan の footprint を設定しました':'範囲を指定してください'); return; } // plan footprint 確定
     if(drag&&(drag.mode==='fpmove'||drag.mode==='fpresize')){ const moved=drag.moved; if(moved) persist(); drag=null; cv.style.cursor='default'; renderTParams(); render(); return; } // plan footprint 移動/リサイズ確定
     if(drag&&drag.mode==='range'){ // 範囲選択の確定
       const sd=drag.sd, sw=drag.sw, cd=rangeBand?rangeBand.cd:sd, cw=rangeBand?rangeBand.cw:sw;
