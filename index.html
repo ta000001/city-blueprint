@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.05';
+const APP_VERSION='1.06';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -986,7 +986,8 @@ function ptInFp(d,w,sh){ const EPS=1e-6; // 点が footprint 形状の内側か�
   if(sh.shape==='CIRCLE') return Math.hypot(d-sh.center.d, w-sh.center.w) <= sh.r+EPS;
   const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
   return d>=Math.min(...ds)-EPS && d<=Math.max(...ds)+EPS && w>=Math.min(...ws)-EPS && w<=Math.max(...ws)+EPS; }
-function entryProtrudes(e, fpSh){ if(e.type==='randomarea') return false; const sh=worldShape(e); if(!sh) return false; // 本体の全頂点/周が内側なら収まっている
+function entryProtrudes(e, fpSh){ if(e.type==='randomarea') return false; const sh=worldShape(e);
+  if(!sh){ if(e.type!=='plan'&&e.type!=='structure') return false; const c=xform(0,0,e.relPos||{},e.relDir||'FRONT'); return !ptInFp(c.d,c.w,fpSh); } // footprint未読込の参照=原点位置で判定
   const pts=(sh.shape==='RECT')?sh.body:sh.pts; return pts.some(p=>!ptInFp(p.d,p.w,fpSh)); }
 function planOverflow(){ const fpSh=fpWorldShape(); if(!fpSh) return false; return plan.entries.some(e=>entryProtrudes(e,fpSh)); } // 保存フラグ用
 function computeOverlaps(){
@@ -1094,7 +1095,7 @@ function render(){
     const sh=worldShape(e); const on=selset.has(i)||(i===sel);
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
-      ctx.fillStyle=on?'#D4A93C':'#4F8A7B'; ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill();
+      ctx.fillStyle=(ovl.fpBad.has(i)||e.footprintOverflow)?'#D24B4B':(on?'#D4A93C':'#4F8A7B'); ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill(); // footprint外/子はみ出し=赤
       ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(idOf(e),x+8,y-6);
       if(SETTINGS.showCoords){ const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+7); } // 各点の座標（⚙で表示/非表示）
       return;
