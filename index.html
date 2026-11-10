@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.01';
+const APP_VERSION='1.02';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -345,13 +345,14 @@ function footprintFor(e){
   if(Array.isArray(fp)){ row=fp.find(r=>{const w=r.when||{};return Object.keys(w).every(k=>String(fieldVal(e,t,k))===String(w[k]));})||fp[0]; }
   else row=fp;
   const a=row.anchor, aD=(typeof a==='object')?a.d:a, aW=(typeof a==='object')?a.w:a;
+  const h=[0, Math.max(0, heightOf(e))]; // 原点基準の高さ範囲（共通 footprint オブジェクトに合わせる）
   if(row.shape==='RECT'){
     const extD=(+fieldVal(e,t,row.size[0]))||1, extW=(+fieldVal(e,t,row.size[1]))||1;
-    const sD=aD==='center'?-((extD-1)>>1):0, sW=aW==='center'?-((extW-1)>>1):0;
-    return {shape:'RECT', d0:sD, d1:sD+extD-1, w0:sW, w1:sW+extW-1};
+    const sD=aD==='center'?-((extD-1)>>1):0, sW=aW==='center'?-((extW-1)>>1):0; // corner/center は min の符号で表現
+    return {shape:'RECT', d:[sD, sD+extD-1], w:[sW, sW+extW-1], h};
   }
   const dia=(+fieldVal(e,t,row.size[0]))||1;
-  return {shape:'CIRCLE', r:dia/2};
+  return {shape:'CIRCLE', diameter:dia, center:{d:0,w:0}, h}; // CIRCLE は中心＝原点
 }
 // margin: RECT={front,back,left,right} or scalar / CIRCLE=scalar(radial)
 function marginOf(e){
@@ -916,18 +917,11 @@ function w2c(d,w){ return [camo.x + w*camo.scale, camo.y - d*camo.scale]; }
 // entry の world footprint（描画用の頂点/中心）
 function worldShape(e){
   if(e.type==='randomarea') return regionShape(e);
-  if(e.type==='plan'||e.type==='structure'){ const sh=shapeFromFp(e.footprint, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); if(sh) sh.ground=e.ground; return sh; } // 子から読み込んだ footprint（未読込は null=marker）
-  const fp=footprintFor(e); if(!fp) return null;
-  const rp=e.relPos||{}, dir=e.relDir||'FRONT', m=marginOf(e);
-  if(fp.shape==='RECT'){
-    const corners=(d0,d1,w0,w1)=>[[d0,w0],[d1,w0],[d1,w1],[d0,w1]].map(([ld,lw])=>xform(ld,lw,rp,dir));
-    const body=corners(fp.d0,fp.d1,fp.w0,fp.w1);
-    const res=corners(fp.d0-m.back,fp.d1+m.front,fp.w0-m.left,fp.w1+m.right);
-    return {shape:'RECT', pts:body, body, reserved:res, ground:e.ground};
-  }
-  const c=xform(0,0,rp,dir);
-  const pts=[]; for(let a=0;a<360;a+=30){ const rad=a*Math.PI/180; pts.push({d:c.d+fp.r*Math.cos(rad), w:c.w+fp.r*Math.sin(rad)}); }
-  return {shape:'CIRCLE', center:c, r:fp.r, rr:fp.r+m.radial, pts, ground:e.ground};
+  // builder=paramから導出 / plan・structure=自ファイルの保存値。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
+  const fp=(e.type==='plan'||e.type==='structure')?e.footprint:footprintFor(e);
+  const sh=shapeFromFp(fp, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); // 未設定(plan/structure 未読込)は null=marker
+  if(sh) sh.ground=e.ground;
+  return sh;
 }
 // ---------- 重なり判定（確保領域 = footprint + margin）----------
 function reservedRegion(e){
