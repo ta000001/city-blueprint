@@ -271,9 +271,9 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 <div class="modal" id="fphelp"><div class="m"><h3>footprint（この plan 自身）</h3><div class="hbody">
 <p>この plan が<b>親から参照された時</b>に使われる外形です。plan 全体で1つ持ちます。</p>
-<p><b>RECT</b>＝四角 ／ <b>CIRCLE</b>＝円。<b>外接</b>（全エントリに外接する大きさを自動設定）で下地を作り、プレビューのドラッグや d/w・center の数値で調整します。<b>消去</b>で未設定に戻します。</p>
+<p><b>RECT</b>＝四角（min/max の d・w で任意配置）／ <b>CIRCLE</b>＝円（<b>中心＝原点固定</b>・diameter のみ）。<b>外接</b>（全エントリに外接する大きさを自動設定）で下地を作り、プレビューのドラッグや数値で調整します。<b>消去</b>で未設定に戻します。</p>
 <p><b>h</b>＝高さ（min〜max）。footprint は <b>mod では無視</b>され、アプリの表示と親側の領域計算にだけ使われます。JSON で直接編集したい場合は <b>json タブ</b>で。</p>
-<p><b>プレビュー操作</b>：RECT は本体ドラッグで移動・四隅でサイズ変更。CIRCLE は本体ドラッグで移動・縁で径変更（中心は center で持ちます）。</p>
+<p><b>プレビュー操作</b>：RECT は本体ドラッグで移動・四隅でサイズ変更。CIRCLE は縁ドラッグで径変更（中心は原点に固定され移動しません）。</p>
 </div></div></div>
 <div class="modal" id="cfghelp"><div class="m"><h3>散布の密度（候補数）</h3><div class="hbody">
 <p>散布は、1棟置くごとに <b>候補数</b> だけ置き場所の候補を作り、その中から <b>角・辺にいちばん密着する</b>ものを選んで置きます（mcpipy 由来＝角→辺から詰める）。</p>
@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.02';
+const APP_VERSION='1.03';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -345,14 +345,13 @@ function footprintFor(e){
   if(Array.isArray(fp)){ row=fp.find(r=>{const w=r.when||{};return Object.keys(w).every(k=>String(fieldVal(e,t,k))===String(w[k]));})||fp[0]; }
   else row=fp;
   const a=row.anchor, aD=(typeof a==='object')?a.d:a, aW=(typeof a==='object')?a.w:a;
-  const h=[0, Math.max(0, heightOf(e))]; // 原点基準の高さ範囲（共通 footprint オブジェクトに合わせる）
+  const hmax=Math.max(0, heightOf(e)); // 原点基準の高さ（0〜height）
   if(row.shape==='RECT'){
     const extD=(+fieldVal(e,t,row.size[0]))||1, extW=(+fieldVal(e,t,row.size[1]))||1;
     const sD=aD==='center'?-((extD-1)>>1):0, sW=aW==='center'?-((extW-1)>>1):0; // corner/center は min の符号で表現
-    return {shape:'RECT', d:[sD, sD+extD-1], w:[sW, sW+extW-1], h};
+    return FP.rect({d:sD, w:sW, h:0}, {d:sD+extD-1, w:sW+extW-1, h:hmax});
   }
-  const dia=(+fieldVal(e,t,row.size[0]))||1;
-  return {shape:'CIRCLE', diameter:dia, center:{d:0,w:0}, h}; // CIRCLE は中心＝原点
+  return FP.circle((+fieldVal(e,t,row.size[0]))||1, 0, hmax); // CIRCLE は中心＝原点
 }
 // margin: RECT={front,back,left,right} or scalar / CIRCLE=scalar(radial)
 function marginOf(e){
@@ -398,7 +397,7 @@ function entryBBox(e){
 }
 // エントリの垂直寸法（高さ候補の目安）。tower/spiral は概算。
 function heightOf(e){
-  if(e.type==='plan'||e.type==='structure'){ const fp=e.footprint; return (fp&&Array.isArray(fp.h))?Math.max(0,fp.h[1]-fp.h[0]):0; }
+  if(e.type==='plan'||e.type==='structure'){ return e.footprint?FP.height(e.footprint):0; }
   if(!SCHEMA||!(e.type in SCHEMA.builders)) return 0;
   const t=e.type, g=k=>{ const v=fieldVal(e,t,k); return (+v)||0; };
   switch(t){
@@ -421,16 +420,51 @@ function fpCandidate(){ const dd=[], ww=[], hh=[];
   return { d:[Math.round(Math.min(...dd)),Math.round(Math.max(...dd))], w:[Math.round(Math.min(...ww)),Math.round(Math.max(...ww))], h:[Math.round(Math.min(...hh)),Math.round(Math.max(...hh))] };
 }
 function defaultFpH(){ const c=fpCandidate(); return c?c.h:[0,8]; }
-// footprint(shape+原点基準 d/h/w[min,max] | diameter+h) → world図形（rp/dir/margin を適用）。描画・重なり共通。
-function shapeFromFp(fp, rp, dir, m){
-  if(!fp) return null; rp=rp||{}; dir=dir||'FRONT'; m=m||{front:0,back:0,left:0,right:0,radial:0};
-  if(fp.shape==='CIRCLE'){ const cen=fp.center||{d:0,w:0}, c=xform(cen.d||0,cen.w||0,rp,dir), r=((+fp.diameter)||2)/2, pts=[]; for(let a=0;a<360;a+=30){ const rad=a*Math.PI/180; pts.push({d:c.d+r*Math.cos(rad), w:c.w+r*Math.sin(rad)}); } return {shape:'CIRCLE', center:c, r, rr:r+m.radial, pts}; }
-  const d=fp.d||[0,0], w=fp.w||[0,0];
-  const corners=(d0,d1,w0,w1)=>[[d0,w0],[d1,w0],[d1,w1],[d0,w1]].map(([ld,lw])=>xform(ld,lw,rp,dir));
-  const body=corners(d[0],d[1],w[0],w[1]);
-  const res=corners(d[0]-m.back,d[1]+m.front,w[0]-m.left,w[1]+m.right);
-  return {shape:'RECT', pts:body, body, reserved:res};
-}
+/* ====================== footprint 共通インターフェース(FP) ======================
+   footprint は必ずこの正準形のみ。生成・正規化・アクセス・幾何・表示は全部 FP 経由で行い、
+   type 別に d0/d1 等のフィールドを直書きしない（＝統一崩れ防止。plan/structure/builder 共通）。
+     RECT   = { shape:'RECT',   min:{d,h,w}, max:{d,h,w} }
+     CIRCLE = { shape:'CIRCLE', diameter,    min:{h}, max:{h} }   // 水平中心=原点固定
+=============================================================================== */
+const FP = {
+  isCircle(fp){ return !!fp && fp.shape==='CIRCLE'; },
+  isRect(fp){ return !!fp && fp.shape==='RECT'; },
+  // --- 生成（整数・min<=max に正規化）---
+  rect(mn, mx){ mn=mn||{}; mx=mx||{}; const r=(a,b)=>{a=Math.round(a||0);b=Math.round(b||0);return a<=b?[a,b]:[b,a];};
+    const d=r(mn.d,mx.d), h=r(mn.h,mx.h), w=r(mn.w,mx.w);
+    return {shape:'RECT', min:{d:d[0],h:h[0],w:w[0]}, max:{d:d[1],h:h[1],w:w[1]}}; },
+  circle(diameter, hmin, hmax){ let h0=Math.round(hmin||0), h1=Math.round(hmax==null?hmin||0:hmax); if(h0>h1){const t=h0;h0=h1;h1=t;}
+    return {shape:'CIRCLE', diameter:Math.max(1,Math.round(diameter||1)), min:{h:h0}, max:{h:h1}}; },
+  // --- アクセサ（軸の [min,max]・高さ・半径）---
+  dRange(fp){ return [ (fp&&fp.min&&fp.min.d)||0, (fp&&fp.max&&fp.max.d)||0 ]; },
+  wRange(fp){ return [ (fp&&fp.min&&fp.min.w)||0, (fp&&fp.max&&fp.max.w)||0 ]; },
+  hRange(fp){ return [ (fp&&fp.min&&fp.min.h)||0, (fp&&fp.max&&fp.max.h)||0 ]; },
+  height(fp){ const h=FP.hRange(fp); return Math.max(0, h[1]-h[0]); },
+  radius(fp){ return ((+fp.diameter)||2)/2; },
+  // --- 正規化：旧形式(d:[min,max]/w/h・center) や部分欠損も受理→正準形 ---
+  norm(fp){ if(!fp||!fp.shape) return null;
+    if(fp.shape==='CIRCLE'){ let h0=0,h1=0;
+      if(fp.min&&typeof fp.min.h==='number'){ h0=fp.min.h; h1=(fp.max&&typeof fp.max.h==='number')?fp.max.h:h0; }
+      else if(Array.isArray(fp.h)){ h0=fp.h[0]||0; h1=fp.h[1]||0; }
+      return FP.circle(fp.diameter, h0, h1); }
+    if(fp.min&&typeof fp.min.d==='number') return FP.rect(fp.min, fp.max);
+    const d=fp.d||[0,0], w=fp.w||[0,0], h=fp.h||[0,0];
+    return FP.rect({d:d[0],w:w[0],h:h[0]}, {d:d[1],w:w[1],h:h[1]}); },
+  // --- world 図形（rp/dir/margin 適用）。描画・重なり共通。CIRCLE 中心=原点 ---
+  shape(fp, rp, dir, m){
+    if(!fp) return null; rp=rp||{}; dir=dir||'FRONT'; m=m||{front:0,back:0,left:0,right:0,radial:0};
+    if(fp.shape==='CIRCLE'){ const c=xform(0,0,rp,dir), r=FP.radius(fp), pts=[]; for(let a=0;a<360;a+=30){ const rad=a*Math.PI/180; pts.push({d:c.d+r*Math.cos(rad), w:c.w+r*Math.sin(rad)}); } return {shape:'CIRCLE', center:c, r, rr:r+m.radial, pts}; }
+    const d=FP.dRange(fp), w=FP.wRange(fp);
+    const corners=(d0,d1,w0,w1)=>[[d0,w0],[d1,w0],[d1,w1],[d0,w1]].map(([ld,lw])=>xform(ld,lw,rp,dir));
+    const body=corners(d[0],d[1],w[0],w[1]);
+    const res=corners(d[0]-m.back,d[1]+m.front,w[0]-m.left,w[1]+m.right);
+    return {shape:'RECT', pts:body, body, reserved:res}; },
+  // --- 表示用テキスト ---
+  info(fp){ if(!fp) return ''; const h=FP.hRange(fp);
+    if(fp.shape==='CIRCLE') return 'CIRCLE diameter'+fp.diameter+' h['+h.join(',')+']';
+    const d=FP.dRange(fp), w=FP.wRange(fp); return 'RECT d['+d.join(',')+'] h['+h.join(',')+'] w['+w.join(',')+']'; }
+};
+const shapeFromFp=FP.shape; // 後方互換の別名（新規は FP.shape を使う）
 // 親(randomarea)を選んだら複数選択モードONにして子も選択状態にする（primaryは親のまま）
 function selParentChildren(i){ selOne(i); const ch=childIdxsOf(i);
   if(ch.length){ ch.forEach(j=>selset.add(j)); if(!multiMode){ multiMode=true; updateMultiBtn(); } } }
@@ -642,29 +676,29 @@ function fpAxisRow(axis,id0,id1,arr){ const v0=(arr&&arr[0])||0,v1=(arr&&arr[1])
 function planFpRows(){ const fp=plan.footprint, shp=(fp&&fp.shape)||'RECT';
   const shapeSel='<select id="pfp-shape"><option value="RECT"'+(shp==='RECT'?' selected':'')+'>RECT</option><option value="CIRCLE"'+(shp==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
   let rows=frRow('shape','',shapeSel,'','','','','fp'); // ? はパネルタイトル横（footprint 全体の説明）
-  if(shp==='CIRCLE'){ rows+=frRow('diameter','',numStepper('pfp-dia',(fp&&fp.diameter)||0),'','','','','fp');
-    const cen=(fp&&fp.center)||{d:0,w:0};
-    rows+=frRow('center','','<span class="muted">d</span>'+numStepper('pfp-cd',cen.d||0)+'<span class="muted">w</span>'+numStepper('pfp-cw',cen.w||0),'','','','','fp'); // 中心位置（原点基準）
-    rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); }
-  else { rows+=fpAxisRow('d','pfp-d0','pfp-d1',fp&&fp.d); rows+=fpAxisRow('h','pfp-h0','pfp-h1',fp&&fp.h); rows+=fpAxisRow('w','pfp-w0','pfp-w1',fp&&fp.w); }
+  if(shp==='CIRCLE'){ rows+=frRow('diameter','',numStepper('pfp-dia',(fp&&fp.diameter)||0),'','','','','fp'); // 中心=原点固定
+    rows+=fpAxisRow('h','pfp-h0','pfp-h1',FP.hRange(fp)); }
+  else { rows+=fpAxisRow('d','pfp-d0','pfp-d1',FP.dRange(fp)); rows+=fpAxisRow('h','pfp-h0','pfp-h1',FP.hRange(fp)); rows+=fpAxisRow('w','pfp-w0','pfp-w1',FP.wRange(fp)); }
   const btns='<button id="pfp-cand">外接</button>'+(fp?'<button id="pfp-clear">消去</button>':'');
   rows+=frRow('操作','',btns,'','','','','fp');
   return rows; }
-// 数値入力（d/h/w/diameter）→ plan.footprint へ反映（min/max は保存時に正規化）
+// 数値入力（d/h/w/diameter）→ plan.footprint へ反映（FP 経由で正準形を生成）
 function readFpInputs(){ const shp=$('#pfp-shape')?$('#pfp-shape').value:'RECT';
-  const g=id=>{ const el=$('#'+id); return el?Math.round(+el.value||0):0; }, mm=(a,b)=>[Math.min(a,b),Math.max(a,b)];
-  const h=mm(g('pfp-h0'),g('pfp-h1'));
-  if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,g('pfp-dia')),h,center:{d:g('pfp-cd'),w:g('pfp-cw')}};
-  else plan.footprint={shape:'RECT',d:mm(g('pfp-d0'),g('pfp-d1')),h,w:mm(g('pfp-w0'),g('pfp-w1'))};
+  const g=id=>{ const el=$('#'+id); return el?Math.round(+el.value||0):0; };
+  if(shp==='CIRCLE') plan.footprint=FP.circle(Math.max(1,g('pfp-dia')), g('pfp-h0'), g('pfp-h1'));
+  else plan.footprint=FP.rect({d:g('pfp-d0'),w:g('pfp-w0'),h:g('pfp-h0')}, {d:g('pfp-d1'),w:g('pfp-w1'),h:g('pfp-h1')});
   persist(); render(); }
 function wirePlanFp(){ const g=()=>plan.footprint;
-  if($('#pfp-shape')) $('#pfp-shape').onchange=ev=>{ const v=ev.target.value, h=(g()&&g().h)||defaultFpH(), f=g();
-    if(v==='CIRCLE'){ let dia=8, cen={d:0,w:0}; if(f&&f.shape==='RECT'&&f.d){ dia=Math.max(f.d[1]-f.d[0], f.w[1]-f.w[0]); cen={d:Math.round((f.d[0]+f.d[1])/2), w:Math.round((f.w[0]+f.w[1])/2)}; } else if(f&&f.diameter){ dia=f.diameter; cen=f.center||{d:0,w:0}; } plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(dia)),h,center:cen}; }
-    else { let d=[0,8],w=[0,8]; if(f&&f.shape==='CIRCLE'){ const r=Math.round((f.diameter||8)/2), cen=f.center||{d:0,w:0}; d=[(cen.d||0)-r,(cen.d||0)+r]; w=[(cen.w||0)-r,(cen.w||0)+r]; } else if(f&&f.d){ d=f.d; w=f.w; } plan.footprint={shape:'RECT',d,h,w}; }
+  if($('#pfp-shape')) $('#pfp-shape').onchange=ev=>{ const v=ev.target.value, f=g(), hr=f?FP.hRange(f):defaultFpH();
+    if(v==='CIRCLE'){ let dia=8; if(f&&FP.isRect(f)){ const d=FP.dRange(f),w=FP.wRange(f); dia=Math.max(d[1]-d[0], w[1]-w[0]); } else if(f&&f.diameter){ dia=f.diameter; } plan.footprint=FP.circle(Math.max(1,dia), hr[0], hr[1]); }
+    else { let d=[0,8],w=[0,8]; if(f&&FP.isCircle(f)){ const r=Math.round(FP.radius(f)); d=[-r,r]; w=[-r,r]; } else if(f&&FP.isRect(f)){ d=FP.dRange(f); w=FP.wRange(f); } plan.footprint=FP.rect({d:d[0],w:w[0],h:hr[0]}, {d:d[1],w:w[1],h:hr[1]}); }
     persist(); renderTParams(); render(); };
-  if($('#pfp-cand')) $('#pfp-cand').onclick=()=>{ const c=fpCandidate(); if(!c){ status('外接できるエントリがありません'); return; } const shp=(plan.footprint&&plan.footprint.shape)||'RECT'; if(shp==='CIRCLE') plan.footprint={shape:'CIRCLE',diameter:Math.max(1,Math.round(Math.max(c.d[1]-c.d[0],c.w[1]-c.w[0]))),h:c.h,center:{d:Math.round((c.d[0]+c.d[1])/2),w:Math.round((c.w[0]+c.w[1])/2)}}; else plan.footprint={shape:'RECT',d:c.d,h:c.h,w:c.w}; persist(); renderTParams(); render(); status('全エントリに外接（要調整）'); };
+  if($('#pfp-cand')) $('#pfp-cand').onclick=()=>{ const c=fpCandidate(); if(!c){ status('外接できるエントリがありません'); return; } const shp=(plan.footprint&&plan.footprint.shape)||'RECT';
+    if(shp==='CIRCLE'){ const rd=Math.max(Math.abs(c.d[0]),Math.abs(c.d[1])), rw=Math.max(Math.abs(c.w[0]),Math.abs(c.w[1])); plan.footprint=FP.circle(Math.max(1,Math.round(2*Math.hypot(rd,rw))), c.h[0], c.h[1]); } // CIRCLE は原点中心で全エントリを内包
+    else plan.footprint=FP.rect({d:c.d[0],w:c.w[0],h:c.h[0]}, {d:c.d[1],w:c.w[1],h:c.h[1]});
+    persist(); renderTParams(); render(); status('全エントリに外接（要調整）'); };
   if($('#pfp-clear')) $('#pfp-clear').onclick=()=>{ delete plan.footprint; persist(); renderTParams(); render(); };
-  ['pfp-d0','pfp-d1','pfp-h0','pfp-h1','pfp-w0','pfp-w1','pfp-dia','pfp-cd','pfp-cw'].forEach(id=>{ const el=$('#'+id); if(el) el.oninput=readFpInputs; });
+  ['pfp-d0','pfp-d1','pfp-h0','pfp-h1','pfp-w0','pfp-w1','pfp-dia'].forEach(id=>{ const el=$('#'+id); if(el) el.oninput=readFpInputs; });
   if($('#pfp-help')) $('#pfp-help').onclick=()=>$('#fphelp').classList.add('on');
   wireSteppers($('#tparams')); }
 function renderTParams(){
@@ -677,7 +711,7 @@ function renderTParams(){
   if(title) title.textContent='パラメータ（'+idOf(e)+'）';
   if(t==='plan'||t==='structure'){ const kind=t, refv=(kind==='plan'?e.plan:e.structure)||'';
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-    const fp=e.footprint, fpinfo = fp ? (fp.shape==='CIRCLE'?('CIRCLE diameter'+fp.diameter+' center('+((fp.center&&fp.center.d)||0)+','+((fp.center&&fp.center.w)||0)+') h['+((fp.h||[]).join(','))+']'):('RECT d['+((fp.d||[]).join(','))+'] h['+((fp.h||[]).join(','))+'] w['+((fp.w||[]).join(','))+']')) : '（未読込＝マーカー表示）';
+    const fp=e.footprint, fpinfo = fp ? FP.info(fp) : '（未読込＝マーカー表示）';
     box.innerHTML=meta
      +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" title="タップして子ファイルを選択（名前＋footprintを読込）" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px" title="子ファイルのfootprintを読み直す">再読込</button>':'')+'</div>'
      +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'（子ファイルから読込・mod無視）</span></div>';
@@ -985,13 +1019,13 @@ function unxform(D,W,dir){ if(dir==='RIGHT') return {ld:W,lw:-D}; if(dir==='BACK
 function sizeFixedOf(e){ const sf=sizeFieldsOf(e)||[]; return sf.map(k=>!!(e.cond&&e.cond[k]&&e.cond[k].fix)); } // 各サイズ軸の fix 有無
 function sizeLocked(e){ if(e.type==='randomarea'||!e.cond) return false; const sf=sizeFieldsOf(e); return !!(sf&&sf.length&&sf.every(k=>e.cond[k]&&e.cond[k].fix)); }
 // ---- plan 自身の footprint をプレビュー上で移動/リサイズするための当たり判定（plan原点=world原点・FRONT固定） ----
-function fpWorldCorners(){ const fp=plan.footprint; if(!fp||fp.shape!=='RECT') return null; const d=fp.d||[0,0],w=fp.w||[0,0]; return [{d:d[0],w:w[0]},{d:d[1],w:w[0]},{d:d[1],w:w[1]},{d:d[0],w:w[1]}]; }
+function fpWorldCorners(){ const fp=plan.footprint; if(!FP.isRect(fp)) return null; const d=FP.dRange(fp),w=FP.wRange(fp); return [{d:d[0],w:w[0]},{d:d[1],w:w[0]},{d:d[1],w:w[1]},{d:d[0],w:w[1]}]; }
 function fpHandleAt(px,py){ const fp=plan.footprint; if(!fp) return null; const R=10*devicePixelRatio;
-  if(fp.shape==='CIRCLE'){ const cen=fp.center||{d:0,w:0}, r=(fp.diameter||0)/2, c=w2c(cen.d||0,(cen.w||0)+r); return (Math.hypot(px-c[0],py-c[1])<=R)?{rim:true}:null; }
+  if(FP.isCircle(fp)){ const r=FP.radius(fp), c=w2c(0,r); return (Math.hypot(px-c[0],py-c[1])<=R)?{rim:true}:null; } // 中心=原点、縁ハンドルは +w 方向
   const cs=fpWorldCorners(); if(!cs) return null; for(let k=0;k<4;k++){ const h=w2c(cs[k].d,cs[k].w); if(Math.hypot(px-h[0],py-h[1])<=R) return {corner:k}; } return null; }
 function fpBodyHit(d,w){ const fp=plan.footprint; if(!fp) return false;
-  if(fp.shape==='CIRCLE'){ const cen=fp.center||{d:0,w:0}, r=(fp.diameter||0)/2; return Math.hypot(d-(cen.d||0),w-(cen.w||0))<=r; }
-  const dd=fp.d||[0,0],ww=fp.w||[0,0]; return d>=Math.min(dd[0],dd[1])&&d<=Math.max(dd[0],dd[1])&&w>=Math.min(ww[0],ww[1])&&w<=Math.max(ww[0],ww[1]); }
+  if(FP.isCircle(fp)) return Math.hypot(d,w)<=FP.radius(fp); // 中心=原点
+  const dd=FP.dRange(fp),ww=FP.wRange(fp); return d>=dd[0]&&d<=dd[1]&&w>=ww[0]&&w<=ww[1]; }
 function resizeHandleAt(e,px,py){ if(!(e.type in SCHEMA.builders)) return null; if(sizeLocked(e)) return null; const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;
   if(sh.shape==='RECT'){ if(sh.body[0].d!==(rp.d||0)||sh.body[0].w!==(rp.w||0)) return null; // corner-anchorのみ
     for(let k=0;k<4;k++){ const c=sh.body[k]; const [hx,hy]=w2c(c.d,c.w); if(Math.hypot(px-hx,py-hy)<=R){ const o=sh.body[(k+2)%4]; return {type:'corner', opp:{d:o.d,w:o.w}}; } } return null; }
@@ -1356,7 +1390,7 @@ async function saveFile(text,fname){
   const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); status('保存（ダウンロード）');
 }
 // plan/structure の参照：ファイルピッカーで .json を選び、{ファイル名, その子ファイルが持つ footprint} を返す（footprint は top-level から読込・無ければ null）。
-function parseFp(text){ try{ const j=JSON.parse(text); if(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE')) return j.footprint; }catch(_){} return null; }
+function parseFp(text){ try{ const j=JSON.parse(text); if(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE')) return FP.norm(j.footprint); }catch(_){} return null; } // 子ファイルの footprint も FP 正準形へ正規化
 async function pickRefFile(){
   let file=null;
   if(window.showOpenFilePicker){
@@ -1444,7 +1478,7 @@ function importPlan(text){
     const out=[], used=new Set();                       // 各 randomarea の直後にその子を並べる
     metas.forEach(m=>{ out.push(m); const id=m.id||(m.params&&m.params.id); ents.forEach(c=>{ if(id!=null&&c.group===id){ out.push(c); used.add(c); } }); });
     ents.forEach(c=>{ if(!used.has(c)) out.push(c); });
-    plan={entries:out}; if(d.footprint&&(d.footprint.shape==='RECT'||d.footprint.shape==='CIRCLE')) plan.footprint=d.footprint; selOne(-1); persist(); renderEntries(); renderEditor(); fitCam(); status('読込: entries '+ents.length+' / meta '+metas.length);
+    plan={entries:out}; out.forEach(x=>{ if(x.footprint) x.footprint=FP.norm(x.footprint); }); if(d.footprint&&(d.footprint.shape==='RECT'||d.footprint.shape==='CIRCLE')) plan.footprint=FP.norm(d.footprint); selOne(-1); persist(); renderEntries(); renderEditor(); fitCam(); status('読込: entries '+ents.length+' / meta '+metas.length);
   }catch(_){ status('plan.json の解析に失敗'); }
 }
 
@@ -1554,7 +1588,7 @@ function boot(){
       drag={mode:'entry', gd:p.d-(rp.d||0), gw:p.w-(rp.w||0), pd:(rp.d||0), pw:(rp.w||0), grp, additive, wasSel, hit, moved:false};
       renderEntries(); renderEditor(); render();
     }
-    else if(sel<0&&fpBodyHit(p.d,p.w)){ const fp=plan.footprint; const orig=(fp.shape==='CIRCLE')?{center:{d:(fp.center&&fp.center.d)||0, w:(fp.center&&fp.center.w)||0}}:{d:(fp.d||[0,0]).slice(), w:(fp.w||[0,0]).slice()}; drag={mode:'fpmove', startD:p.d, startW:p.w, orig, moved:false}; cv.style.cursor='move'; } // plan footprint 本体ドラッグで移動
+    else if(sel<0&&FP.isRect(plan.footprint)&&fpBodyHit(p.d,p.w)){ const fp=plan.footprint; const orig={d:FP.dRange(fp), w:FP.wRange(fp), h:FP.hRange(fp)}; drag={mode:'fpmove', startD:p.d, startW:p.w, orig, moved:false}; cv.style.cursor='move'; } // RECT のみ本体ドラッグで移動（CIRCLE は中心=原点固定）
     else drag={mode:'pan', x:e.clientX, y:e.clientY, ox:camo.x, oy:camo.y, moved:false, cd:Math.round(p.d), cw:Math.round(p.w)};
   };
   cv.onpointermove=e=>{
@@ -1562,15 +1596,15 @@ function boot(){
     if(pinch&&pointers.size>=2){ const m=pinchMeasure(); zoomAround(m.mx,m.my, pinch.startScale*(m.dist/pinch.startDist)); return; } // ピンチズーム
     if(copyMode){ cv.style.cursor='copy'; if(drag&&drag.mode==='pastemove'){ const q=ptWorld(e); pasteCursor={d:Math.round(q.d),w:Math.round(q.w)}; render(); } return; } // コピーモード中はドラッグ中のみ貼り付け先が追従（ホバーでは動かさない）
     if(drag&&drag.mode==='range'){ const q=ptWorld(e); rangeBand.cd=q.d; rangeBand.cw=q.w; if(Math.abs(e.clientX-drag.sx)+Math.abs(e.clientY-drag.sy)>4) drag.moved=true; render(); return; } // 範囲選択の矩形更新
-    if(drag&&drag.mode==='fpresize'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } // plan footprint サイズ変更（RECT=対角固定・CIRCLE=中心固定で径）
-      if(drag.circle){ const cen=fp.center||{d:0,w:0}; fp.diameter=Math.max(1,Math.round(2*Math.hypot(q.d-(cen.d||0),q.w-(cen.w||0)))); }
-      else { const Pd=Math.round(q.d),Pw=Math.round(q.w),o=drag.opp; fp.d=[Math.min(Pd,o.d),Math.max(Pd,o.d)]; fp.w=[Math.min(Pw,o.w),Math.max(Pw,o.w)]; }
+    if(drag&&drag.mode==='fpresize'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } const h=FP.hRange(fp); // サイズ変更（CIRCLE=原点中心で径／RECT=対角固定）
+      if(drag.circle){ plan.footprint=FP.circle(Math.max(1,Math.round(2*Math.hypot(q.d,q.w))), h[0], h[1]); }
+      else { const Pd=Math.round(q.d),Pw=Math.round(q.w),o=drag.opp; plan.footprint=FP.rect({d:Math.min(Pd,o.d),w:Math.min(Pw,o.w),h:h[0]},{d:Math.max(Pd,o.d),w:Math.max(Pw,o.w),h:h[1]}); }
       drag.moved=true; cv.style.cursor='nwse-resize'; render(); return; }
-    if(drag&&drag.mode==='fpmove'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } const dd=Math.round(q.d-drag.startD), dw=Math.round(q.w-drag.startW); // plan footprint 平行移動（サイズ保持）
-      if(fp.shape==='CIRCLE'){ const o=drag.orig.center||{d:0,w:0}; fp.center={d:o.d+dd, w:o.w+dw}; } else { fp.d=[drag.orig.d[0]+dd, drag.orig.d[1]+dd]; fp.w=[drag.orig.w[0]+dw, drag.orig.w[1]+dw]; } if(dd||dw) drag.moved=true; cv.style.cursor='move'; render(); return; }
+    if(drag&&drag.mode==='fpmove'){ const q=ptWorld(e), fp=plan.footprint; if(!fp){ drag=null; return; } const dd=Math.round(q.d-drag.startD), dw=Math.round(q.w-drag.startW), o=drag.orig; // RECT 平行移動（サイズ保持）
+      plan.footprint=FP.rect({d:o.d[0]+dd,w:o.w[0]+dw,h:o.h[0]},{d:o.d[1]+dd,w:o.w[1]+dw,h:o.h[1]}); if(dd||dw) drag.moved=true; cv.style.cursor='move'; render(); return; }
     if(rangeMode&&!drag){ cv.style.cursor='crosshair'; return; }
     if(!drag){ const p=ptWorld(e);
-      if(sel<0&&plan.footprint){ if(fpHandleAt(p.px,p.py)){ cv.style.cursor=(plan.footprint.shape==='CIRCLE')?'ns-resize':'nwse-resize'; return; } if(fpBodyHit(p.d,p.w)){ cv.style.cursor='move'; return; } }
+      if(sel<0&&plan.footprint){ if(fpHandleAt(p.px,p.py)){ cv.style.cursor=FP.isCircle(plan.footprint)?'ns-resize':'nwse-resize'; return; } if(FP.isRect(plan.footprint)&&fpBodyHit(p.d,p.w)){ cv.style.cursor='move'; return; } }
       if(sel>=0&&plan.entries[sel]&&resizeHandleAt(plan.entries[sel],p.px,p.py)){ cv.style.cursor='nwse-resize'; return; } cv.style.cursor=candidatesAt(p.d,p.w,p.px,p.py).length?'grab':'default'; return; }
     if(drag.mode==='resize'){ const p=ptWorld(e); applyResize(plan.entries[drag.idx],p,drag.handle); drag.moved=true; render(); syncEditorPos(); return; }
     if(drag.mode==='pan'){ if(Math.abs(e.clientX-drag.x)+Math.abs(e.clientY-drag.y)>3) drag.moved=true; camo.x=drag.ox+(e.clientX-drag.x)*devicePixelRatio; camo.y=drag.oy+(e.clientY-drag.y)*devicePixelRatio; render(); return; }
