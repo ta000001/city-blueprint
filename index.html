@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.09';
+const APP_VERSION='1.10';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -390,7 +390,7 @@ const isGroupParent=e=>!!e&&(e.type==='randomarea'||e.type==='childplan'); // �
 function childIdxsOf(i){ const e=plan.entries[i]; if(!isGroupParent(e)) return []; const id=e.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
 // エントリの world 上の外接矩形（範囲選択の内包判定用）
 function entryBBox(e){
-  if(e.type==='randomarea'){ const r=regionWorld(e); return r.shape==='RECT'?{d0:r.d0,d1:r.d1,w0:r.w0,w1:r.w1}:{d0:r.cd-r.r,d1:r.cd+r.r,w0:r.cw-r.r,w1:r.cw+r.r}; }
+  if(isGroupParent(e)){ const r=regionWorld(e); return r.shape==='RECT'?{d0:r.d0,d1:r.d1,w0:r.w0,w1:r.w1}:{d0:r.cd-r.r,d1:r.cd+r.r,w0:r.cw-r.r,w1:r.cw+r.r}; }   // area（randomarea/childplan）
   const sh=worldShape(e);
   if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir); return {d0:c.d,d1:c.d,w0:c.w,w1:c.w}; }
   if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w); return {d0:Math.min(...ds),d1:Math.max(...ds),w0:Math.min(...ws),w1:Math.max(...ws)}; }
@@ -735,13 +735,14 @@ function renderTParams(){
       snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: childplan に '+n+'件を取り込み（参照を置換）', 5000); };
     wireGroupSel(e); return; }
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); if(ht) ht.innerHTML='<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'; wireRandomEditor(e); return; }
-  if(t==='childplan'){ const n=plan.entries.filter(x=>x.group===e.id).length;
+  if(t==='childplan'){ const n=plan.entries.filter(x=>x.group===e.id).length; e.params=e.params||{shape:'RECT',depth:1,width:1};
     box.innerHTML=meta
-     +'<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+n+'件</span></div>'
+     +'<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+n+'件（area＝randomareaと同形・ランダム機能なし）</span></div>'
+     +areaRegionRows(e)   // area の region（shape/depth/width・diameter）＝randomarea と同一・プレビューで角/縁ドラッグも可
      +'<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 childplan 配下へネスト可。</span></div>';
     if(ht) ht.innerHTML='<button id="cp-del">グループ削除</button>';
     if($('#cp-del')) $('#cp-del').onclick=()=>{ const rm=groupDescendants([sel]); const c=rm.size; plan.entries=plan.entries.filter((x,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); render(); status('childplan を子ごと削除（'+c+'件）'); };
-    wireGroupSel(e); return; }
+    wireAreaFields(e, areaRegionFields(e)); wireGroupSel(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, canRoll=rollable(e);
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
@@ -937,8 +938,8 @@ function metaLine(e){ const rp=e.relPos||{}; const p=[];
   p.push('"relPos": '+JSON.stringify({d:rp.d||0,h:rp.h||0,w:rp.w||0}));
   p.push('"relDir": '+JSON.stringify(e.relDir||'FRONT'));
   p.push('"type": '+JSON.stringify(e.type));
-  if(e.type==='childplan'){ if(e.plan) p.push('"plan": '+JSON.stringify(e.plan)); if(e.margin!=null) p.push('"margin": '+JSON.stringify(e.margin)); if(e.footprint) p.push('"footprint": '+JSON.stringify(e.footprint)); if(e.footprintOverflow) p.push('"footprintOverflow": true'); } // childplan=展開元の子ファイル名（表示用）＋継承 footprint（round-trip用）
-  else p.push('"params": '+JSON.stringify(e.params||{}));
+  p.push('"params": '+JSON.stringify(e.params||{}));   // area（randomarea / childplan）共通＝region（shape/depth/width/diameter）。randomarea はランダム系も含む
+  if(e.type==='childplan'&&e.plan) p.push('"plan": '+JSON.stringify(e.plan)); // childplan=展開元の子ファイル名（表示用）
   if(e.group) p.push('"group": '+JSON.stringify(e.group)); // childplan のネスト（親グループ所属）・mod は meta を無視
   return '{'+p.join(', ')+'}';
 }
@@ -974,10 +975,10 @@ function fitCam(){
 function w2c(d,w){ return [camo.x + w*camo.scale, camo.y - d*camo.scale]; }
 // entry の world footprint（描画用の頂点/中心）
 function worldShape(e){
-  if(e.type==='randomarea') return regionShape(e);
-  const isRef=(e.type==='plan'||e.type==='structure'||e.type==='childplan'); // childplan=展開前参照の footprint を継承（未設定なら marker）
+  if(isGroupParent(e)) return regionShape(e);   // area（randomarea / childplan）＝params の region。同一コード、違いはランダム機能/フィールドの有無のみ
+  const isRef=(e.type==='plan'||e.type==='structure'); // plan（展開前）/structure=子ファイル由来 footprint（area ではない）
   if(!isRef&&!(SCHEMA&&e.type in SCHEMA.builders)) return null;   // 未知typeは安全にマーカー扱い
-  // builder=paramから導出 / plan・structure・childplan=保存/継承した footprint。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
+  // builder=paramから導出 / plan・structure=子ファイルの footprint。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
   const fp=isRef?e.footprint:footprintFor(e);
   const sh=shapeFromFp(fp, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); // 未設定(参照の footprint 無し)は null=marker
   if(sh) sh.ground=e.ground;
@@ -985,14 +986,14 @@ function worldShape(e){
 }
 // ---------- 重なり判定（確保領域 = footprint + margin）----------
 function reservedRegion(e){
-  if(e.type==='randomarea') return null; // 領域は重なり判定対象外
+  if(isGroupParent(e)) return null; // area（randomarea/childplan）は重なり判定対象外
   const sh=worldShape(e); if(!sh) return null; // plan/structure(marker) は footprint なし→対象外
   if(sh.shape==='RECT'){ const ds=sh.reserved.map(p=>p.d), ws=sh.reserved.map(p=>p.w);
     return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
   return {kind:'circle', cd:sh.center.d, cw:sh.center.w, r:sh.rr};
 }
 function bodyRegion(e){
-  if(e.type==='randomarea') return null; // 領域は重なり判定対象外
+  if(isGroupParent(e)) return null; // area（randomarea/childplan）は重なり判定対象外
   const sh=worldShape(e); if(!sh) return null; // marker は対象外
   if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
     return {kind:'rect', d0:Math.min(...ds), d1:Math.max(...ds), w0:Math.min(...ws), w1:Math.max(...ws)}; }
@@ -1012,7 +1013,7 @@ function ptInFp(d,w,sh){ const EPS=1e-6; // 点が footprint 形状の内側か�
   if(sh.shape==='CIRCLE') return Math.hypot(d-sh.center.d, w-sh.center.w) <= sh.r+EPS;
   const ds=sh.body.map(p=>p.d), ws=sh.body.map(p=>p.w);
   return d>=Math.min(...ds)-EPS && d<=Math.max(...ds)+EPS && w>=Math.min(...ws)-EPS && w<=Math.max(...ws)+EPS; }
-function entryProtrudes(e, fpSh){ if(e.type==='randomarea') return false; const sh=worldShape(e);
+function entryProtrudes(e, fpSh){ if(isGroupParent(e)) return false; const sh=worldShape(e);   // area（randomarea/childplan）はplan footprintはみ出し判定の対象外
   if(!sh){ if(e.type!=='plan'&&e.type!=='structure') return false; const c=xform(0,0,e.relPos||{},e.relDir||'FRONT'); return !ptInFp(c.d,c.w,fpSh); } // footprint未読込の参照=原点位置で判定
   const pts=(sh.shape==='RECT')?sh.body:sh.pts; return pts.some(p=>!ptInFp(p.d,p.w,fpSh)); }
 function planOverflow(){ const fpSh=fpWorldShape(); if(!fpSh) return false; return plan.entries.some(e=>entryProtrudes(e,fpSh)); } // 保存フラグ用
@@ -1041,7 +1042,7 @@ function nearRegionBorder(e,d,w){ const sh=worldShape(e); if(!sh) return false; 
 function candidatesAt(d,w,px,py){
   const list=[];
   plan.entries.forEach((e,i)=>{
-    if(e.type==='randomarea'){ if(nearRegionBorder(e,d,w)) list.push(i); return; } // 領域は枠付近のみ選択対象
+    if(isGroupParent(e)){ if(nearRegionBorder(e,d,w)) list.push(i); return; } // area（randomarea/childplan）は枠付近のみ選択対象
     const sh=worldShape(e);
     if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w); if(Math.hypot(px-x,py-y)<=10*devicePixelRatio) list.push(i); return; }
     if(sh.shape==='RECT'){ const ds=sh.body.map(p=>p.d),ws=sh.body.map(p=>p.w); if(d>=Math.min(...ds)&&d<=Math.max(...ds)&&w>=Math.min(...ws)&&w<=Math.max(...ws)) list.push(i); }
@@ -1055,7 +1056,7 @@ function unxform(D,W,dir){ if(dir==='RIGHT') return {ld:W,lw:-D}; if(dir==='BACK
 // 4角のいずれか/縁に近いか。角は対角(opp)のworld座標を固定点として返す
 // サイズフィールド(depth/width/diameter)が「全て」fix済みの時だけ GUI リサイズを完全禁止。一部fixは軸ごとに据え置く
 function sizeFixedOf(e){ const sf=sizeFieldsOf(e)||[]; return sf.map(k=>!!(e.cond&&e.cond[k]&&e.cond[k].fix)); } // 各サイズ軸の fix 有無
-function sizeLocked(e){ if(e.type==='randomarea'||!e.cond) return false; const sf=sizeFieldsOf(e); return !!(sf&&sf.length&&sf.every(k=>e.cond[k]&&e.cond[k].fix)); }
+function sizeLocked(e){ if(isGroupParent(e)||!e.cond) return false; const sf=sizeFieldsOf(e); return !!(sf&&sf.length&&sf.every(k=>e.cond[k]&&e.cond[k].fix)); }   // area はロック概念なし
 // ---- plan 自身の footprint をプレビュー上で移動/リサイズするための当たり判定（plan原点=world原点・FRONT固定） ----
 function fpWorldCorners(){ const fp=plan.footprint; if(!FP.isRect(fp)) return null; const d=FP.dRange(fp),w=FP.wRange(fp); return [{d:d[0],w:w[0]},{d:d[1],w:w[0]},{d:d[1],w:w[1]},{d:d[0],w:w[1]}]; }
 function fpHandleAt(px,py){ const fp=plan.footprint; if(!fp) return null; const R=10*devicePixelRatio;
@@ -1064,13 +1065,13 @@ function fpHandleAt(px,py){ const fp=plan.footprint; if(!fp) return null; const 
 function fpBodyHit(d,w){ const fp=plan.footprint; if(!fp) return false;
   if(FP.isCircle(fp)) return Math.hypot(d,w)<=FP.radius(fp); // 中心=原点
   const dd=FP.dRange(fp),ww=FP.wRange(fp); return d>=dd[0]&&d<=dd[1]&&w>=ww[0]&&w<=ww[1]; }
-function resizeHandleAt(e,px,py){ if(!((e.type in SCHEMA.builders)||e.type==='randomarea')) return null; if(sizeLocked(e)) return null; const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;   // randomarea も幅変更可（region は rp 角固定・applyResize/setSizeFields が対応済）。childplan/plan/structure は子ファイル由来 footprint＝非対応
+function resizeHandleAt(e,px,py){ if(!((e.type in SCHEMA.builders)||isGroupParent(e))) return null; if(sizeLocked(e)) return null; const sh=worldShape(e); if(!sh) return null; const rp=e.relPos||{}, R=10*devicePixelRatio;   // area（randomarea / childplan）も幅変更可（region は rp 角固定）。plan/structure は子ファイル由来 footprint＝非対応
   if(sh.shape==='RECT'){ if(sh.body[0].d!==(rp.d||0)||sh.body[0].w!==(rp.w||0)) return null; // corner-anchorのみ
     for(let k=0;k<4;k++){ const c=sh.body[k]; const [hx,hy]=w2c(c.d,c.w); if(Math.hypot(px-hx,py-hy)<=R){ const o=sh.body[(k+2)%4]; return {type:'corner', opp:{d:o.d,w:o.w}}; } } return null; }
   const [cx,cy]=w2c(sh.center.d,sh.center.w+sh.r); return (Math.hypot(px-cx,py-cy)<=R)?{type:'rim'}:null; }
 function sizeFieldsOf(e){ if(!(e.type in SCHEMA.builders)) return null; const pr={}, f=SCHEMA.builders[e.type].fields; for(const k of Object.keys(f)) pr[k]=fieldVal(e,e.type,k); return footprintSizeFields(e.type,pr); }
 function setSizeFields(e,vals){ // vals=[depth,width] or [diameter]
-  if(e.type==='randomarea'){ if(vals.length===2){ e.params.depth=vals[0]; e.params.width=vals[1]; } else e.params.diameter=vals[0]; return; }
+  if(isGroupParent(e)){ e.params=e.params||{}; if(vals.length===2){ e.params.depth=vals[0]; e.params.width=vals[1]; } else e.params.diameter=vals[0]; return; }   // area（randomarea / childplan）共通
   const sf=sizeFieldsOf(e); if(!sf) return; e.params=e.params||{}; sf.forEach((k,i)=>{ if(e.cond&&e.cond[k]&&e.cond[k].fix) return; /* fix軸は据え置き（値・fix保持） */ if(e.cond) delete e.cond[k]; if(vals[i]!=null) e.params[k]=vals[i]; }); }
 function applyResize(e,p,hz){ const dir=e.relDir||'FRONT', rp=e.relPos||{};
   if(hz.type==='corner'){ const Pd=Math.round(p.d), Pw=Math.round(p.w), od=hz.opp.d, ow=hz.opp.w;
@@ -1117,7 +1118,7 @@ function render(){
   // entries
   const ovl=computeOverlaps();
   plan.entries.forEach((e,i)=>{
-    if(e.type==='randomarea'){ drawRegion(e, i===sel); return; }
+    if(isGroupParent(e)){ drawRegion(e, i===sel); return; }   // area（randomarea / childplan）は region 描画
     const sh=worldShape(e); const on=selset.has(i)||(i===sel);
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
@@ -1191,7 +1192,7 @@ function render(){
   ctx.fillText((sel>=0?'sel ':'cursor ')+'d'+cp.d+' w'+cp.w, 8*devicePixelRatio, H-8*devicePixelRatio);
   // 選択中エントリのサイズハンドル（角/縁をドラッグで depth/width・diameter 編集）
   if(sel>=0&&plan.entries[sel]){ const se=plan.entries[sel], ssh=worldShape(se), HS=5*devicePixelRatio;
-    if(ssh && ((se.type in SCHEMA.builders)||se.type==='randomarea')){ ctx.fillStyle=sizeLocked(se)?'#5a6b67':'#D4A93C'; // fix済みは灰色＝ロック可視化（ドラッグ不可）・randomareaも角/縁ハンドル表示
+    if(ssh && ((se.type in SCHEMA.builders)||isGroupParent(se))){ ctx.fillStyle=sizeLocked(se)?'#5a6b67':'#D4A93C'; // fix済みは灰色＝ロック可視化（ドラッグ不可）・area（randomarea/childplan）も角/縁ハンドル表示
       if(ssh.shape==='RECT'){ if(ssh.body[0].d===((se.relPos||{}).d||0)&&ssh.body[0].w===((se.relPos||{}).w||0)) ssh.body.forEach(c=>{ const [hx,hy]=w2c(c.d,c.w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); } // 全4角
       else { const [hx,hy]=w2c(ssh.center.d,ssh.center.w+ssh.r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } } }
   function poly(pts){ ctx.beginPath(); pts.forEach((p,k)=>{const [x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); }
@@ -1202,7 +1203,7 @@ function drawClipGhost(e, off, stroke, fill){
   ee.relPos.d=(ee.relPos.d||0)+off.d; ee.relPos.w=(ee.relPos.w||0)+off.w;
   const strokePoly=(pts)=>{ ctx.beginPath(); pts.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w);k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); };
   ctx.setLineDash([4,3]); ctx.lineWidth=1.8; ctx.strokeStyle=stroke; ctx.fillStyle=fill;
-  if(ee.type==='randomarea'){ const sh=regionShape(ee);
+  if(isGroupParent(ee)){ const sh=regionShape(ee);   // area（randomarea/childplan）のゴースト
     if(sh.shape==='RECT') strokePoly(sh.body); else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); }
     ctx.setLineDash([]); return; }
   const sh=worldShape(ee);
@@ -1317,7 +1318,7 @@ async function scatterArea(m){
   const cmin=p.countMin|0, cmax=p.countMax|0, cap=cmax>0?cmax:Infinity; // 下限~上限（上限0=無制限＝詰める）
   plan.entries=plan.entries.filter(e=>e.group!==id);   // 既存の子を除去（再抽選）
   const rng=mulberry32((p.seed|0)||1), reg=regionWorld(m);
-  const exclude=plan.entries.filter(e=>e.type!=='randomarea' && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean);
+  const exclude=plan.entries.filter(e=>!isGroupParent(e) && !enclosesRegion(e,reg)).map(reservedRegion).filter(Boolean);   // area（randomarea/childplan）同士は衝突除外
   const tmpl=rollParams(bt,src,rng); // footprint サイズ場は全子固定
   const sizeFields=footprintSizeFields(bt, Object.assign({}, defaultsOf(bt), tmpl));
   const fc=p.facing||(p.rotate===false?'front':'random');
@@ -1384,8 +1385,9 @@ async function scatterArea(m){
 }
 // randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
 // 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
-function raFields(e){ const rect=((e.params.shape||'RECT')==='RECT');
-  return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']])
+function areaRegionFields(e){ const rect=(((e.params||{}).shape||'RECT')==='RECT');   // area 共通の region フィールド（randomarea/childplan）
+  return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']]); }
+function raFields(e){ return areaRegionFields(e)   // randomarea = region + ランダム系フィールド（childplan はランダム系を持たない）
     .concat([['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]); }
 function raEditor(e,k,kind){ const p=e.params, v=(k==='id'?e.id:p[k]);
   if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
@@ -1396,8 +1398,8 @@ function raEditor(e,k,kind){ const p=e.params, v=(k==='id'?e.id:p[k]);
 function randomEditorRows(e){
   let h=raFields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join('');
   return h; } // 抽選/子削除ボタンはパネル右上(#phdtools)へ移動
-function wireRandomEditor(e){ const p=e.params;
-  raFields(e).forEach(([k,kind])=>{
+function wireAreaFields(e, fields){ const p=e.params=e.params||{};   // area 共通のフィールド結線（randomarea/childplan）
+  fields.forEach(([k,kind])=>{
     if(kind==='ro') return;
     const el=$('#ra-'+k); if(!el) return;
     if(kind==='enum2') el.onchange=()=>{ p.shape=el.value; persist();renderEntries();renderTParams();render(); }; // RECT↔CIRCLE で depth/width ↔ diameter 切替
@@ -1405,6 +1407,9 @@ function wireRandomEditor(e){ const p=e.params;
     else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source=DEF_KEY; persist();renderEntries();renderTParams(); };
     else { const min=(k==='depth'||k==='width'||k==='diameter')?1:0; el.oninput=()=>{ p[k]=Math.max(min,Math.round(+el.value||0)); persist();renderEntries();render(); }; }
   });
+}
+function areaRegionRows(e){ return areaRegionFields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join(''); }
+function wireRandomEditor(e){ const p=e.params; wireAreaFields(e, raFields(e));   // randomarea = area 共通 + ランダム系（抽選/子削除）
   $('#ra-run').onclick=(ev)=>{ if(scatterBusy) return; scatterBusy=true; flashBtn(ev.currentTarget); p.seed=Math.floor(Math.random()*1e9); scatterArea(e).finally(()=>{ scatterBusy=false; busy(false); }); };
   $('#ra-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==e.id); sel=-1; selset.clear(); persist();renderEntries();renderEditor();render(); status('子を削除'); };
 }
@@ -1463,12 +1468,22 @@ function expandRef(parent, idx, child, refName){
   items.forEach(c=>{ const nid=fresh(c.type); if(c.id) idMap[c.id]=nid; c.id=nid; });   // 全アイテムに衝突しない新id
   items.forEach(c=>{ if(c.group){ c.group=idMap[c.group]||c.group; } else { c.group=cpId; } }); // 旧group→新group（ネスト保持）／トップレベルは新childplan配下
   const prp=parent.relPos||{d:0,h:0,w:0};
-  const cp={id:cpId, type:'childplan', relPos:{d:prp.d||0,h:prp.h||0,w:prp.w||0}, relDir:parent.relDir||'FRONT', plan:refName||''};
-  if(parent.footprint) cp.footprint=FP.norm(parent.footprint);   // 展開前参照の footprint を継承＝範囲ボックス（描画/重なり/はみ出し判定に使用）
-  if(parent.footprintOverflow) cp.footprintOverflow=true;
-  if(parent.margin!=null) cp.margin=parent.margin;
+  const ar=areaFromExpansion(parent, items);   // childplan=area。region(params)と relPos を展開前参照 footprint（無ければ子の bbox）から算出
+  const cp={id:cpId, type:'childplan', relPos:ar.relPos, relDir:parent.relDir||'FRONT', plan:refName||'', params:ar.params};
   if(parent.group) cp.group=parent.group;   // 参照自身がネストされていたら childplan もその group を継承（外側ネスト維持）
   plan.entries.splice(idx,1, cp, ...items); return items.length;
+}
+// childplan(area) の region を算出：展開前参照に footprint があれば継承、無ければ展開した子の world body bbox。
+function areaFromExpansion(parent, items){ const prp=parent.relPos||{d:0,h:0,w:0}, pdir=parent.relDir||'FRONT', fp=parent.footprint;
+  if(fp&&fp.shape==='CIRCLE'){ return {relPos:{d:prp.d||0,h:(prp.h||0)+FP.hRange(fp)[0],w:prp.w||0}, params:{shape:'CIRCLE', diameter:fp.diameter}}; }
+  if(fp&&fp.shape==='RECT'){ const d=FP.dRange(fp), w=FP.wRange(fp), anc=xform(d[0],w[0],prp,pdir);
+    return {relPos:{d:anc.d,h:(prp.h||0)+FP.hRange(fp)[0],w:anc.w}, params:{shape:'RECT', depth:d[1]-d[0]+1, width:w[1]-w[0]+1}}; }
+  let d0=Infinity,d1=-Infinity,w0=Infinity,w1=-Infinity;   // footprint 無し→子の world body から bbox
+  items.forEach(it=>{ const sh=worldShape(it); if(!sh){ const c=xform(0,0,it.relPos||{},it.relDir||'FRONT'); d0=Math.min(d0,c.d);d1=Math.max(d1,c.d);w0=Math.min(w0,c.w);w1=Math.max(w1,c.w); return; }
+    const pts=(sh.shape==='RECT')?sh.body:[{d:sh.center.d-sh.r,w:sh.center.w-sh.r},{d:sh.center.d+sh.r,w:sh.center.w+sh.r}];
+    pts.forEach(p=>{ d0=Math.min(d0,p.d);d1=Math.max(d1,p.d);w0=Math.min(w0,p.w);w1=Math.max(w1,p.w); }); });
+  if(!isFinite(d0)){ d0=d1=prp.d||0; w0=w1=prp.w||0; }
+  return {relPos:{d:Math.round(d0),h:prp.h||0,w:Math.round(w0)}, params:{shape:'RECT', depth:Math.round(d1-d0+1), width:Math.round(w1-w0+1)}};
 }
 // 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
 async function readChildFp(name){ if(!DIR||!name) return null; try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} return null; }
