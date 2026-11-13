@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.06';
+const APP_VERSION='1.07';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -386,7 +386,8 @@ function ensureIds(){ const raMap={};
     if(!e.id){ const nid=nextId(e.type); if(e.type==='randomarea'){ const old=e.params&&e.params.id; if(old) raMap[old]=nid; } e.id=nid; }
     if(e.type==='randomarea'&&e.params&&e.params.id!=null){ if(e.params.id!==e.id) raMap[e.params.id]=e.id; delete e.params.id; } });
   if(Object.keys(raMap).length) plan.entries.forEach(e=>{ if(e&&e.group&&raMap[e.group]) e.group=raMap[e.group]; }); }
-function childIdxsOf(i){ const e=plan.entries[i]; if(!e||e.type!=='randomarea') return []; const id=e.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
+const isGroupParent=e=>!!e&&(e.type==='randomarea'||e.type==='childplan'); // グループ親＝randomarea / childplan（子を group=id で束ねる）
+function childIdxsOf(i){ const e=plan.entries[i]; if(!isGroupParent(e)) return []; const id=e.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
 // エントリの world 上の外接矩形（範囲選択の内包判定用）
 function entryBBox(e){
   if(e.type==='randomarea'){ const r=regionWorld(e); return r.shape==='RECT'?{d0:r.d0,d1:r.d1,w0:r.w0,w1:r.w1}:{d0:r.cd-r.r,d1:r.cd+r.r,w0:r.cw-r.r,w1:r.cw+r.r}; }
@@ -512,15 +513,20 @@ function snapshot(){ const s=JSON.stringify(plan), now=Date.now();
 function restoreHist(){ plan=JSON.parse(history[histIdx]); sel=-1; selset.clear(); try{localStorage.setItem('city-blueprint:plan',history[histIdx]);}catch(_){ } renderEntries(); renderEditor(); renderJson(); render(); }
 function undo(){ if(histIdx>0){ histIdx--; restoreHist(); status('戻る'); } else status('これ以上戻れません'); }
 function redo(){ if(histIdx<history.length-1){ histIdx++; restoreHist(); status('進む'); } else status('これ以上進めません'); }
-// 一括削除（親 randomarea は紐づく子も削除）(⑬⑭)
+// 選択した親の全子孫 index（group 連鎖をたどる・childplan ネスト対応）
+function groupDescendants(startIdxs){ const rm=new Set(startIdxs); let changed=true;
+  while(changed){ changed=false; const pids=new Set();
+    plan.entries.forEach((e,i)=>{ if(rm.has(i)&&isGroupParent(e)&&e.id) pids.add(e.id); });
+    plan.entries.forEach((e,i)=>{ if(!rm.has(i)&&e.group&&pids.has(e.group)){ rm.add(i); changed=true; } }); }
+  return rm; }
+// 一括削除（親 randomarea/childplan は紐づく子孫も削除・ネスト連鎖）(⑬⑭)
 function deleteSelected(){ if(copyMode) return; const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); if(!idxs.length) return; // コピー/切り取り中は無効
-  const ids=idxs.map(i=>plan.entries[i]).filter(x=>x&&x.type==='randomarea').map(x=>x.id).filter(Boolean);
-  const rm=new Set(idxs); plan.entries.forEach((e,i)=>{ if(e.group&&ids.includes(e.group)) rm.add(i); });
+  const rm=groupDescendants(idxs);
   plan.entries=plan.entries.filter((e,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); status('削除 '+rm.size+'件'); }
 // グループ解除（親削除から守りたい子用）(⑭)：親選択→全子のgroup削除 / 子選択→自身のgroup削除
-function selHasUnlinkTarget(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); return idxs.some(i=>{ const e=plan.entries[i]; if(!e) return false; if(e.group) return true; if(e.type==='randomarea'){ const id=e.id; return plan.entries.some(x=>x.group===id); } return false; }); }
+function selHasUnlinkTarget(){ const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); return idxs.some(i=>{ const e=plan.entries[i]; if(!e) return false; if(e.group) return true; if(isGroupParent(e)){ const id=e.id; return plan.entries.some(x=>x.group===id); } return false; }); }
 function unlinkSelected(){ if(copyMode) return; const idxs=selset.size?[...selset]:(sel>=0?[sel]:[]); // コピー/切り取り中は無効
-  const pids=idxs.map(i=>plan.entries[i]).filter(e=>e&&e.type==='randomarea').map(e=>e.id).filter(Boolean);
+  const pids=idxs.map(i=>plan.entries[i]).filter(e=>isGroupParent(e)).map(e=>e.id).filter(Boolean);
   let n=0; plan.entries.forEach(e=>{ if(e.group&&pids.includes(e.group)){ delete e.group; n++; } }); // 親→全子
   idxs.forEach(i=>{ const e=plan.entries[i]; if(e&&e.group){ delete e.group; n++; } });               // 子→自身
   if(n){ persist(); renderEntries(); renderEditor(); status('グループ解除 '+n+'件'); } else status('解除対象がありません'); }
@@ -571,6 +577,7 @@ function renderEntries(){
     let ref='';
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
     else if(e.type==='randomarea'){ const id=e.id; const n=plan.entries.filter(x=>x.group===id).length; const cmn=e.params.countMin|0, cmx=e.params.countMax|0; const ct=cmx>0?(cmn+'~'+cmx):(cmn>0?cmn+'~詰':'詰める'); ref=(e.params.builder||'?')+'×'+ct+' ('+n+'配置)'; }
+    else if(e.type==='childplan'){ const id=e.id; const n=plan.entries.filter(x=>x.group===id).length; ref=(e.plan||'childplan')+' ('+n+'件)'; }
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+idOf(e)+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
@@ -588,7 +595,9 @@ function basicVal(e,k){ const rp=e.relPos||{};
   if(k==='ground') return e.ground?specOrValStr(e.ground):'なし';
   if(k==='group') return e.group||'なし';
   return ''; }
-function groupSelectHtml(e){ const ids=plan.entries.filter(x=>x.type==='randomarea'&&x.id).map(x=>x.id), cur=e.group||''; // group=所属randomarea（基本パラメータ扱い）
+function descendantIds(e){ const ids=new Set(e&&e.id?[e.id]:[]); let changed=true; // e の全子孫id（group連鎖・自身含む）＝グループ先候補から除外しサイクル防止
+  while(changed){ changed=false; plan.entries.forEach(x=>{ if(x.group&&ids.has(x.group)&&x.id&&!ids.has(x.id)){ ids.add(x.id); changed=true; } }); } return ids; }
+function groupSelectHtml(e){ const banned=descendantIds(e); const ids=plan.entries.filter(x=>isGroupParent(x)&&x.id&&!banned.has(x.id)).map(x=>x.id), cur=e.group||''; // group先＝randomarea/childplan（自身と子孫は除外＝サイクル防止）
   const extra=(cur&&!ids.includes(cur))?('<option value="'+cur+'" selected>'+cur+'（欠番）</option>'):'';
   return '<select id="e-group"><option value="">（なし）</option>'+ids.map(id=>'<option value="'+id+'"'+(cur===id?' selected':'')+'>'+id+'</option>').join('')+extra+'</select>'; }
 function refreshBasic(e,k){ const s=$('#br-'+k); if(s) s.textContent=basicVal(e,k); }
@@ -714,12 +723,25 @@ function renderTParams(){
     const fp=e.footprint, fpinfo = fp ? (FP.info(fp)+(e.footprintOverflow?' <span style="color:#D24B4B">⚠はみ出しあり</span>':'')) : '（未読込＝マーカー表示）';
     box.innerHTML=meta
      +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" title="タップして子ファイルを選択（名前＋footprintを読込）" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px" title="子ファイルのfootprintを読み直す">再読込</button>':'')+'</div>'
-     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'（子ファイルから読込・mod無視）</span></div>';
+     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'（子ファイルから読込・mod無視）</span></div>'
+     +'<div class="r"><label>展開</label><button id="e-expand" style="padding:5px 8px;font-size:11px" title="子の直接エントリを取り込み childplan グループで括ってこの参照を置換（孫はマーカーのまま）">子を展開</button> <span class="muted" style="font-size:10px">childplan化・孫はマーカー（A方針）</span></div>';
     const applyPick=async()=>{ const r=await pickRefFile(); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
     $('#e-ref').onclick=applyPick;
     if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
+    $('#e-expand').onclick=async()=>{ const nm=(kind==='plan'?e.plan:e.structure); if(!nm){ status('先に子ファイルを選択してください'); return; }
+      const data=await loadChildFull(nm); if(!data) return; const ne=(data.entries||[]).length, nm2=(data.meta||[]).length;
+      if(!ne&&!nm2){ status('子にエントリがありません'); return; }
+      if(!confirm('「'+nm+'」の子（entries '+ne+'＋meta '+nm2+'）を展開し、childplan グループで括ってこの参照('+idOf(e)+')を置換します。よろしいですか？（孫はマーカー・Undo可）')) return;
+      snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: childplan に '+n+'件を取り込み（参照を置換）', 5000); };
     wireGroupSel(e); return; }
   if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); if(ht) ht.innerHTML='<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'; wireRandomEditor(e); return; }
+  if(t==='childplan'){ const n=plan.entries.filter(x=>x.group===e.id).length;
+    box.innerHTML=meta
+     +'<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+n+'件</span></div>'
+     +'<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 childplan 配下へネスト可。</span></div>';
+    if(ht) ht.innerHTML='<button id="cp-del">グループ削除</button>';
+    if($('#cp-del')) $('#cp-del').onclick=()=>{ const rm=groupDescendants([sel]); const c=rm.size; plan.entries=plan.entries.filter((x,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); render(); status('childplan を子ごと削除（'+c+'件）'); };
+    wireGroupSel(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, canRoll=rollable(e);
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
@@ -915,11 +937,13 @@ function metaLine(e){ const rp=e.relPos||{}; const p=[];
   p.push('"relPos": '+JSON.stringify({d:rp.d||0,h:rp.h||0,w:rp.w||0}));
   p.push('"relDir": '+JSON.stringify(e.relDir||'FRONT'));
   p.push('"type": '+JSON.stringify(e.type));
-  p.push('"params": '+JSON.stringify(e.params||{}));
+  if(e.type==='childplan'){ if(e.plan) p.push('"plan": '+JSON.stringify(e.plan)); } // childplan=展開元の子ファイル名（表示用）
+  else p.push('"params": '+JSON.stringify(e.params||{}));
+  if(e.group) p.push('"group": '+JSON.stringify(e.group)); // childplan のネスト（親グループ所属）・mod は meta を無視
   return '{'+p.join(', ')+'}';
 }
 function buildPlanJson(){
-  const ents=plan.entries.filter(e=>e.type!=='randomarea'), metas=plan.entries.filter(e=>e.type==='randomarea');
+  const ents=plan.entries.filter(e=>!isGroupParent(e)), metas=plan.entries.filter(isGroupParent); // randomarea/childplan は meta（mod 無視）、他は entries（mod が建てる）
   let s='{\n  "entries": [\n'+ents.map(e=>'    '+entryLine(e)).join(',\n')+(ents.length?'\n':'')+'  ]';
   if(plan.footprint){ s+=',\n  "footprint": '+JSON.stringify(plan.footprint); if(planOverflow()) s+=',\n  "footprintOverflow": true'; } // この plan 自身の footprint＋はみ出しフラグ（親の警告用・mod は無視）
   if(metas.length) s+=',\n  "meta": [\n'+metas.map(e=>'    '+metaLine(e)).join(',\n')+'\n  ]'; // アプリ専用（mod は entries のみ読む）
@@ -951,6 +975,8 @@ function w2c(d,w){ return [camo.x + w*camo.scale, camo.y - d*camo.scale]; }
 // entry の world footprint（描画用の頂点/中心）
 function worldShape(e){
   if(e.type==='randomarea') return regionShape(e);
+  if(e.type==='childplan') return null;   // グループ親＝footprint 無し。既存のマーカー描画パス（点＋ラベル）で表示・重なり/はみ出し判定の対象外
+  if(!(e.type==='plan'||e.type==='structure')&&!(SCHEMA&&e.type in SCHEMA.builders)) return null;   // 未知typeは安全にマーカー扱い
   // builder=paramから導出 / plan・structure=自ファイルの保存値。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
   const fp=(e.type==='plan'||e.type==='structure')?e.footprint:footprintFor(e);
   const sh=shapeFromFp(fp, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); // 未設定(plan/structure 未読込)は null=marker
@@ -1403,7 +1429,7 @@ async function saveFile(text,fname){
 }
 // plan/structure の参照：ファイルピッカーで .json を選び、{ファイル名, その子ファイルが持つ footprint} を返す（footprint は top-level から読込・無ければ null）。
 // 子ファイルから footprint（FP 正準形）＋はみ出しフラグを読む
-function parseChild(text){ try{ const j=JSON.parse(text); const fp=(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE'))?FP.norm(j.footprint):null; return {footprint:fp, overflow:!!(j&&j.footprintOverflow)}; }catch(_){} return {footprint:null, overflow:false}; }
+function parseChild(text){ try{ const j=JSON.parse(text); const fp=(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE'))?FP.norm(j.footprint):null; const entries=Array.isArray(j&&j.entries)?j.entries:[]; const meta=Array.isArray(j&&j.meta)?j.meta:[]; return {footprint:fp, overflow:!!(j&&j.footprintOverflow), entries, meta}; }catch(_){} return {footprint:null, overflow:false, entries:[], meta:[]}; }
 async function pickRefFile(){
   let file=null;
   if(window.showOpenFilePicker){
@@ -1414,7 +1440,32 @@ async function pickRefFile(){
     file=await new Promise(res=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=()=>res((inp.files&&inp.files[0])||null); inp.click(); });
   }
   if(!file) return null;
-  const m=parseChild(await file.text()); return { name:file.name, footprint:m.footprint, overflow:m.overflow };
+  const m=parseChild(await file.text()); return { name:file.name, footprint:m.footprint, overflow:m.overflow, entries:m.entries, meta:m.meta };
+}
+// 子ファイルの全内容（footprint/overflow/entries/meta）。フォルダ設定時は名前から直読（ピッカー不要）、無ければピッカー。
+async function loadChildFull(name){ if(DIR&&name){ const r=await readChildFp(name); if(r) return r; } return await pickRefFile(); }
+// 回転合成（親relDir ∘ 子relDir）。xform と同じ FRONT/RIGHT/BACK/LEFT=0/90/180/270。
+const DIR4=['FRONT','RIGHT','BACK','LEFT'];
+function composeDir(parentDir, childDir){ return DIR4[(DIR4.indexOf(parentDir||'FRONT')+DIR4.indexOf(childDir||'FRONT')+4)%4]; }
+// 子の1アイテム（entry/meta）を親(parent)の world フレームへ平坦化：relPos=親xform / relDir=回転合成 / h=親h＋子h。group/id は保持（後段で張替）。
+function flattenItem(parent, it){ const prp=parent.relPos||{d:0,h:0,w:0}, pdir=parent.relDir||'FRONT';
+  const c=JSON.parse(JSON.stringify(it)); const crp=c.relPos||{d:0,h:0,w:0}; const wp=xform(crp.d||0, crp.w||0, prp, pdir);
+  c.relPos={d:wp.d, h:(prp.h||0)+(crp.h||0), w:wp.w}; c.relDir=composeDir(pdir, c.relDir);
+  if((c.type==='plan'||c.type==='structure')&&c.footprint) c.footprint=FP.norm(c.footprint); return c; }
+// 展開：子(entries＋meta)を親参照(idx)の world フレームへ取り込み、新しい childplan グループで括る（randomarea と同じ group 機構）。
+//  ・id を衝突回避で全採番し直し、group 参照を旧→新へ張替（子の内部ネストを保持）。
+//  ・子でトップレベル(group無し)だったアイテムは新 childplan 配下へ。孫(plan/structure 参照)はマーカーのまま（A方針・後で再展開＝ネスト）。
+function expandRef(parent, idx, child, refName){
+  const items=[...(child.entries||[]), ...(child.meta||[])].filter(it=>it&&it.type).map(it=>flattenItem(parent, it));
+  const used=new Set(); plan.entries.forEach(e=>{ if(e&&e.id) used.add(e.id); });
+  const cnt={}, fresh=(type)=>{ let n=cnt[type]||0,id; do{ n++; id=type+n; }while(used.has(id)); cnt[type]=n; used.add(id); return id; };
+  const cpId=fresh('childplan'), idMap={};
+  items.forEach(c=>{ const nid=fresh(c.type); if(c.id) idMap[c.id]=nid; c.id=nid; });   // 全アイテムに衝突しない新id
+  items.forEach(c=>{ if(c.group){ c.group=idMap[c.group]||c.group; } else { c.group=cpId; } }); // 旧group→新group（ネスト保持）／トップレベルは新childplan配下
+  const prp=parent.relPos||{d:0,h:0,w:0};
+  const cp={id:cpId, type:'childplan', relPos:{d:prp.d||0,h:prp.h||0,w:prp.w||0}, relDir:parent.relDir||'FRONT', plan:refName||''};
+  if(parent.group) cp.group=parent.group;   // 参照自身がネストされていたら childplan もその group を継承（外側ネスト維持）
+  plan.entries.splice(idx,1, cp, ...items); return items.length;
 }
 // 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
 async function readChildFp(name){ if(!DIR||!name) return null; try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} return null; }
