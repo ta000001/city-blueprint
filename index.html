@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.11';
+const APP_VERSION='1.12';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -386,7 +386,25 @@ function ensureIds(){ const raMap={};
     if(!e.id){ const nid=nextId(e.type); if(e.type==='randomarea'){ const old=e.params&&e.params.id; if(old) raMap[old]=nid; } e.id=nid; }
     if(e.type==='randomarea'&&e.params&&e.params.id!=null){ if(e.params.id!==e.id) raMap[e.params.id]=e.id; delete e.params.id; } });
   if(Object.keys(raMap).length) plan.entries.forEach(e=>{ if(e&&e.group&&raMap[e.group]) e.group=raMap[e.group]; }); }
-const isGroupParent=e=>!!e&&(e.type==='randomarea'||e.type==='childplan'); // グループ親＝randomarea / childplan（子を group=id で束ねる）
+// ===== area（グループ親＝meta）の単一ソース・オブジェクト =====
+//  childplan = area の基本。randomarea = area + ランダム機能（random:true）だけを上乗せ。
+//  area 固有の振る舞い（判定/能力/region フィールド/既定値/エディタ）は全てここに集約し、
+//  個別関数からは Area.is(e) / Area.hasRandom(e) で1本呼びする（type ごとに別コードを書かない）。
+const Area = {
+  types: { childplan:{ random:false, nestable:true }, randomarea:{ random:true, nestable:false } },   // area の種類と能力（差分はここだけ：random=抽選/ランダム項目・nestable=他area配下へネスト）
+  is(e){ return !!e && !!(e.type in Area.types); },
+  hasRandom(e){ return !!e && !!(Area.types[e.type]||{}).random; },
+  nestable(e){ return !!e && !!(Area.types[e.type]||{}).nestable; },
+  shape(e){ return regionShape(e); },                                  // world 図形は region（params 由来）に一本化
+  regionFields(e){ const rect=(((e.params||{}).shape||'RECT')==='RECT'); // 全 area 共通の region フィールド
+    return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']]); },
+  randomFields(){ return [['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]; },
+  fields(e){ return Area.hasRandom(e) ? Area.regionFields(e).concat(Area.randomFields()) : Area.regionFields(e); },
+  defaults(type){ return (Area.types[type]||{}).random
+      ? { shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'outward', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) }
+      : { shape:'RECT', depth:1, width:1 }; },
+};
+const isGroupParent=Area.is;   // 後方互換の別名（＝Area.is）。area 判定は Area.is に一本化
 function childIdxsOf(i){ const e=plan.entries[i]; if(!isGroupParent(e)) return []; const id=e.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
 // エントリの world 上の外接矩形（範囲選択の内包判定用）
 function entryBBox(e){
@@ -550,7 +568,7 @@ function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
   if(type==='plan') e.plan='child.json';
   else if(type==='structure') e.structure='structure.json';
-  else if(type==='randomarea') e.params={ shape:'RECT', depth:24, width:24, diameter:24, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'outward', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) };
+  else if(Area.is({type})) e.params=Area.defaults(type);   // area（randomarea/childplan）の既定 region は Area に一本化
   else e.params={};
   e.id=nextId(type);
   return e;
@@ -576,8 +594,9 @@ function renderEntries(){
     const rp=e.relPos||{};
     let ref='';
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
-    else if(e.type==='randomarea'){ const id=e.id; const n=plan.entries.filter(x=>x.group===id).length; const cmn=e.params.countMin|0, cmx=e.params.countMax|0; const ct=cmx>0?(cmn+'~'+cmx):(cmn>0?cmn+'~詰':'詰める'); ref=(e.params.builder||'?')+'×'+ct+' ('+n+'配置)'; }
-    else if(e.type==='childplan'){ const id=e.id; const n=plan.entries.filter(x=>x.group===id).length; ref=(e.plan||'childplan')+' ('+n+'件)'; }
+    else if(Area.is(e)){ const id=e.id, n=plan.entries.filter(x=>x.group===id).length;   // area 一覧ラベル：random は builder×count、非random(childplan) は展開元ファイル
+      if(Area.hasRandom(e)){ const cmn=e.params.countMin|0, cmx=e.params.countMax|0, ct=cmx>0?(cmn+'~'+cmx):(cmn>0?cmn+'~詰':'詰める'); ref=(e.params.builder||'?')+'×'+ct+' ('+n+'配置)'; }
+      else ref=(e.plan||'childplan')+' ('+n+'件)'; }
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+idOf(e)+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
@@ -610,7 +629,7 @@ function renderEditor(){
     ['relPos', 'd<input type="number" id="e-d" value="'+(rp.d||0)+'">h<input type="number" id="e-h" value="'+(rp.h||0)+'">w<input type="number" id="e-w" value="'+(rp.w||0)+'">'],
     ['relDir', '<select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select>']
   ];
-  if(e.type!=='randomarea') rows.push(['group', groupSelectHtml(e)]); // group を基本パラメータとして表示（randomarea自身は親なので除外）
+  if(!Area.is(e)) rows.push(['group', groupSelectHtml(e)]); // group 行は非area のみ（area は専用エディタで nestable に応じ表示）
   if((e.type in SCHEMA.builders)||e.type==='plan'||e.type==='structure'){
     const isRect=(e.type in SCHEMA.builders)?((footprintFor(e)||{}).shape==='RECT'):((e.footprint&&e.footprint.shape)!=='CIRCLE'), mm=(e.margin==null)?'none':(typeof e.margin==='number'?'scalar':'sides');
     let me='<select id="e-mmode"><option value="none"'+(mm==='none'?' selected':'')+'>なし</option><option value="scalar"'+(mm==='scalar'?' selected':'')+'>一律</option>'+(isRect?('<option value="sides"'+(mm==='sides'?' selected':'')+'>四辺</option>'):'')+'</select>';
@@ -734,14 +753,16 @@ function renderTParams(){
       if(!confirm('「'+nm+'」の子（entries '+ne+'＋meta '+nm2+'）を展開し、childplan グループで括ってこの参照('+idOf(e)+')を置換します。よろしいですか？（孫はマーカー・Undo可）')) return;
       snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: childplan に '+n+'件を取り込み（参照を置換）', 5000); };
     wireGroupSel(e); return; }
-  if(t==='randomarea'){ box.innerHTML=meta+randomEditorRows(e); if(ht) ht.innerHTML='<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'; wireRandomEditor(e); return; }
-  if(t==='childplan'){ const n=plan.entries.filter(x=>x.group===e.id).length; e.params=e.params||{shape:'RECT',depth:1,width:1};
-    box.innerHTML=meta
-     +'<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+n+'件（area＝randomareaと同形・ランダム機能なし）</span></div>'
-     +areaRegionRows(e)   // area の region（shape/depth/width・diameter）＝randomarea と同一・プレビューで角/縁ドラッグも可
-     +'<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 childplan 配下へネスト可。</span></div>';
-    if(ht) ht.innerHTML='';   // area（childplan）はランダム機能なし＝専用ボタンなし。削除はエントリ一覧の削除（親子カスケード）で
-    wireAreaFields(e, areaRegionFields(e)); wireGroupSel(e); return; }
+  if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
+    const info = rand ? '' : '<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+plan.entries.filter(x=>x.group===e.id).length+'件（area・ランダム機能なし）</span></div>';
+    const rows = Area.fields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join('');
+    const hint = Area.nestable(e) ? '<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 area 配下へネスト可。</span></div>' : '';
+    box.innerHTML = meta + info + rows + hint;
+    if(ht) ht.innerHTML = rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>' : '';   // 抽選/子削除は random 能力のみ
+    wireAreaFields(e, Area.fields(e));
+    if(rand) wireRandomButtons(e);
+    if(Area.nestable(e)) wireGroupSel(e);
+    return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, canRoll=rollable(e);
   const probe={}; for(const k of Object.keys(fields)) probe[k]=fieldVal(e,t,k);
@@ -1382,21 +1403,15 @@ async function scatterArea(m){
   selOne(plan.entries.indexOf(m)); persist(); renderEntries(); renderEditor(); render();
   status('抽選: '+made+' 件配置（'+TRIES+'回試行の最良）'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/⚙の試行回数を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')), made<cmin?8000:4000);
 }
-// randomarea の params を物理名・1列・descriptor 駆動で表示（type別の他と同様に動的生成）
-// 他type同様フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
-function areaRegionFields(e){ const rect=(((e.params||{}).shape||'RECT')==='RECT');   // area 共通の region フィールド（randomarea/childplan）
-  return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']]); }
-function raFields(e){ return areaRegionFields(e)   // randomarea = region + ランダム系フィールド（childplan はランダム系を持たない）
-    .concat([['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]); }
+// area（randomarea/childplan）のフィールド descriptor・既定値・差分（random/nestable）は Area に集約済み。
+// ここは「1 フィールドの入力 UI 生成（raEditor）」「結線（wireAreaFields）」「ランダム専用ボタン（wireRandomButtons）」のみ。
+// フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
 function raEditor(e,k,kind){ const p=e.params, v=(k==='id'?e.id:p[k]);
   if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
   if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
   if(kind==='enum'){ const vals=k==='facing'?['front','random','outward']:(k==='builder')?builderTypes():allPresets(p.builder); return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
   if(kind==='bool') return '<label class="chk"><input type="checkbox" id="ra-'+k+'"'+(v?' checked':'')+'></label>';
   return '<input type="number" id="ra-'+k+'" value="'+(v||0)+'">'; }
-function randomEditorRows(e){
-  let h=raFields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join('');
-  return h; } // 抽選/子削除ボタンはパネル右上(#phdtools)へ移動
 function wireAreaFields(e, fields){ const p=e.params=e.params||{};   // area 共通のフィールド結線（randomarea/childplan）
   fields.forEach(([k,kind])=>{
     if(kind==='ro') return;
@@ -1407,8 +1422,7 @@ function wireAreaFields(e, fields){ const p=e.params=e.params||{};   // area 共
     else { const min=(k==='depth'||k==='width'||k==='diameter')?1:0; el.oninput=()=>{ p[k]=Math.max(min,Math.round(+el.value||0)); persist();renderEntries();render(); }; }
   });
 }
-function areaRegionRows(e){ return areaRegionFields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join(''); }
-function wireRandomEditor(e){ const p=e.params; wireAreaFields(e, raFields(e));   // randomarea = area 共通 + ランダム系（抽選/子削除）
+function wireRandomButtons(e){ const p=e.params;   // random 能力の area 専用ボタン（抽選/子削除）
   $('#ra-run').onclick=(ev)=>{ if(scatterBusy) return; scatterBusy=true; flashBtn(ev.currentTarget); p.seed=Math.floor(Math.random()*1e9); scatterArea(e).finally(()=>{ scatterBusy=false; busy(false); }); };
   $('#ra-clear').onclick=()=>{ plan.entries=plan.entries.filter(x=>x.group!==e.id); sel=-1; selset.clear(); persist();renderEntries();renderEditor();render(); status('子を削除'); };
 }
