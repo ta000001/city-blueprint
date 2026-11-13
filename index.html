@@ -290,9 +290,19 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p>ユーザープリセットは常に端末内に保存されますが、このフォルダを設定すると <b>user_presets.json</b> を保存/削除/取込のたび自動で書き出し、起動時に読み込みます。端末間の共有/バックアップ向け。</p>
 <p class="muted">非対応端末（iOS 等）では使えません（端末内保存＋書出/取込アイコンで対応）。</p>
 </div></div></div>
+<div class="modal" id="refhelp"><div class="m"><h3>参照（plan / structure）</h3><div class="hbody">
+<p><b>plan / structure</b> は子ファイルを参照する type です。タップで子ファイルを選ぶと、名前と <b>footprint</b>（外形）を読み込みます（footprint は mod では無視され、アプリ表示と親側の領域計算にだけ使われます）。</p>
+<p><b>再読込</b>：子ファイルの footprint を読み直します。</p>
+<p><b>子を展開</b>：子の直接エントリを取り込み、<b>childplan（area）</b> で束ねてこの参照を置き換えます。孫（さらに子を参照する plan/structure）はマーカーのまま残り、必要なら再度展開できます（ネスト）。</p>
+</div></div></div>
+<div class="modal" id="areahelp"><div class="m"><h3>area（randomarea / childplan）</h3><div class="hbody">
+<p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。</p>
+<p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>します（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
+<p><b>childplan</b>：plan を「子を展開」して出来る area です。ランダム機能は持ちません。<b>group</b> で他の area 配下へネストできます。</p>
+</div></div></div>
 
 <script>
-const APP_VERSION='1.12';
+const APP_VERSION='1.13';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -740,10 +750,12 @@ function renderTParams(){
   if(t==='plan'||t==='structure'){ const kind=t, refv=(kind==='plan'?e.plan:e.structure)||'';
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     const fp=e.footprint, fpinfo = fp ? (FP.info(fp)+(e.footprintOverflow?' <span style="color:#D24B4B">⚠はみ出しあり</span>':'')) : '（未読込＝マーカー表示）';
+    if(ht) ht.innerHTML='<span class="qbtn" id="ref-help" role="button" tabindex="0" title="参照の説明">?</span>';
+    if($('#ref-help')) $('#ref-help').onclick=()=>$('#refhelp').classList.add('on');
     box.innerHTML=meta
-     +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" title="タップして子ファイルを選択（名前＋footprintを読込）" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px" title="子ファイルのfootprintを読み直す">再読込</button>':'')+'</div>'
-     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'（子ファイルから読込・mod無視）</span></div>'
-     +'<div class="r"><label>展開</label><button id="e-expand" style="padding:5px 8px;font-size:11px" title="子の直接エントリを取り込み childplan グループで括ってこの参照を置換（孫はマーカーのまま）">子を展開</button> <span class="muted" style="font-size:10px">childplan化・孫はマーカー（A方針）</span></div>';
+     +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px">再読込</button>':'')+'</div>'
+     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'</span></div>'
+     +'<div class="r"><label>展開</label><button id="e-expand" style="padding:5px 8px;font-size:11px">子を展開</button></div>';
     const applyPick=async()=>{ const r=await pickRefFile(); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
     $('#e-ref').onclick=applyPick;
     if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
@@ -754,13 +766,14 @@ function renderTParams(){
       snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: childplan に '+n+'件を取り込み（参照を置換）', 5000); };
     wireGroupSel(e); return; }
   if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
-    const info = rand ? '' : '<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+plan.entries.filter(x=>x.group===e.id).length+'件（area・ランダム機能なし）</span></div>';
+    const info = rand ? '' : '<div class="r"><label>展開元</label><span class="muted" style="font-size:11px">'+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+plan.entries.filter(x=>x.group===e.id).length+'件</span></div>';
     const rows = Area.fields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join('');
-    const hint = Area.nestable(e) ? '<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 area 配下へネスト可。</span></div>' : '';
-    box.innerHTML = meta + info + rows + hint;
-    if(ht) ht.innerHTML = rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>' : '';   // 抽選/子削除は random 能力のみ
+    box.innerHTML = meta + info + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
+    if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>' : '')
+      + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除は random 能力のみ・説明は「?」へ
     wireAreaFields(e, Area.fields(e));
     if(rand) wireRandomButtons(e);
+    if($('#area-help')) $('#area-help').onclick=()=>$('#areahelp').classList.add('on');
     if(Area.nestable(e)) wireGroupSel(e);
     return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
@@ -1661,6 +1674,8 @@ function boot(){
   $('#fphelp').onclick=e=>{if(e.target.id==='fphelp')$('#fphelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
   $('#pdirhelp').onclick=e=>{if(e.target.id==='pdirhelp')$('#pdirhelp').classList.remove('on');};
+  $('#refhelp').onclick=e=>{if(e.target.id==='refhelp')$('#refhelp').classList.remove('on');};
+  $('#areahelp').onclick=e=>{if(e.target.id==='areahelp')$('#areahelp').classList.remove('on');};
   // canvas: エントリを掴んで配置（relPos.d/w をブロック単位で決定）/ 空きはパン / 2本指でピンチズーム
   let drag=null, pointers=new Map(), pinch=null;
   function ptWorld(e){ const r=cv.getBoundingClientRect(); const px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return {px,py, d:(camo.y-py)/camo.scale, w:(px-camo.x)/camo.scale}; }
