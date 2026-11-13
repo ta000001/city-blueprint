@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.07';
+const APP_VERSION='1.08';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -937,7 +937,7 @@ function metaLine(e){ const rp=e.relPos||{}; const p=[];
   p.push('"relPos": '+JSON.stringify({d:rp.d||0,h:rp.h||0,w:rp.w||0}));
   p.push('"relDir": '+JSON.stringify(e.relDir||'FRONT'));
   p.push('"type": '+JSON.stringify(e.type));
-  if(e.type==='childplan'){ if(e.plan) p.push('"plan": '+JSON.stringify(e.plan)); } // childplan=展開元の子ファイル名（表示用）
+  if(e.type==='childplan'){ if(e.plan) p.push('"plan": '+JSON.stringify(e.plan)); if(e.margin!=null) p.push('"margin": '+JSON.stringify(e.margin)); if(e.footprint) p.push('"footprint": '+JSON.stringify(e.footprint)); if(e.footprintOverflow) p.push('"footprintOverflow": true'); } // childplan=展開元の子ファイル名（表示用）＋継承 footprint（round-trip用）
   else p.push('"params": '+JSON.stringify(e.params||{}));
   if(e.group) p.push('"group": '+JSON.stringify(e.group)); // childplan のネスト（親グループ所属）・mod は meta を無視
   return '{'+p.join(', ')+'}';
@@ -975,11 +975,11 @@ function w2c(d,w){ return [camo.x + w*camo.scale, camo.y - d*camo.scale]; }
 // entry の world footprint（描画用の頂点/中心）
 function worldShape(e){
   if(e.type==='randomarea') return regionShape(e);
-  if(e.type==='childplan') return null;   // グループ親＝footprint 無し。既存のマーカー描画パス（点＋ラベル）で表示・重なり/はみ出し判定の対象外
-  if(!(e.type==='plan'||e.type==='structure')&&!(SCHEMA&&e.type in SCHEMA.builders)) return null;   // 未知typeは安全にマーカー扱い
-  // builder=paramから導出 / plan・structure=自ファイルの保存値。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
-  const fp=(e.type==='plan'||e.type==='structure')?e.footprint:footprintFor(e);
-  const sh=shapeFromFp(fp, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); // 未設定(plan/structure 未読込)は null=marker
+  const isRef=(e.type==='plan'||e.type==='structure'||e.type==='childplan'); // childplan=展開前参照の footprint を継承（未設定なら marker）
+  if(!isRef&&!(SCHEMA&&e.type in SCHEMA.builders)) return null;   // 未知typeは安全にマーカー扱い
+  // builder=paramから導出 / plan・structure・childplan=保存/継承した footprint。どちらも同じ共通 footprint オブジェクト→shapeFromFp で一本化。
+  const fp=isRef?e.footprint:footprintFor(e);
+  const sh=shapeFromFp(fp, e.relPos||{}, e.relDir||'FRONT', marginOf(e)); // 未設定(参照の footprint 無し)は null=marker
   if(sh) sh.ground=e.ground;
   return sh;
 }
@@ -1464,6 +1464,9 @@ function expandRef(parent, idx, child, refName){
   items.forEach(c=>{ if(c.group){ c.group=idMap[c.group]||c.group; } else { c.group=cpId; } }); // 旧group→新group（ネスト保持）／トップレベルは新childplan配下
   const prp=parent.relPos||{d:0,h:0,w:0};
   const cp={id:cpId, type:'childplan', relPos:{d:prp.d||0,h:prp.h||0,w:prp.w||0}, relDir:parent.relDir||'FRONT', plan:refName||''};
+  if(parent.footprint) cp.footprint=FP.norm(parent.footprint);   // 展開前参照の footprint を継承＝範囲ボックス（描画/重なり/はみ出し判定に使用）
+  if(parent.footprintOverflow) cp.footprintOverflow=true;
+  if(parent.margin!=null) cp.margin=parent.margin;
   if(parent.group) cp.group=parent.group;   // 参照自身がネストされていたら childplan もその group を継承（外側ネスト維持）
   plan.entries.splice(idx,1, cp, ...items); return items.length;
 }
