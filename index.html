@@ -292,7 +292,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.10';
+const APP_VERSION='1.11';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -740,8 +740,7 @@ function renderTParams(){
      +'<div class="r"><label>childplan</label><span class="muted" style="font-size:11px">展開元: '+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+n+'件（area＝randomareaと同形・ランダム機能なし）</span></div>'
      +areaRegionRows(e)   // area の region（shape/depth/width・diameter）＝randomarea と同一・プレビューで角/縁ドラッグも可
      +'<div class="r"><label></label><span class="muted" style="font-size:10px">親を選ぶと子も選択（一緒に移動/削除）。group で他 childplan 配下へネスト可。</span></div>';
-    if(ht) ht.innerHTML='<button id="cp-del">グループ削除</button>';
-    if($('#cp-del')) $('#cp-del').onclick=()=>{ const rm=groupDescendants([sel]); const c=rm.size; plan.entries=plan.entries.filter((x,i)=>!rm.has(i)); sel=-1; selset.clear(); persist(); renderEntries(); renderEditor(); render(); status('childplan を子ごと削除（'+c+'件）'); };
+    if(ht) ht.innerHTML='';   // area（childplan）はランダム機能なし＝専用ボタンなし。削除はエントリ一覧の削除（親子カスケード）で
     wireAreaFields(e, areaRegionFields(e)); wireGroupSel(e); return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, canRoll=rollable(e);
