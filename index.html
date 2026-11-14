@@ -302,7 +302,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.14';
+const APP_VERSION='1.15';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -760,10 +760,9 @@ function renderTParams(){
     $('#e-ref').onclick=applyPick;
     if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
     $('#e-expand').onclick=async()=>{ const nm=(kind==='plan'?e.plan:e.structure); if(!nm){ status('先に子ファイルを選択してください'); return; }
-      const data=await loadChildFull(nm); if(!data) return; const ne=(data.entries||[]).length, nm2=(data.meta||[]).length;
-      if(!ne&&!nm2){ status('子にエントリがありません'); return; }
-      if(!confirm('「'+nm+'」の子（entries '+ne+'＋meta '+nm2+'）を展開し、childplan グループで括ってこの参照('+idOf(e)+')を置換します。よろしいですか？（孫はマーカー・Undo可）')) return;
-      snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: childplan に '+n+'件を取り込み（参照を置換）', 5000); };
+      const data=await loadChildFull(nm); if(!data) return;
+      if(!(data.entries||[]).length && !(data.meta||[]).length){ status('子にエントリがありません'); return; }
+      snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: '+n+'件を取り込み（Undo可）', 4000); };
     wireGroupSel(e); return; }
   if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
     const info = rand ? '' : '<div class="r"><label>展開元</label><span class="muted" style="font-size:11px">'+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+plan.entries.filter(x=>x.group===e.id).length+'件</span></div>';
@@ -1442,21 +1441,23 @@ function wireRandomButtons(e){ const p=e.params;   // random 能力の area 専�
 
 /* ---------- 保存先（File System Access API + IndexedDB）: mc-blueprint から流用 ---------- */
 const FS_OK=!!(window.showDirectoryPicker);
-function idb(mode,fn){ return new Promise((res,rej)=>{ const r=indexedDB.open('cb',1);
+let _dbP=null;   // DB接続は1本に共有（毎回 open する作りは遅く・読書の競合で不安定になるため）
+function openDb(){ return _dbP||(_dbP=new Promise((res,rej)=>{ const r=indexedDB.open('cb',1);
   r.onupgradeneeded=()=>{ if(!r.result.objectStoreNames.contains('kv')) r.result.createObjectStore('kv'); };
-  r.onsuccess=()=>{ const tx=r.result.transaction('kv',mode); const out=fn(tx.objectStore('kv')); tx.oncomplete=()=>res(out&&out.result); tx.onerror=()=>rej(tx.error); };
-  r.onerror=()=>rej(r.error); }); }
+  r.onsuccess=()=>res(r.result); r.onerror=()=>{ _dbP=null; rej(r.error); }; })); }
+function idb(mode,fn){ return openDb().then(db=>new Promise((res,rej)=>{ const tx=db.transaction('kv',mode); const out=fn(tx.objectStore('kv'));
+  tx.oncomplete=()=>res(out&&out.result); tx.onerror=()=>rej(tx.error); tx.onabort=()=>rej(tx.error||new Error('abort')); })); }
 const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k)), idbGet=k=>idb('readonly',s=>s.get(k));
 // アプリ内 plan ライブラリ（IndexedDB）：フォルダ非対応端末(iOS 等)でも子 plan を「ファイル名」で自動解決するための保管庫。
 // 保存/オープン/参照選択のたびに basename.json で保管し、再読込/子を展開は名前で直読み（無い時だけ選択画面）。
 const planLibKey=name=>'plan:'+String(name||'').replace(/^.*[\\/]/,'').replace(/\.json$/i,'')+'.json';
-function libPut(name,text){ if(name&&text) idbSet(planLibKey(name), text).catch(()=>{}); }
+function libPut(name,text){ return (name&&text) ? idbSet(planLibKey(name), text).catch(()=>{}) : Promise.resolve(); }
 async function libGet(name){ if(!name) return null; try{ return await idbGet(planLibKey(name)); }catch(_){ return null; } }
 async function ensurePerm(h){ const o={mode:'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
 let DIR=null;
 async function pickDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} renderCfg(); status('保存先: '+h.name); }catch(_){} }
 let planName='my_plan'; // ⑧ 保存時のファイル名（押下時にpromptの既定値、入力値を記憶）
-async function saveFile(text,fname){ libPut(fname, text);   // アプリ内ライブラリにも保管（iOS等で名前解決に使う）
+async function saveFile(text,fname){ await libPut(fname, text);   // アプリ内ライブラリにも保管（iOS等で名前解決に使う）
   if(DIR){ try{ if(await ensurePerm(DIR)){
     let exists=false; try{ await DIR.getFileHandle(fname); exists=true; }catch(_){}
     if(exists && !confirm(fname+' は既に存在します。上書きしますか？')){ status('保存を中止しました'); return; } // ⑩上書き確認
@@ -1486,7 +1487,7 @@ async function pickRefFile(){
     file=await new Promise(res=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=()=>res((inp.files&&inp.files[0])||null); inp.click(); });
   }
   if(!file) return null;
-  const text=await file.text(); libPut(file.name, text);   // 選んだ子をライブラリへ保管＝以後は名前で自動解決（選択不要）
+  const text=await file.text(); await libPut(file.name, text);   // 選んだ子をライブラリへ確実に保管＝以後は名前で自動解決（選択不要）
   const m=parseChild(text); return { name:file.name, footprint:m.footprint, overflow:m.overflow, entries:m.entries, meta:m.meta };
 }
 // 子ファイルの全内容（footprint/overflow/entries/meta）。名前から直読（フォルダ or アプリ内ライブラリ）、無ければピッカー。
@@ -1541,7 +1542,7 @@ async function savePlanPicker(){
       if(DIR) opts.startIn=DIR;                    // 保存先フォルダ設定時はそこを初期表示
       const h=await window.showSaveFilePicker(opts);
       const w=await h.createWritable(); await w.write(text); await w.close();
-      libPut(h.name||(planName+'.json'), text);   // アプリ内ライブラリにも保管
+      await libPut(h.name||(planName+'.json'), text);   // アプリ内ライブラリにも保管
       planName=(h.name||planName).replace(/\.json$/,''); // 次回の既定名に反映
       status('保存: '+h.name); return true;
     }catch(err){ if(err && err.name==='AbortError') return false; status('保存できません: '+((err&&err.message)||err)); return false; }
@@ -1664,13 +1665,13 @@ function boot(){
         const opts={types:[{description:'plan.json',accept:{'application/json':['.json']}}]};
         if(DIR) opts.startIn=DIR;                 // 設定した保存先フォルダから開く
         const [fh]=await window.showOpenFilePicker(opts);
-        const f=await fh.getFile(); const txt=await f.text(); libPut(f.name, txt); importPlan(txt);   // 開いた plan もライブラリへ（子参照の名前解決に使える）
+        const f=await fh.getFile(); const txt=await f.text(); await libPut(f.name, txt); planName=f.name.replace(/\.json$/i,''); importPlan(txt);   // 開いた plan をライブラリへ＋保存名の既定を読込ファイル名に（変更なし=上書き）
       }catch(err){ if(err && err.name!=='AbortError') status('開けません: '+err.message); }
       return;
     }
     $('#file').click(); // 非対応環境はファイル選択にフォールバック
   };
-  $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ libPut(f.name, r.result); importPlan(r.result); }; r.readAsText(f); ev.target.value=''; };   // 開いた plan もライブラリへ
+  $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ libPut(f.name, r.result); planName=f.name.replace(/\.json$/i,''); importPlan(r.result); }; r.readAsText(f); ev.target.value=''; };   // 開いた plan をライブラリへ＋保存名の既定を読込ファイル名に
   $('#fit').onclick=fitCam;
   $('#zin').onclick=()=>{camo.scale*=1.25;render();};
   $('#zout').onclick=()=>{camo.scale/=1.25;render();};
