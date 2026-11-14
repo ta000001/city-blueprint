@@ -302,7 +302,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.15';
+const APP_VERSION='1.16';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -406,8 +406,8 @@ const Area = {
   hasRandom(e){ return !!e && !!(Area.types[e.type]||{}).random; },
   nestable(e){ return !!e && !!(Area.types[e.type]||{}).nestable; },
   shape(e){ return regionShape(e); },                                  // world 図形は region（params 由来）に一本化
-  regionFields(e){ const rect=(((e.params||{}).shape||'RECT')==='RECT'); // 全 area 共通の region フィールド
-    return [['id','ro'],['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']]); },
+  regionFields(e){ const rect=(((e.params||{}).shape||'RECT')==='RECT'); // 全 area 共通の region フィールド（id はタイトルに表示＝重複のため出さない）
+    return [['shape','enum2']].concat(rect?[['depth','int'],['width','int']]:[['diameter','int']]); },
   randomFields(){ return [['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]; },
   fields(e){ return Area.hasRandom(e) ? Area.regionFields(e).concat(Area.randomFields()) : Area.regionFields(e); },
   defaults(type){ return (Area.types[type]||{}).random
@@ -766,7 +766,7 @@ function renderTParams(){
     wireGroupSel(e); return; }
   if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
     const info = rand ? '' : '<div class="r"><label>展開元</label><span class="muted" style="font-size:11px">'+String(e.plan||'(不明)').replace(/&/g,'&amp;').replace(/</g,'&lt;')+' ・ 直下 '+plan.entries.filter(x=>x.group===e.id).length+'件</span></div>';
-    const rows = Area.fields(e).map(([k,kind])=>'<div class="pf"><span class="k">'+k+'</span><span class="ped">'+raEditor(e,k,kind)+'</span></div>').join('');
+    const rows = Area.fields(e).map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
     box.innerHTML = meta + info + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
     if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>' : '')
       + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除は random 能力のみ・説明は「?」へ
@@ -1416,18 +1416,19 @@ async function scatterArea(m){
   status('抽選: '+made+' 件配置（'+TRIES+'回試行の最良）'+(made<cmin?'（下限 '+cmin+' に届かず・領域/間隔/⚙の試行回数を確認）':(cmax>0&&made>=cmax?'（上限 '+cmax+' に到達）':'')), made<cmin?8000:4000);
 }
 // area（randomarea/childplan）のフィールド descriptor・既定値・差分（random/nestable）は Area に集約済み。
-// ここは「1 フィールドの入力 UI 生成（raEditor）」「結線（wireAreaFields）」「ランダム専用ボタン（wireRandomButtons）」のみ。
+// ここは「1 フィールド行の描画（areaFieldRow＝frRow）」「結線（wireAreaFields）」「ランダム専用ボタン（wireRandomButtons）」のみ。
 // フラットな物理名（shape/depth/width/diameter…）。id は変更不可で表示（⑪）
-function raEditor(e,k,kind){ const p=e.params, v=(k==='id'?e.id:p[k]);
-  if(kind==='ro') return '<span class="muted">'+(v==null?'—':v)+'</span>';
-  if(kind==='enum2') return '<select id="ra-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>';
-  if(kind==='enum'){ const vals=k==='facing'?['front','random','outward']:(k==='builder')?builderTypes():allPresets(p.builder); return '<select id="ra-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>'; }
-  if(kind==='bool') return '<label class="chk"><input type="checkbox" id="ra-'+k+'"'+(v?' checked':'')+'></label>';
-  return '<input type="number" id="ra-'+k+'" value="'+(v||0)+'">'; }
-function wireAreaFields(e, fields){ const p=e.params=e.params||{};   // area 共通のフィールド結線（randomarea/childplan）
+// area の1フィールドを共通行テンプレ frRow で描画（他の行＝relPos等と見た目を揃える・数値はステッパー）。結果列は不要なので rowClass='fp'。
+function areaFieldRow(e,k,kind){ const p=e.params, v=p[k];
+  if(kind==='enum2') return frRow(k,'', '<select id="ar-'+k+'"><option'+(v==='RECT'?' selected':'')+'>RECT</option><option'+(v==='CIRCLE'?' selected':'')+'>CIRCLE</option></select>', '','','', '', 'fp');
+  if(kind==='enum'){ const vals=k==='facing'?['front','random','outward']:(k==='builder')?builderTypes():allPresets(p.builder);
+    return frRow(k,'', '<select id="ar-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>', '','','', '', 'fp'); }
+  if(kind==='bool') return frRow(k,'', '<label class="chk"><input type="checkbox" id="ar-'+k+'"'+(v?' checked':'')+'></label>', '','','', '', 'fp');
+  return frRow(k,'', numStepper('ar-'+k, v||0), '','','', '', 'fp'); }
+function wireAreaFields(e, fields){ const p=e.params=e.params||{}; wireSteppers(document);   // area 共通のフィールド結線（frRow＋ステッパー・randomarea/childplan 共通）
   fields.forEach(([k,kind])=>{
     if(kind==='ro') return;
-    const el=$('#ra-'+k); if(!el) return;
+    const el=$('#ar-'+k); if(!el) return;
     if(kind==='enum2') el.onchange=()=>{ p.shape=el.value; persist();renderEntries();renderTParams();render(); }; // RECT↔CIRCLE で depth/width ↔ diameter 切替
     else if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
     else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source=DEF_KEY; persist();renderEntries();renderTParams(); };
