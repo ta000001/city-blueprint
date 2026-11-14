@@ -302,7 +302,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.13';
+const APP_VERSION='1.14';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1447,20 +1447,35 @@ function idb(mode,fn){ return new Promise((res,rej)=>{ const r=indexedDB.open('c
   r.onsuccess=()=>{ const tx=r.result.transaction('kv',mode); const out=fn(tx.objectStore('kv')); tx.oncomplete=()=>res(out&&out.result); tx.onerror=()=>rej(tx.error); };
   r.onerror=()=>rej(r.error); }); }
 const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k)), idbGet=k=>idb('readonly',s=>s.get(k));
+// アプリ内 plan ライブラリ（IndexedDB）：フォルダ非対応端末(iOS 等)でも子 plan を「ファイル名」で自動解決するための保管庫。
+// 保存/オープン/参照選択のたびに basename.json で保管し、再読込/子を展開は名前で直読み（無い時だけ選択画面）。
+const planLibKey=name=>'plan:'+String(name||'').replace(/^.*[\\/]/,'').replace(/\.json$/i,'')+'.json';
+function libPut(name,text){ if(name&&text) idbSet(planLibKey(name), text).catch(()=>{}); }
+async function libGet(name){ if(!name) return null; try{ return await idbGet(planLibKey(name)); }catch(_){ return null; } }
 async function ensurePerm(h){ const o={mode:'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
 let DIR=null;
 async function pickDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} renderCfg(); status('保存先: '+h.name); }catch(_){} }
 let planName='my_plan'; // ⑧ 保存時のファイル名（押下時にpromptの既定値、入力値を記憶）
-async function saveFile(text,fname){
+async function saveFile(text,fname){ libPut(fname, text);   // アプリ内ライブラリにも保管（iOS等で名前解決に使う）
   if(DIR){ try{ if(await ensurePerm(DIR)){
     let exists=false; try{ await DIR.getFileHandle(fname); exists=true; }catch(_){}
     if(exists && !confirm(fname+' は既に存在します。上書きしますか？')){ status('保存を中止しました'); return; } // ⑩上書き確認
     const fh=await DIR.getFileHandle(fname,{create:true}); const w=await fh.createWritable(); await w.write(text); await w.close(); status('保存: '+DIR.name+'/'+fname); return; } }catch(_){} status('保存先に書けません→ダウンロード'); }
   const b=new Blob([text],{type:'application/json'}), a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download=fname; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); status('保存（ダウンロード）');
 }
-// plan/structure の参照：ファイルピッカーで .json を選び、{ファイル名, その子ファイルが持つ footprint} を返す（footprint は top-level から読込・無ければ null）。
-// 子ファイルから footprint（FP 正準形）＋はみ出しフラグを読む
-function parseChild(text){ try{ const j=JSON.parse(text); const fp=(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE'))?FP.norm(j.footprint):null; const entries=Array.isArray(j&&j.entries)?j.entries:[]; const meta=Array.isArray(j&&j.meta)?j.meta:[]; return {footprint:fp, overflow:!!(j&&j.footprintOverflow), entries, meta}; }catch(_){} return {footprint:null, overflow:false, entries:[], meta:[]}; }
+// エントリ群（子ファイルの entries＋meta）の外接 RECT footprint を算出（＝「外接」と同じ・子自身の座標系）。
+function footprintFromEntries(list){ const dd=[],ww=[],hh=[];
+  (list||[]).forEach(e=>{ if(!e||!e.type) return; const b=entryBBox(e); if(isFinite(b.d0)){ dd.push(b.d0,b.d1); ww.push(b.w0,b.w1); } const h0=(e.relPos&&e.relPos.h)||0; hh.push(h0, h0+heightOf(e)); });
+  if(!dd.length) return null;
+  return FP.rect({d:Math.min(...dd),w:Math.min(...ww),h:Math.min(...hh)},{d:Math.max(...dd),w:Math.max(...ww),h:Math.max(...hh)}); }
+// plan/structure の参照：子ファイルから footprint（FP 正準形）＋はみ出しフラグを読む。
+// 子に top-level footprint が無ければ、子の中身（entries＋meta）の外接から自動算出して返す（autoFp=true）。
+function parseChild(text){ try{ const j=JSON.parse(text);
+    const entries=Array.isArray(j&&j.entries)?j.entries:[]; const meta=Array.isArray(j&&j.meta)?j.meta:[];
+    let fp=(j&&j.footprint&&(j.footprint.shape==='RECT'||j.footprint.shape==='CIRCLE'))?FP.norm(j.footprint):null, autoFp=false;
+    if(!fp){ fp=footprintFromEntries([...entries,...meta]); autoFp=!!fp; }   // footprint 未保存の子は中身の外接を自動 footprint に
+    return {footprint:fp, overflow:!!(j&&j.footprintOverflow), entries, meta, autoFp};
+  }catch(_){} return {footprint:null, overflow:false, entries:[], meta:[], autoFp:false}; }
 async function pickRefFile(){
   let file=null;
   if(window.showOpenFilePicker){
@@ -1471,10 +1486,11 @@ async function pickRefFile(){
     file=await new Promise(res=>{ const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json'; inp.onchange=()=>res((inp.files&&inp.files[0])||null); inp.click(); });
   }
   if(!file) return null;
-  const m=parseChild(await file.text()); return { name:file.name, footprint:m.footprint, overflow:m.overflow, entries:m.entries, meta:m.meta };
+  const text=await file.text(); libPut(file.name, text);   // 選んだ子をライブラリへ保管＝以後は名前で自動解決（選択不要）
+  const m=parseChild(text); return { name:file.name, footprint:m.footprint, overflow:m.overflow, entries:m.entries, meta:m.meta };
 }
-// 子ファイルの全内容（footprint/overflow/entries/meta）。フォルダ設定時は名前から直読（ピッカー不要）、無ければピッカー。
-async function loadChildFull(name){ if(DIR&&name){ const r=await readChildFp(name); if(r) return r; } return await pickRefFile(); }
+// 子ファイルの全内容（footprint/overflow/entries/meta）。名前から直読（フォルダ or アプリ内ライブラリ）、無ければピッカー。
+async function loadChildFull(name){ if(name){ const r=await readChildFp(name); if(r) return r; } return await pickRefFile(); }
 // 回転合成（親relDir ∘ 子relDir）。xform と同じ FRONT/RIGHT/BACK/LEFT=0/90/180/270。
 const DIR4=['FRONT','RIGHT','BACK','LEFT'];
 function composeDir(parentDir, childDir){ return DIR4[(DIR4.indexOf(parentDir||'FRONT')+DIR4.indexOf(childDir||'FRONT')+4)%4]; }
@@ -1512,7 +1528,10 @@ function areaFromExpansion(parent, items){ const prp=parent.relPos||{d:0,h:0,w:0
   return {relPos:{d:Math.round(d0),h:prp.h||0,w:Math.round(w0)}, params:{shape:'RECT', depth:Math.round(d1-d0+1), width:Math.round(w1-w0+1)}};
 }
 // 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
-async function readChildFp(name){ if(!DIR||!name) return null; try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} return null; }
+async function readChildFp(name){ if(!name) return null;
+  if(DIR){ try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} }  // フォルダ優先
+  const t=await libGet(name); if(t) return parseChild(t);   // アプリ内ライブラリ（iOS等・名前で自動解決）
+  return null; }
 // plan 保存：対応環境は OS 保存ダイアログ(showSaveFilePicker)でフォルダを辿り、既存.jsonを選べば上書き／名前欄で新規。非対応(iOS等)は名前入力→保存。
 async function savePlanPicker(){
   const text=buildPlanJson();
@@ -1522,6 +1541,7 @@ async function savePlanPicker(){
       if(DIR) opts.startIn=DIR;                    // 保存先フォルダ設定時はそこを初期表示
       const h=await window.showSaveFilePicker(opts);
       const w=await h.createWritable(); await w.write(text); await w.close();
+      libPut(h.name||(planName+'.json'), text);   // アプリ内ライブラリにも保管
       planName=(h.name||planName).replace(/\.json$/,''); // 次回の既定名に反映
       status('保存: '+h.name); return true;
     }catch(err){ if(err && err.name==='AbortError') return false; status('保存できません: '+((err&&err.message)||err)); return false; }
@@ -1644,13 +1664,13 @@ function boot(){
         const opts={types:[{description:'plan.json',accept:{'application/json':['.json']}}]};
         if(DIR) opts.startIn=DIR;                 // 設定した保存先フォルダから開く
         const [fh]=await window.showOpenFilePicker(opts);
-        const f=await fh.getFile(); importPlan(await f.text());
+        const f=await fh.getFile(); const txt=await f.text(); libPut(f.name, txt); importPlan(txt);   // 開いた plan もライブラリへ（子参照の名前解決に使える）
       }catch(err){ if(err && err.name!=='AbortError') status('開けません: '+err.message); }
       return;
     }
     $('#file').click(); // 非対応環境はファイル選択にフォールバック
   };
-  $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>importPlan(r.result); r.readAsText(f); ev.target.value=''; };
+  $('#file').onchange=ev=>{ const f=ev.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ libPut(f.name, r.result); importPlan(r.result); }; r.readAsText(f); ev.target.value=''; };   // 開いた plan もライブラリへ
   $('#fit').onclick=fitCam;
   $('#zin').onclick=()=>{camo.scale*=1.25;render();};
   $('#zout').onclick=()=>{camo.scale/=1.25;render();};
