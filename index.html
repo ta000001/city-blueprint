@@ -299,10 +299,11 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。</p>
 <p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>します（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
 <p><b>childplan</b>：plan を「子を展開」して出来る area です。ランダム機能は持ちません。<b>group</b> で他の area 配下へネストできます。</p>
+<p><b>planに戻す</b>：childplan を元の <b>plan 参照</b>（展開前のマーカー）へ戻します。region は footprint に変換して引き継ぎ、<b>配下の子エントリ（孫含む）はすべて削除</b>します（Undo 可）。「子を展開」の逆操作です。</p>
 </div></div></div>
 
 <script>
-const APP_VERSION='1.17';
+const APP_VERSION='1.18';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -767,10 +768,12 @@ function renderTParams(){
   if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
     const rows = Area.fields(e).map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
     box.innerHTML = meta + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
-    if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>' : '')
-      + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除は random 能力のみ・説明は「?」へ
+    if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'
+                                : '<button id="cp-tofoot">planに戻す</button>')   // childplan は参照(plan)へ戻す（抽選ボタンと同じ右上位置）
+      + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除/planに戻すは能力別・説明は「?」へ
     wireAreaFields(e, Area.fields(e));
     if(rand) wireRandomButtons(e);
+    else if($('#cp-tofoot')) $('#cp-tofoot').onclick=()=>{ snapshot(); const n=collapseToPlan(e, sel); selOne(-1); persist(); renderEntries(); renderEditor(); render(); status('planに戻す'+(n?'（子'+n+'件を削除・Undo可）':'（Undo可）'), 4000); };
     if($('#area-help')) $('#area-help').onclick=()=>$('#areahelp').classList.add('on');
     if(Area.nestable(e)) wireGroupSel(e);
     return; }
@@ -1527,6 +1530,21 @@ function areaFromExpansion(parent, items){ const prp=parent.relPos||{d:0,h:0,w:0
     pts.forEach(p=>{ d0=Math.min(d0,p.d);d1=Math.max(d1,p.d);w0=Math.min(w0,p.w);w1=Math.max(w1,p.w); }); });
   if(!isFinite(d0)){ d0=d1=prp.d||0; w0=w1=prp.w||0; }
   return {relPos:{d:Math.round(d0),h:prp.h||0,w:Math.round(w0)}, params:{shape:'RECT', depth:Math.round(d1-d0+1), width:Math.round(w1-w0+1)}};
+}
+// childplan(area)→plan 参照に戻す（子を展開の逆）。region を footprint 化して type:'plan' に置換し、子孫はすべて削除。
+function collapseToPlan(cp, idx){
+  const rm=groupDescendants([idx]);                                  // 自身＋全子孫（ネスト連鎖）
+  const kids=[...rm].filter(j=>j!==idx).map(j=>plan.entries[j]);
+  const p=cp.params||{}, rp=cp.relPos||{d:0,h:0,w:0};
+  let h0=0,h1=0;                                                      // footprint の h レンジは子孫の相対高さ（childplan 基準）から推定・子が無ければ[0,0]
+  kids.forEach(k=>{ const lo=((k.relPos&&k.relPos.h)||0)-(rp.h||0), hi=lo+heightOf(k); h0=Math.min(h0,lo); h1=Math.max(h1,hi); });
+  const fp=((p.shape||'RECT')==='CIRCLE')
+    ? FP.circle(Math.max(1,(+p.diameter)||2), h0, h1)
+    : FP.rect({d:0,w:0,h:h0}, {d:Math.max(0,((+p.depth)||1)-1), w:Math.max(0,((+p.width)||1)-1), h:h1});
+  const ref={ id:nextId('plan'), type:'plan', plan:cp.plan||'', relPos:{d:rp.d||0,h:rp.h||0,w:rp.w||0}, relDir:cp.relDir||'FRONT', footprint:fp };
+  if(cp.group) ref.group=cp.group;                                   // childplan がネストされていたら plan 参照もその group を継承
+  const out=[]; plan.entries.forEach((e,i)=>{ if(i===idx) out.push(ref); else if(!rm.has(i)) out.push(e); }); // 枠を plan へ置換・他の子孫は除去
+  plan.entries=out; return kids.length;
 }
 // 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
 async function readChildFp(name){ if(!name) return null;
