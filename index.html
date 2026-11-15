@@ -303,7 +303,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.18';
+const APP_VERSION='1.19';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1517,6 +1517,8 @@ function expandRef(parent, idx, child, refName){
   const ar=areaFromExpansion(parent, items);   // childplan=area。region(params)と relPos を展開前参照 footprint（無ければ子の bbox）から算出
   const cp={id:cpId, type:'childplan', relPos:ar.relPos, relDir:parent.relDir||'FRONT', plan:refName||'', params:ar.params};
   if(parent.group) cp.group=parent.group;   // 参照自身がネストされていたら childplan もその group を継承（外側ネスト維持）
+  // 「planに戻す」で元の参照フレーム（plan原点・relDir・footprint）を厳密復元するため記憶。childplan.relPos は footprint最小角にずらして持つので plan原点とは別物＝anchorとの差分で移動も追従。保存JSON/modには出さずアプリ内autosaveのみ保持。
+  cp.src={ relPos:{d:prp.d||0,h:prp.h||0,w:prp.w||0}, relDir:parent.relDir||'FRONT', anchor:{d:ar.relPos.d||0,h:ar.relPos.h||0,w:ar.relPos.w||0}, fp:parent.footprint?JSON.parse(JSON.stringify(parent.footprint)):null };
   plan.entries.splice(idx,1, cp, ...items); return items.length;
 }
 // childplan(area) の region を算出：展開前参照に footprint があれば継承、無ければ展開した子の world body bbox。
@@ -1531,17 +1533,25 @@ function areaFromExpansion(parent, items){ const prp=parent.relPos||{d:0,h:0,w:0
   if(!isFinite(d0)){ d0=d1=prp.d||0; w0=w1=prp.w||0; }
   return {relPos:{d:Math.round(d0),h:prp.h||0,w:Math.round(w0)}, params:{shape:'RECT', depth:Math.round(d1-d0+1), width:Math.round(w1-w0+1)}};
 }
-// childplan(area)→plan 参照に戻す（子を展開の逆）。region を footprint 化して type:'plan' に置換し、子孫はすべて削除。
+// childplan(area)→plan 参照に戻す（子を展開の逆）。元の参照フレームを復元して type:'plan' に置換し、子孫はすべて削除。
 function collapseToPlan(cp, idx){
   const rm=groupDescendants([idx]);                                  // 自身＋全子孫（ネスト連鎖）
   const kids=[...rm].filter(j=>j!==idx).map(j=>plan.entries[j]);
   const p=cp.params||{}, rp=cp.relPos||{d:0,h:0,w:0};
-  let h0=0,h1=0;                                                      // footprint の h レンジは子孫の相対高さ（childplan 基準）から推定・子が無ければ[0,0]
-  kids.forEach(k=>{ const lo=((k.relPos&&k.relPos.h)||0)-(rp.h||0), hi=lo+heightOf(k); h0=Math.min(h0,lo); h1=Math.max(h1,hi); });
-  const fp=((p.shape||'RECT')==='CIRCLE')
-    ? FP.circle(Math.max(1,(+p.diameter)||2), h0, h1)
-    : FP.rect({d:0,w:0,h:h0}, {d:Math.max(0,((+p.depth)||1)-1), w:Math.max(0,((+p.width)||1)-1), h:h1});
-  const ref={ id:nextId('plan'), type:'plan', plan:cp.plan||'', relPos:{d:rp.d||0,h:rp.h||0,w:rp.w||0}, relDir:cp.relDir||'FRONT', footprint:fp };
+  const ref={ id:nextId('plan'), type:'plan', plan:cp.plan||'' };
+  const src=cp.src;
+  if(src){   // 厳密復元：plan原点=src.relPos＋（展開後に childplan を動かした分 anchor→現relPos の差）。footprint は子ファイル由来の元形をそのまま。
+    const an=src.anchor||{d:0,h:0,w:0}, dd=(rp.d||0)-(an.d||0), dh=(rp.h||0)-(an.h||0), dw=(rp.w||0)-(an.w||0);
+    ref.relPos={ d:(src.relPos.d||0)+dd, h:(src.relPos.h||0)+dh, w:(src.relPos.w||0)+dw };
+    ref.relDir=src.relDir||'FRONT';
+    if(src.fp) ref.footprint=FP.norm(src.fp);                        // 元 footprint あり→そのまま（無ければマーカーのまま＝再展開で bbox 再計算）
+  } else {   // フォールバック（src 無し＝保存JSON経由等）：region から footprint を復元・relPos はそのまま（厳密往復は不可）
+    let h0=0,h1=0; kids.forEach(k=>{ const lo=((k.relPos&&k.relPos.h)||0)-(rp.h||0), hi=lo+heightOf(k); h0=Math.min(h0,lo); h1=Math.max(h1,hi); });
+    ref.relPos={d:rp.d||0,h:rp.h||0,w:rp.w||0}; ref.relDir=cp.relDir||'FRONT';
+    ref.footprint=((p.shape||'RECT')==='CIRCLE')
+      ? FP.circle(Math.max(1,(+p.diameter)||2), h0, h1)
+      : FP.rect({d:0,w:0,h:h0}, {d:Math.max(0,((+p.depth)||1)-1), w:Math.max(0,((+p.width)||1)-1), h:h1});
+  }
   if(cp.group) ref.group=cp.group;                                   // childplan がネストされていたら plan 参照もその group を継承
   const out=[]; plan.entries.forEach((e,i)=>{ if(i===idx) out.push(ref); else if(!rm.has(i)) out.push(e); }); // 枠を plan へ置換・他の子孫は除去
   plan.entries=out; return kids.length;
