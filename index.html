@@ -286,6 +286,11 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p class="muted">mod の <b>data/.../transaction/plan/</b> を選ぶと、保存した plan.json をそのまま mod で読めます。</p>
 <p class="muted">この端末（iOS 等）が File System Access 非対応の場合は使えません（保存はダウンロード）。</p>
 </div></div></div>
+<div class="modal" id="sdirhelp"><div class="m"><h3>読込フォルダ（structure）</h3><div class="hbody">
+<p><b>structure</b> 参照（type=structure）の子ファイルを読むフォルダです。設定すると、ファイル名から footprint の読込・再読込・子を展開がこのフォルダから直接でき、都度の選択が不要になります（読取専用）。<b>未設定</b>なら都度ファイル選択になります。</p>
+<p class="muted">mod の <b>data/.../transaction/structure/</b> を選ぶと、mc-blueprint で作った structure.json をそのまま参照できます。</p>
+<p class="muted">plan 参照は「保存先フォルダ（plan）」から読みます（別管理）。この端末（iOS 等）が File System Access 非対応の場合は使えません（都度ファイル選択）。</p>
+</div></div></div>
 <div class="modal" id="pdirhelp"><div class="m"><h3>保存先フォルダ（preset）</h3><div class="hbody">
 <p>ユーザープリセットは常に端末内に保存されますが、このフォルダを設定すると <b>user_presets.json</b> を保存/削除/取込のたび自動で書き出し、起動時に読み込みます。端末間の共有/バックアップ向け。</p>
 <p class="muted">非対応端末（iOS 等）では使えません（端末内保存＋書出/取込アイコンで対応）。</p>
@@ -303,7 +308,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.19';
+const APP_VERSION='1.20';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -757,11 +762,11 @@ function renderTParams(){
      +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択" style="flex:1;min-width:120px;cursor:pointer">'+(refv?' <button id="e-reload" style="padding:5px 8px;font-size:11px">再読込</button>':'')+'</div>'
      +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'</span></div>'
      +'<div class="r"><label>展開</label><button id="e-expand" style="padding:5px 8px;font-size:11px">子を展開</button></div>';
-    const applyPick=async()=>{ const r=await pickRefFile(); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
+    const applyPick=async()=>{ const r=await pickRefFile(kind); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
     $('#e-ref').onclick=applyPick;
-    if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
+    if($('#e-reload')) $('#e-reload').onclick=async()=>{ const name=(kind==='plan'?e.plan:e.structure); const res=await readChildFp(name, kind); if(res&&res.footprint){ e.footprint=res.footprint; if(res.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; persist(); renderEntries(); renderEditor(); render(); status('再読込: '+name+(res.overflow?'（⚠はみ出しあり）':''), res.overflow?6000:3000); } else { applyPick(); } };
     $('#e-expand').onclick=async()=>{ const nm=(kind==='plan'?e.plan:e.structure); if(!nm){ status('先に子ファイルを選択してください'); return; }
-      const data=await loadChildFull(nm); if(!data) return;
+      const data=await loadChildFull(nm, kind); if(!data) return;
       if(!(data.entries||[]).length && !(data.meta||[]).length){ status('子にエントリがありません'); return; }
       snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: '+n+'件を取り込み（Undo可）', 4000); };
     wireGroupSel(e); return; }
@@ -1456,9 +1461,12 @@ const idbSet=(k,v)=>idb('readwrite',s=>s.put(v,k)), idbGet=k=>idb('readonly',s=>
 const planLibKey=name=>'plan:'+String(name||'').replace(/^.*[\\/]/,'').replace(/\.json$/i,'')+'.json';
 function libPut(name,text){ return (name&&text) ? idbSet(planLibKey(name), text).catch(()=>{}) : Promise.resolve(); }
 async function libGet(name){ if(!name) return null; try{ return await idbGet(planLibKey(name)); }catch(_){ return null; } }
-async function ensurePerm(h){ const o={mode:'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
-let DIR=null;
+async function ensurePerm(h, mode){ const o={mode:mode||'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
+let DIR=null;    // plan の保存＋plan参照の読込フォルダ
+let SDIR=null;   // structure 参照の読込フォルダ（読取専用・任意）
+const refDir=kind=>(kind==='structure'?SDIR:DIR);   // 参照 type 別の既定読込フォルダ
 async function pickDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} renderCfg(); status('保存先: '+h.name); }catch(_){} }
+async function pickStructDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'read',id:'cb-structure'}); SDIR=h; try{await idbSet('dir_structure',h);}catch(_){} renderCfg(); status('structure 読込先: '+h.name); }catch(_){} }
 let planName='my_plan'; // ⑧ 保存時のファイル名（押下時にpromptの既定値、入力値を記憶）
 async function saveFile(text,fname){ await libPut(fname, text);   // アプリ内ライブラリにも保管（iOS等で名前解決に使う）
   if(DIR){ try{ if(await ensurePerm(DIR)){
@@ -1480,10 +1488,10 @@ function parseChild(text){ try{ const j=JSON.parse(text);
     if(!fp){ fp=footprintFromEntries([...entries,...meta]); autoFp=!!fp; }   // footprint 未保存の子は中身の外接を自動 footprint に
     return {footprint:fp, overflow:!!(j&&j.footprintOverflow), entries, meta, autoFp};
   }catch(_){} return {footprint:null, overflow:false, entries:[], meta:[], autoFp:false}; }
-async function pickRefFile(){
-  let file=null;
+async function pickRefFile(kind){
+  let file=null; const d=refDir(kind);
   if(window.showOpenFilePicker){
-    try{ const opts={types:[{description:'JSON',accept:{'application/json':['.json']}}], id:'cb-plan'}; if(DIR) opts.startIn=DIR;
+    try{ const opts={types:[{description:'JSON',accept:{'application/json':['.json']}}], id:(kind==='structure'?'cb-structure':'cb-plan')}; if(d) opts.startIn=d;
       const [h]=await window.showOpenFilePicker(opts); file=await h.getFile(); }
     catch(err){ if(err && err.name==='AbortError') return null; status('選択できません: '+((err&&err.message)||err)); return null; }
   } else {
@@ -1494,7 +1502,7 @@ async function pickRefFile(){
   const m=parseChild(text); return { name:file.name, footprint:m.footprint, overflow:m.overflow, entries:m.entries, meta:m.meta };
 }
 // 子ファイルの全内容（footprint/overflow/entries/meta）。名前から直読（フォルダ or アプリ内ライブラリ）、無ければピッカー。
-async function loadChildFull(name){ if(name){ const r=await readChildFp(name); if(r) return r; } return await pickRefFile(); }
+async function loadChildFull(name, kind){ if(name){ const r=await readChildFp(name, kind); if(r) return r; } return await pickRefFile(kind); }
 // 回転合成（親relDir ∘ 子relDir）。xform と同じ FRONT/RIGHT/BACK/LEFT=0/90/180/270。
 const DIR4=['FRONT','RIGHT','BACK','LEFT'];
 function composeDir(parentDir, childDir){ return DIR4[(DIR4.indexOf(parentDir||'FRONT')+DIR4.indexOf(childDir||'FRONT')+4)%4]; }
@@ -1556,9 +1564,10 @@ function collapseToPlan(cp, idx){
   const out=[]; plan.entries.forEach((e,i)=>{ if(i===idx) out.push(ref); else if(!rm.has(i)) out.push(e); }); // 枠を plan へ置換・他の子孫は除去
   plan.entries=out; return kids.length;
 }
-// 設定フォルダ(DIR)があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
-async function readChildFp(name){ if(!name) return null;
-  if(DIR){ try{ if(await ensurePerm(DIR)){ const fh=await DIR.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} }  // フォルダ優先
+// 設定フォルダ（plan=DIR / structure=SDIR）があれば、ファイル名から子の footprint を読み直す（ピッカー不要）。{footprint,overflow} か null。
+async function readChildFp(name, kind){ if(!name) return null;
+  const d=refDir(kind);
+  if(d){ try{ if(await ensurePerm(d,'read')){ const fh=await d.getFileHandle(name); return parseChild(await (await fh.getFile()).text()); } }catch(_){} }  // type別フォルダ優先
   const t=await libGet(name); if(t) return parseChild(t);   // アプリ内ライブラリ（iOS等・名前で自動解決）
   return null; }
 // plan 保存：対応環境は OS 保存ダイアログ(showSaveFilePicker)でフォルダを辿り、既存.jsonを選べば上書き／名前欄で新規。非対応(iOS等)は名前入力→保存。
@@ -1654,6 +1663,11 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
         : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（保存はダウンロード／開くはファイル選択）</div>')
     +'</div>'
+    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">読込フォルダ（structure）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-sdir" role="button" tabindex="0" title="説明">?</span></span></div>'
+      +(FS_OK
+        ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(SDIR?(SDIR.name+'/'):'未設定（都度ファイル選択）')+'</b></div><div class="cfgfoot"><button id="cfg-pickstructdir">フォルダを選択</button>'+(SDIR?' <button id="cfg-clearstructdir">解除</button>':'')+'</div>')
+        : '<div class="muted" style="font-size:11px">この端末はフォルダ指定に非対応（structure 参照は都度ファイル選択）</div>')
+    +'</div>'
     +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（preset）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-pdir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(PDIR?(PDIR.name+'/'):'未設定（端末内のみ）')+'</b></div><div class="cfgfoot"><button id="cfg-pickpdir">フォルダを選択</button>'+(PDIR?' <button id="cfg-clearpdir">解除</button>':'')+'</div>')
@@ -1667,6 +1681,9 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
   if($('#cfg-pickdir')) $('#cfg-pickdir').onclick=()=>pickDir();
   if($('#cfg-cleardir')) $('#cfg-cleardir').onclick=async()=>{ DIR=null; try{await idbSet('dir_plan',null);}catch(_){} renderCfg(); status('保存先フォルダを解除しました'); };
+  if($('#cfg-help-sdir')) $('#cfg-help-sdir').onclick=()=>$('#sdirhelp').classList.add('on');
+  if($('#cfg-pickstructdir')) $('#cfg-pickstructdir').onclick=()=>pickStructDir();
+  if($('#cfg-clearstructdir')) $('#cfg-clearstructdir').onclick=async()=>{ SDIR=null; try{await idbSet('dir_structure',null);}catch(_){} renderCfg(); status('structure 読込フォルダを解除しました'); };
   if($('#cfg-help-pdir')) $('#cfg-help-pdir').onclick=()=>$('#pdirhelp').classList.add('on');
   if($('#cfg-pickpdir')) $('#cfg-pickpdir').onclick=()=>pickPresetDir();
   if($('#cfg-clearpdir')) $('#cfg-clearpdir').onclick=async()=>{ PDIR=null; try{await idbSet('dir_presets',null);}catch(_){} renderCfg(); status('presetフォルダを解除しました'); };
@@ -1828,6 +1845,7 @@ boot();
 loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</option>').join(''); normalizeAll(); fillVer(); renderEntries(); renderEditor(); renderJson(); requestAnimationFrame(()=>{ if(!restoreCam()) fitCam(); }); status('schema/presets 読込 OK'); })
   .catch(err=>{ console.error(err); status('schema.json/presets.json を読めません（sync-from-mod を実行）'); });
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存先は⚙設定モーダルで表示/変更
+if(FS_OK) idbGet('dir_structure').then(h=>{ if(h) SDIR=h; }).catch(()=>{}); // structure 参照の読込先（⚙設定で指定）
 if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadPresetFile(); if(sel>=0) renderTParams(); } }).catch(()=>{}); // preset同期フォルダ
 loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
 loadSettings(); // 各種設定を復元
