@@ -206,7 +206,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
-        <span class="htools"><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
+        <span class="htools"><button id="pv-labels" title="エントリ名ラベルの表示切替">ラベル</button><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
@@ -255,7 +255,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div class="modal" id="pvhelp"><div class="m"><h3>配置プレビューの見方</h3><div class="hbody">
 <p><b>座標</b>：上＝d＋ ／ 下＝d− ／ 右＝w＋ ／ 左＝w− ／ <b>原点＝左下</b>（d0,w0）。h＝高さ（上下、プレビューは上から見た図）。</p>
 <p><b>図の記号</b>：<b>footprint＝本体</b>（塗りの四角）／<b>破線＝margin</b>（確保領域）／<b>塗り＝ground</b>（地面）。</p>
-<p><b>type ラベル</b>：文字の天（上）が建物の <b>front</b> 方向。outward などで回転して表示されます。</p>
+<p><b>type ラベル</b>：文字の天（上）が建物の <b>front</b> 方向。outward などで回転して表示されます。右上の <b>ラベル</b> ボタンで名前ラベル（id・▦area・plan footprint）の表示/非表示を切替できます（座標は⚙設定で別途切替）。</p>
 <p class="muted">操作：ドラッグで移動／角をドラッグでサイズ変更（fix した軸は不可）／2本指ピンチでズーム／↻で回転。</p>
 <p><b>キー操作</b></p>
 <ul class="klist">
@@ -308,7 +308,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.22';
+const APP_VERSION='1.23';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -331,7 +331,7 @@ function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scCand:30, scTries:12, showCoords:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -1160,7 +1160,7 @@ function render(){
     if(!sh){ // plan/structure marker
       const c=xform(0,0,e.relPos||{},e.relDir); const [x,y]=w2c(c.d,c.w);
       ctx.fillStyle=(ovl.fpBad.has(i)||e.footprintOverflow)?'#D24B4B':(on?'#D4A93C':'#4F8A7B'); ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill(); // footprint外/子はみ出し=赤
-      ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(idOf(e),x+8,y-6);
+      if(SETTINGS.showLabels){ ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(idOf(e),x+8,y-6); }
       if(SETTINGS.showCoords){ const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+7); } // 各点の座標（⚙で表示/非表示）
       return;
     }
@@ -1185,11 +1185,13 @@ function render(){
       ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke();
     }
     // type ラベル：常に「front=上」の向き。footprintの(front-up)左下=back-left corner を基点に、relDir だけ回転して描く（FRONT は従来どおり）
-    const lang={FRONT:0,RIGHT:Math.PI/2,BACK:Math.PI,LEFT:-Math.PI/2}[e.relDir||'FRONT']||0;
-    const lorg=(sh.shape==='RECT')?w2c(sh.body[0].d,sh.body[0].w):w2c(sh.center.d,sh.center.w);
-    ctx.save(); ctx.translate(lorg[0],lorg[1]); ctx.rotate(lang);
-    ctx.fillStyle='#DCE5E2'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
-    ctx.fillText(idOf(e),4,-4); ctx.restore();
+    if(SETTINGS.showLabels){
+      const lang={FRONT:0,RIGHT:Math.PI/2,BACK:Math.PI,LEFT:-Math.PI/2}[e.relDir||'FRONT']||0;
+      const lorg=(sh.shape==='RECT')?w2c(sh.body[0].d,sh.body[0].w):w2c(sh.center.d,sh.center.w);
+      ctx.save(); ctx.translate(lorg[0],lorg[1]); ctx.rotate(lang);
+      ctx.fillStyle='#DCE5E2'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      ctx.fillText(idOf(e),4,-4); ctx.restore();
+    }
     if(SETTINGS.showCoords){ const rp=e.relPos||{}, h=rp.h||0; // 4角すべての座標を外向きに小表示（⚙で表示/非表示）
       let pts; if(sh.shape==='RECT') pts=sh.body; else { const c=sh.center,r=sh.r; pts=[{d:c.d-r,w:c.w-r},{d:c.d+r,w:c.w-r},{d:c.d+r,w:c.w+r},{d:c.d-r,w:c.w+r}]; }
       const S=pts.map(p=>w2c(p.d,p.w)), ccx=S.reduce((a,s)=>a+s[0],0)/S.length, ccy=S.reduce((a,s)=>a+s[1],0)/S.length;
@@ -1202,8 +1204,8 @@ function render(){
   // この plan 自身の footprint（親から参照された時の形）を破線のベルドグリーンで表示
   if(plan.footprint){ const sh=shapeFromFp(plan.footprint, {d:0,h:0,w:0}, 'FRONT', marginOf({})); if(sh){
     ctx.setLineDash([7,5]); ctx.lineWidth=1.6; ctx.strokeStyle='#4F8A7B'; ctx.fillStyle='rgba(79,138,123,.07)';
-    if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); const[lx,ly]=w2c(sh.body[0].d,sh.body[0].w); ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', lx+3, ly-3); }
-    else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', cx+3, cy-sh.r*camo.scale-3); }
+    if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); if(SETTINGS.showLabels){ const[lx,ly]=w2c(sh.body[0].d,sh.body[0].w); ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', lx+3, ly-3); } }
+    else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); if(SETTINGS.showLabels){ ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', cx+3, cy-sh.r*camo.scale-3); } }
     ctx.setLineDash([]);
     if(sel<0){ ctx.fillStyle='#4F8A7B'; const HS=4*devicePixelRatio; // 編集中（非選択時）はハンドルを描画：RECT=四隅ドラッグでサイズ/本体ドラッグで移動、CIRCLE=縁ドラッグで径
       if(sh.shape==='RECT') sh.body.forEach(p=>{ const h=w2c(p.d,p.w); ctx.fillRect(h[0]-HS,h[1]-HS,HS*2,HS*2); });
@@ -1266,7 +1268,7 @@ function drawRegion(e,onSel){ const sh=regionShape(e);
   if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((pt,k)=>{const [x,y]=w2c(pt.d,pt.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); }
   else { const [cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); }
   ctx.setLineDash([]);
-  const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0); ctx.fillStyle='#D4A93C'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.fillText('▦ '+idOf(e), c0[0]+4, c0[1]-4);
+  if(SETTINGS.showLabels){ const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0); ctx.fillStyle='#D4A93C'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.fillText('▦ '+idOf(e), c0[0]+4, c0[1]-4); }
 }
 // 領域(world) / 子の確保領域 bbox / フィット判定
 function regionWorld(m){ const sh=regionShape(m);
@@ -1734,6 +1736,7 @@ function boot(){
   $('#cfgmodal').onclick=e=>{if(e.target.id==='cfgmodal')$('#cfgmodal').classList.remove('on');};
   $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
+  if($('#pv-labels')) $('#pv-labels').onclick=()=>{ SETTINGS.showLabels=!SETTINGS.showLabels; saveSettings(); updateLabelBtn(); render(); }; // プレビューのラベル表示 ON/OFF
   $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
   $('#fphelp').onclick=e=>{if(e.target.id==='fphelp')$('#fphelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
@@ -1834,9 +1837,10 @@ function boot(){
   addEventListener('resize',render);
   // restore local plan
   try{ const raw=localStorage.getItem('city-blueprint:plan'); if(raw){ const d=JSON.parse(raw); if(d&&Array.isArray(d.entries)){ d.entries.forEach(migEntry); plan=d; ensureIds(); } } }catch(_){}
-  updateMultiBtn(); snapshot(); // 初期状態を履歴に（id採番後）
+  updateMultiBtn(); updateLabelBtn(); snapshot(); // 初期状態を履歴に（id採番後）
 }
 function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',multiMode||rangeMode); b.textContent=rangeMode?'範囲選択:ドラッグ':(multiMode?'複数:ON':'複数選択'); } }
+function updateLabelBtn(){ const b=$('#pv-labels'); if(b) b.classList.toggle('pri', !!SETTINGS.showLabels); } // ラベル表示中は primary 表示
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
