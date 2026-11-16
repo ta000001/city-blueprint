@@ -298,7 +298,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div class="modal" id="refhelp"><div class="m"><h3>参照（plan / structure）</h3><div class="hbody">
 <p><b>plan / structure</b> は子ファイルを参照する type です。タップで子ファイルを選ぶと、名前と <b>footprint</b>（外形）を読み込みます（footprint は mod では無視され、アプリ表示と親側の領域計算にだけ使われます）。</p>
 <p><b>読み直し</b>：参照欄をもう一度タップしてファイルを選び直すと、最新の footprint を読み込みます（別ファイルへの変更も同じ操作）。</p>
-<p><b>子を展開</b>：子の直接エントリを取り込み、<b>childplan（area）</b> で束ねてこの参照を置き換えます。孫（さらに子を参照する plan/structure）はマーカーのまま残り、必要なら再度展開できます（ネスト）。</p>
+<p><b>展開</b>（右上）：子の直接エントリを取り込み、<b>childplan（area）</b> で束ねてこの参照を置き換えます。孫（さらに子を参照する plan/structure）はマーカーのまま残り、必要なら再度展開できます（ネスト）。childplan の「planに戻す」で元に戻せます。</p>
 </div></div></div>
 <div class="modal" id="areahelp"><div class="m"><h3>area（randomarea / childplan）</h3><div class="hbody">
 <p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。</p>
@@ -308,7 +308,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.21';
+const APP_VERSION='1.22';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -756,12 +756,11 @@ function renderTParams(){
   if(t==='plan'||t==='structure'){ const kind=t, refv=(kind==='plan'?e.plan:e.structure)||'';
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
     const fp=e.footprint, fpinfo = fp ? (FP.info(fp)+(e.footprintOverflow?' <span style="color:#D24B4B">⚠はみ出しあり</span>':'')) : '（未読込＝マーカー表示）';
-    if(ht) ht.innerHTML='<span class="qbtn" id="ref-help" role="button" tabindex="0" title="参照の説明">?</span>';
+    if(ht) ht.innerHTML='<button id="e-expand">展開</button><span class="qbtn" id="ref-help" role="button" tabindex="0" title="参照の説明">?</span>';   // 展開は右上（childplanの「planに戻す」と同位置）・説明は「?」へ
     if($('#ref-help')) $('#ref-help').onclick=()=>$('#refhelp').classList.add('on');
     box.innerHTML=meta
      +'<div class="r"><label>'+kind+'</label><input id="e-ref" value="'+esc(refv)+'" readonly placeholder="タップして子ファイルを選択（再タップで読み直し）" style="flex:1;min-width:120px;cursor:pointer"></div>'
-     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'</span></div>'
-     +'<div class="r"><label>展開</label><button id="e-expand" style="padding:5px 8px;font-size:11px">子を展開</button></div>';
+     +'<div class="r"><label>footprint</label><span class="muted" style="font-size:11px">'+fpinfo+'</span></div>';
     const applyPick=async()=>{ const r=await pickRefFile(kind); if(!r) return; if(kind==='plan') e.plan=r.name; else e.structure=r.name; if(r.footprint){ e.footprint=r.footprint; if(r.overflow) e.footprintOverflow=true; else delete e.footprintOverflow; } else { delete e.footprint; delete e.footprintOverflow; } persist(); renderEntries(); renderEditor(); render(); status(r.footprint?('読込: '+r.name+'（footprintあり'+(r.overflow?'・⚠はみ出しあり':'')+'）'):('読込: '+r.name+'（footprintなし＝マーカー）'), r.overflow?6000:3000); };
     $('#e-ref').onclick=applyPick;   // 参照欄タップに一本化（選択＝footprint 読み直し。再読込ボタンは撤去）
     $('#e-expand').onclick=async()=>{ const nm=(kind==='plan'?e.plan:e.structure); if(!nm){ status('先に子ファイルを選択してください'); return; }
