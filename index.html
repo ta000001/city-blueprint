@@ -301,15 +301,16 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p><b>読み直し</b>：参照欄をもう一度タップしてファイルを選び直すと、最新の footprint を読み込みます（別ファイルへの変更も同じ操作）。</p>
 <p><b>展開</b>（右上）：子の直接エントリを取り込み、<b>childplan（area）</b> で束ねてこの参照を置き換えます。孫（さらに子を参照する plan/structure）はマーカーのまま残り、必要なら再度展開できます（ネスト）。childplan の「planに戻す」で元に戻せます。</p>
 </div></div></div>
-<div class="modal" id="areahelp"><div class="m"><h3>area（randomarea / childplan）</h3><div class="hbody">
-<p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。</p>
-<p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>します（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
-<p><b>childplan</b>：ランダム機能を持たないグループ用 area です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめられます（plan 参照の「子を展開」でも生まれます）。<b>group</b> で他の area 配下へネストも可。</p>
-<p><b>planに戻す</b>：childplan を元の <b>plan 参照</b>（展開前のマーカー）へ戻します。region は footprint に変換して引き継ぎ、<b>配下の子エントリ（孫含む）はすべて削除</b>します（Undo 可）。「子を展開」の逆操作です。</p>
+<div class="modal" id="areahelp"><div class="m"><h3>area（基底 / childplan / randomarea）</h3><div class="hbody">
+<p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。<b>childplan / randomarea は area の派生</b>です。</p>
+<p><b>area（基底）</b>：ランダム機能を持たないグループ用の枠です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめます。<b>group</b> で他の area 配下へネストも可。</p>
+<p><b>childplan</b>：plan 参照を「子を展開」して生まれる area の派生です。元 plan を覚えており、<b>planに戻す</b>で復元できます。</p>
+<p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>する area の派生です（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
+<p><b>planに戻す</b>（childplan のみ）：childplan を元の <b>plan 参照</b>（展開前のマーカー）へ戻します。region は footprint に変換して引き継ぎ、<b>配下の子エントリ（孫含む）はすべて削除</b>します（Undo 可）。「子を展開」の逆操作です。</p>
 </div></div></div>
 
 <script>
-const APP_VERSION='1.26';
+const APP_VERSION='1.27';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -343,7 +344,7 @@ async function loadData(){
   DICT_BY_BLOCK={}; DICT.forEach(e=>{ if(e.block) DICT_BY_BLOCK[e.block]={form:e.form, mat:e.mat}; }); // block→form/mat 逆引き（ピッカーのグループ化/選択解決）
 }
 const builderTypes=()=>Object.keys(SCHEMA.builders);
-const allTypes=()=>['plan','structure','randomarea','childplan',...builderTypes()];
+const allTypes=()=>['plan','structure','area','randomarea',...builderTypes()];
 const DEF_KEY='DEFAULTS'; // presets.json のベースライン(既定値)キー＝mod の BuilderSchema.defaults と同契約
 const defaultsOf=t=>((PRESETS.presets[t]&&PRESETS.presets[t][DEF_KEY])||{});
 const allPresets=t=>Object.keys((PRESETS.presets&&PRESETS.presets[t])||{}); // DEF_KEY を先頭に全キー（データ駆動）
@@ -408,7 +409,7 @@ function ensureIds(){ const raMap={};
 //  area 固有の振る舞い（判定/能力/region フィールド/既定値/エディタ）は全てここに集約し、
 //  個別関数からは Area.is(e) / Area.hasRandom(e) で1本呼びする（type ごとに別コードを書かない）。
 const Area = {
-  types: { childplan:{ random:false, nestable:true }, randomarea:{ random:true, nestable:false } },   // area の種類と能力（差分はここだけ：random=抽選/ランダム項目・nestable=他area配下へネスト）
+  types: { area:{ random:false, nestable:true }, childplan:{ random:false, nestable:true }, randomarea:{ random:true, nestable:false } },   // area=基底（手作りグループ）／childplan=plan展開の派生／randomarea=ランダム派生（差分はここだけ：random=抽選/ランダム項目・nestable=他area配下へネスト）
   is(e){ return !!e && !!(e.type in Area.types); },
   hasRandom(e){ return !!e && !!(Area.types[e.type]||{}).random; },
   nestable(e){ return !!e && !!(Area.types[e.type]||{}).nestable; },
@@ -613,7 +614,7 @@ function renderEntries(){
     if(e.type==='plan') ref=e.plan; else if(e.type==='structure') ref=e.structure;
     else if(Area.is(e)){ const id=e.id, n=plan.entries.filter(x=>x.group===id).length;   // area 一覧ラベル：random は builder×count、非random(childplan) は展開元ファイル
       if(Area.hasRandom(e)){ const cmn=e.params.countMin|0, cmx=e.params.countMax|0, ct=cmx>0?(cmn+'~'+cmx):(cmn>0?cmn+'~詰':'詰める'); ref=(e.params.builder||'?')+'×'+ct+' ('+n+'配置)'; }
-      else ref=(e.plan||'childplan')+' ('+n+'件)'; }
+      else ref=(e.plan||e.type)+' ('+n+'件)'; }
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+idOf(e)+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
@@ -773,7 +774,7 @@ function renderTParams(){
     const rows = Area.fields(e).map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
     box.innerHTML = meta + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
     if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'
-                                : '<button id="cp-tofoot">planに戻す</button>')   // childplan は参照(plan)へ戻す（抽選ボタンと同じ右上位置）
+                                : (e.type==='childplan' ? '<button id="cp-tofoot">planに戻す</button>' : ''))   // planに戻すは childplan（plan展開の派生）のみ。基底 area は戻す先が無いので非表示
       + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除/planに戻すは能力別・説明は「?」へ
     wireAreaFields(e, Area.fields(e));
     if(rand) wireRandomButtons(e);
