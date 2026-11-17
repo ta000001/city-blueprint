@@ -304,14 +304,14 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <div class="modal" id="areahelp"><div class="m"><h3>area（基底 / childplan / randomarea）</h3><div class="hbody">
 <p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。<b>childplan / randomarea は area の派生</b>です。</p>
 <p><b>area（基底）</b>：ランダム機能を持たないグループ用の枠です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめます。<b>group</b> で他の area 配下へネストも可。</p>
-<p><b>高さ（h）の一括調整</b>：area を選択して基本情報の <b>relPos の h</b> を変えると、配下の子（ネスト含む）も同じ差分だけまとめて上下します（area 単位の高さ調整）。d/w は横方向なのでプレビュー上のドラッグで area ごと移動できます。</p>
+<p><b>高さ（h）の一括調整</b>：area 選択中に 2 通りあります。<br>① 基本情報の <b>relPos の h</b> ＝<b>差分シフト</b>：子（ネスト含む）を相対関係を保ったまま同じ差分だけ上下。<br>② area パネルの <b>「h統一」→統一</b> ＝<b>絶対値で統一</b>：配下の子の h を全部その値に揃える（高さを平らにそろえたい時）。<br>d/w は横方向なのでプレビュー上のドラッグで area ごと移動できます。</p>
 <p><b>childplan</b>：plan 参照を「子を展開」して生まれる area の派生です。元 plan を覚えており、<b>planに戻す</b>で復元できます。</p>
 <p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>する area の派生です（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
 <p><b>planに戻す</b>（childplan のみ）：childplan を元の <b>plan 参照</b>（展開前のマーカー）へ戻します。region は footprint に変換して引き継ぎ、<b>配下の子エントリ（孫含む）はすべて削除</b>します（Undo 可）。「子を展開」の逆操作です。</p>
 </div></div></div>
 
 <script>
-const APP_VERSION='1.29';
+const APP_VERSION='1.30';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -775,13 +775,15 @@ function renderTParams(){
     wireGroupSel(e); return; }
   if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
     const rows = Area.fields(e).map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
-    box.innerHTML = meta + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
+    const uhRow = frRow('h統一','', numStepper('area-uh',(e.relPos&&e.relPos.h)||0)+'<button type="button" id="area-uh-apply">統一</button>','','','','','fp'); // 配下の子の h を全部この値に揃える（差分シフトの relPos.h とは別＝絶対値で統一）
+    box.innerHTML = meta + rows + uhRow;   // 説明は書かない（必要な説明は「?」モーダルに集約）
     if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'
                                 : (e.type==='childplan' ? '<button id="cp-tofoot">planに戻す</button>' : ''))   // planに戻すは childplan（plan展開の派生）のみ。基底 area は戻す先が無いので非表示
       + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除/planに戻すは能力別・説明は「?」へ
     wireAreaFields(e, Area.fields(e));
     if(rand) wireRandomButtons(e);
     else if($('#cp-tofoot')) $('#cp-tofoot').onclick=()=>{ snapshot(); const n=collapseToPlan(e, sel); selOne(-1); persist(); renderEntries(); renderEditor(); render(); status('planに戻す'+(n?'（子'+n+'件を削除・Undo可）':'（Undo可）'), 4000); };
+    { const ua=$('#area-uh-apply'); if(ua) ua.onclick=()=>{ snapshot(); const h=Math.round(+(($('#area-uh')||{}).value)||0); const rp=e.relPos||(e.relPos={d:0,h:0,w:0}); let n=0; groupDescendants([sel]).forEach(j=>{ if(j===sel) return; const r=plan.entries[j].relPos||(plan.entries[j].relPos={d:0,h:0,w:0}); r.h=h; n++; }); rp.h=h; persist(); renderEntries(); renderEditor(); render(); status('配下の子 '+n+'件の h を '+h+' に統一'); }; } // h統一：配下の子を全部同じ h に揃える
     if($('#area-help')) $('#area-help').onclick=()=>$('#areahelp').classList.add('on');
     if(Area.nestable(e)) wireGroupSel(e);
     return; }
