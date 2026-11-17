@@ -206,7 +206,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
   <div class="col">
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
-        <span class="htools"><button id="pv-labels" title="エントリ名ラベルの表示切替">エントリ名表示</button><button id="pv-coords" title="各点の座標(d,h,w)の表示切替">座標表示</button><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
+        <span class="htools"><button id="pv-labels" title="エントリ名ラベルの表示切替">エントリ名表示</button><button id="pv-coords" title="各点の座標(d,h,w)の表示切替">座標表示</button><button id="pv-h" title="各エントリの h 座標を表示">h表示</button><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
       <canvas id="cv"></canvas>
       <div class="canbar">
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
@@ -256,7 +256,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 <p><b>座標</b>：上＝d＋ ／ 下＝d− ／ 右＝w＋ ／ 左＝w− ／ <b>原点＝左下</b>（d0,w0）。h＝高さ（上下、プレビューは上から見た図）。</p>
 <p><b>図の記号</b>：<b>footprint＝本体</b>（塗りの四角）／<b>破線＝margin</b>（確保領域）／<b>塗り＝ground</b>（地面）。</p>
 <p><b>type ラベル</b>：文字の天（上）が建物の <b>front</b> 方向。outward などで回転して表示されます。</p>
-<p><b>表示切替</b>（右上）：<b>エントリ名表示</b>＝名前ラベル（id・▦area・plan footprint）／<b>座標表示</b>＝各点の座標(d,h,w)。それぞれ ON/OFF でき、点灯中が表示状態です。</p>
+<p><b>表示切替</b>（右上）：<b>エントリ名表示</b>＝名前ラベル（id・▦area・plan footprint）／<b>座標表示</b>＝各点の座標(d,h,w)／<b>h表示</b>＝各エントリの中心に h 座標だけを表示。それぞれ ON/OFF でき、点灯中が表示状態です。</p>
 <p class="muted">操作：ドラッグで移動／角をドラッグでサイズ変更（fix した軸は不可）／2本指ピンチでズーム／↻で回転。</p>
 <p><b>キー操作</b></p>
 <ul class="klist">
@@ -311,7 +311,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 </div></div></div>
 
 <script>
-const APP_VERSION='1.31';
+const APP_VERSION='1.32';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -334,7 +334,7 @@ function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true, showH:false }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -1169,6 +1169,7 @@ function render(){
       ctx.fillStyle=(ovl.fpBad.has(i)||e.footprintOverflow)?'#D24B4B':(on?'#D4A93C':'#4F8A7B'); ctx.beginPath();ctx.arc(x,y,6,0,7);ctx.fill(); // footprint外/子はみ出し=赤
       if(SETTINGS.showLabels){ ctx.fillStyle='#DCE5E2';ctx.font=(11*devicePixelRatio)+'px monospace';ctx.textBaseline='alphabetic';ctx.fillText(idOf(e),x+8,y-6); }
       if(SETTINGS.showCoords){ const rp=e.relPos||{}; ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+8, y+7); } // 各点の座標（⚙で表示/非表示）
+      if(SETTINGS.showH){ ctx.fillStyle='#F0D98A'; ctx.font='bold '+(11*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('h'+((e.relPos||{}).h||0), x, y-8*devicePixelRatio); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; } // h表示（各エントリ上に h 座標）
       return;
     }
     const ov=(ovl.bodyBad.has(i)||ovl.fpBad.has(i)||e.footprintOverflow)?'body':ovl.marginBad.has(i)?'margin':null; // 本体重なり/footprintはみ出し/子はみ出し=赤 ・ マージンのみ重なり=橙
@@ -1205,6 +1206,7 @@ function render(){
       ctx.fillStyle='#8a9b97'; ctx.font=(8*devicePixelRatio)+'px monospace';
       pts.forEach((p,k)=>{ const sx=S[k][0], sy=S[k][1]; ctx.textAlign=sx<ccx?'right':'left'; ctx.textBaseline=sy<ccy?'bottom':'top'; ctx.fillText('d'+Math.round(p.d)+' h'+h+' w'+Math.round(p.w), sx+(sx<ccx?-2:2), sy+(sy<ccy?-2:2)); });
       ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
+    if(SETTINGS.showH){ const h=(e.relPos||{}).h||0; let cx,cy; if(sh.shape==='RECT'){ const S=sh.body.map(p=>w2c(p.d,p.w)); cx=S.reduce((a,s)=>a+s[0],0)/S.length; cy=S.reduce((a,s)=>a+s[1],0)/S.length; } else { const c=w2c(sh.center.d,sh.center.w); cx=c[0]; cy=c[1]; } ctx.fillStyle='#F0D98A'; ctx.font='bold '+(12*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('h'+h, cx, cy); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; } // h表示（エントリ中心に h 座標）
   });
   { const bn=ovl.bodyPairs, mn=ovl.marginPairs; let on=0; plan.entries.forEach((e,i)=>{ if(ovl.fpBad.has(i)||e.footprintOverflow) on++; }); // over=footprintはみ出し（自エントリ＋子plan）
     if(bn||mn||on){ ctx.fillStyle=(bn||on)?'#D24B4B':'#D9902B'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.fillText('conflict: (body:'+bn+'、margin:'+mn+'、over:'+on+')', 8*devicePixelRatio, 20*devicePixelRatio); } }
@@ -1276,6 +1278,7 @@ function drawRegion(e,onSel){ const sh=regionShape(e);
   else { const [cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); }
   ctx.setLineDash([]);
   if(SETTINGS.showLabels){ const c0=w2c((e.relPos||{}).d||0,(e.relPos||{}).w||0); ctx.fillStyle='#D4A93C'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.fillText('▦ '+idOf(e), c0[0]+4, c0[1]-4); }
+  if(SETTINGS.showH){ let cx,cy; if(sh.shape==='RECT'){ const S=sh.body.map(p=>w2c(p.d,p.w)); cx=S.reduce((a,s)=>a+s[0],0)/S.length; cy=S.reduce((a,s)=>a+s[1],0)/S.length; } else { const c=w2c(sh.center.d,sh.center.w); cx=c[0]; cy=c[1]; } ctx.fillStyle='#F0D98A'; ctx.font='bold '+(12*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('h'+((e.relPos||{}).h||0), cx, cy); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; } // h表示（area の h も中心に）
 }
 // 領域(world) / 子の確保領域 bbox / フィット判定
 function regionWorld(m){ const sh=regionShape(m);
@@ -1741,6 +1744,7 @@ function boot(){
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
   if($('#pv-labels')) $('#pv-labels').onclick=()=>{ SETTINGS.showLabels=!SETTINGS.showLabels; saveSettings(); updateLabelBtn(); render(); }; // エントリ名ラベル ON/OFF
   if($('#pv-coords')) $('#pv-coords').onclick=()=>{ SETTINGS.showCoords=!SETTINGS.showCoords; saveSettings(); updateLabelBtn(); render(); }; // 座標(d,h,w) ON/OFF
+  if($('#pv-h')) $('#pv-h').onclick=()=>{ SETTINGS.showH=!SETTINGS.showH; saveSettings(); updateLabelBtn(); render(); }; // h 座標を各エントリ上に ON/OFF
   $('#pvhelp').onclick=e=>{if(e.target.id==='pvhelp')$('#pvhelp').classList.remove('on');};
   $('#fphelp').onclick=e=>{if(e.target.id==='fphelp')$('#fphelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
@@ -1844,7 +1848,7 @@ function boot(){
   updateMultiBtn(); updateLabelBtn(); snapshot(); // 初期状態を履歴に（id採番後）
 }
 function updateMultiBtn(){ const b=$('#multi'); if(b){ b.classList.toggle('pri',multiMode||rangeMode); b.textContent=rangeMode?'範囲選択:ドラッグ':(multiMode?'複数:ON':'複数選択'); } }
-function updateLabelBtn(){ const b=$('#pv-labels'); if(b) b.classList.toggle('pri', !!SETTINGS.showLabels); const c=$('#pv-coords'); if(c) c.classList.toggle('pri', !!SETTINGS.showCoords); } // 表示中は primary 表示（エントリ/座標）
+function updateLabelBtn(){ const b=$('#pv-labels'); if(b) b.classList.toggle('pri', !!SETTINGS.showLabels); const c=$('#pv-coords'); if(c) c.classList.toggle('pri', !!SETTINGS.showCoords); const h=$('#pv-h'); if(h) h.classList.toggle('pri', !!SETTINGS.showH); } // 表示中は primary 表示（エントリ/座標/h）
 function fillVer(){ $('#vbody').innerHTML=['app '+APP_VERSION,'schema '+(SCHEMA_VER??'?'),'presets '+(PRESETS_VER??'?'),'dict '+(DICT_VER??'?')].map(s=>'<div class="vrow">'+s+'</div>').join(''); }
 
 boot();
