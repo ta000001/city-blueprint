@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.40';
+const APP_VERSION='1.41';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1892,14 +1892,14 @@ function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
   if(landSel<0 || !land.regions || !land.regions[landSel]){ g.innerHTML='<span class="muted">layer を選択</span>'; return; }
   const rg=land.regions[landSel];
   g.innerHTML='<label>layer '+(landSel+1)+'/'+land.regions.length+' ('+(rg.shape==='CIRCLE'?'丸':'四角')+')</label>'
-    +'<button id="lf-lup" title="上の layer へ（後がち＝上書き側）">layer↑</button><button id="lf-ldn" title="下の layer へ">layer↓</button>'
+    +'<button id="lf-lup" title="layer を上げる（重なった所でこの範囲が上になる）">layer↑</button><button id="lf-ldn" title="layer を下げる">layer↓</button>'
     +'<label>高さh</label><span id="lf-rh-w"></span><button id="lf-del">削除</button>';
   const rw=$('#lf-rh-w'); if(rw) rw.innerHTML=numStepper('lf-rh', rg.h); wireSteppers(g);
   const rh=$('#lf-rh'); if(rh) rh.oninput=()=>{ if(land.regions[landSel]){ land.regions[landSel].h=Math.round(+rh.value||0); landPersist(); render(); } };
   const del=$('#lf-del'); if(del) del.onclick=landDelSel;
   const up=$('#lf-lup'); if(up) up.onclick=()=>landReorder(1);
   const dn=$('#lf-ldn'); if(dn) dn.onclick=()=>landReorder(-1); }
-function landReorder(dir){ const j=landSel+dir; if(landSel<0||j<0||j>=land.regions.length) return; snapshotLand(); const a=land.regions, t=a[landSel]; a[landSel]=a[j]; a[j]=t; landSel=j; landPersist(); renderLandCtrl(); render(); status('layer 順を変更（上の layer ＝後がちが上書き）'); }
+function landReorder(dir){ const j=landSel+dir; if(landSel<0||j<0||j>=land.regions.length) return; snapshotLand(); const a=land.regions, t=a[landSel]; a[landSel]=a[j]; a[j]=t; landSel=j; landPersist(); renderLandCtrl(); render(); status(dir>0?('layer を上げました（'+(landSel+1)+'/'+land.regions.length+'）'):('layer を下げました（'+(landSel+1)+'/'+land.regions.length+'）')); }
 async function saveLandPicker(){ const text=buildLandJson(), nm=planName+'_land';
   if(window.showSaveFilePicker){ try{ const h=await window.showSaveFilePicker({suggestedName:nm+'.json', types:[{description:'landform json',accept:{'application/json':['.json']}}], id:'cb-landform'});
       const w=await h.createWritable(); await w.write(text); await w.close(); plan.landform=nm; persist(); status('地形を保存: '+h.name); return true;
