@@ -233,7 +233,7 @@ body.mode-land .landtools{display:flex}
       </div>
       <div class="landtools" id="landtools">
         <span class="grp"><label>layer 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button></span>
-        <span class="grp" id="lf-selgrp"><span class="muted">layer を選択</span></span>
+        <span id="lf-selgrp" style="display:contents"></span>
         <span class="grp"><button class="pri" id="lf-gen">生成</button><label>なだらかさ</label><span id="lf-sm-w"></span></span>
         <span class="grp"><button id="lf-undo">元に戻す</button></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.43';
+const APP_VERSION='1.44';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1894,11 +1894,12 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
   renderLandSel(); }
 // 選択中 layer の編集（プレビュー下のツールバーに表示）
 function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
-  if(landSel<0 || !land.regions || !land.regions[landSel]){ g.innerHTML='<span class="muted">layer を選択</span>'; return; }
+  if(landSel<0 || !land.regions || !land.regions[landSel]){ g.innerHTML='<span class="grp"><span class="muted">layer を選択</span></span>'; return; }
   const rg=land.regions[landSel];
-  g.innerHTML='<label>layer '+(landSel+1)+'/'+land.regions.length+' ('+(rg.shape==='CIRCLE'?'丸':'四角')+')</label>'
-    +'<button id="lf-lup" title="layer を上げる（重なった所でこの範囲が上になる）">layer↑</button><button id="lf-ldn" title="layer を下げる">layer↓</button>'
-    +'<label>高さh</label><input type="range" id="lf-rh-s" style="width:120px;vertical-align:middle"><span id="lf-rh-w"></span><button id="lf-del">削除</button>';
+  g.innerHTML='<span class="grp"><label>layer '+(landSel+1)+'/'+land.regions.length+' ('+(rg.shape==='CIRCLE'?'丸':'四角')+')</label>'
+    +'<button id="lf-lup" title="layer を上げる（重なった所でこの範囲が上になる）">layer↑</button><button id="lf-ldn" title="layer を下げる">layer↓</button></span>'
+    +'<span class="grp"><label>高さh</label><input type="range" id="lf-rh-s" style="width:130px;vertical-align:middle;flex:0 0 auto"><span id="lf-rh-w"></span></span>'
+    +'<span class="grp"><button id="lf-del">削除</button></span>';
   const rw=$('#lf-rh-w'); if(rw) rw.innerHTML=numStepper('lf-rh', rg.h); wireSteppers(g);
   const setH=(v)=>{ if(!land.regions[landSel]) return; const h=Math.round(v); land.regions[landSel].h=h; const r=$('#lf-rh'); if(r) r.value=h; const s2=$('#lf-rh-s'); if(s2){ if(h<+s2.min) s2.min=h; if(h>+s2.max) s2.max=h; s2.value=h; } landPersist(); render(); };
   const sl=$('#lf-rh-s'); if(sl){ const lo=Math.min(land.groundBottom, rg.h), hi=Math.max(land.atmosTop, rg.h); sl.min=lo; sl.max=hi; sl.step=1; sl.value=rg.h; sl.oninput=()=>setH(+sl.value); }
