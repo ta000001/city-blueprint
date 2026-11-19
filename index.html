@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.45';
+const APP_VERSION='1.46';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1905,8 +1905,9 @@ function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
     +'<span class="grp"><label>高さh</label><input type="range" id="lf-rh-s" style="width:130px;vertical-align:middle;flex:0 0 auto"><span id="lf-rh-w"></span></span>'
     +'<span class="grp"><button id="lf-del">削除</button></span>';
   const rw=$('#lf-rh-w'); if(rw) rw.innerHTML=numStepper('lf-rh', rg.h); wireSteppers(g);
-  const setH=(v)=>{ if(!land.regions[landSel]) return; const h=Math.round(v); land.regions[landSel].h=h; const r=$('#lf-rh'); if(r) r.value=h; const s2=$('#lf-rh-s'); if(s2){ if(h<+s2.min) s2.min=h; if(h>+s2.max) s2.max=h; s2.value=h; } landPersist(); render(); };
-  const sl=$('#lf-rh-s'); if(sl){ const lo=Math.min(land.groundBottom, rg.h), hi=Math.max(land.atmosTop, rg.h); sl.min=lo; sl.max=hi; sl.step=1; sl.value=rg.h; sl.oninput=()=>setH(+sl.value); }
+  const hmin=land.groundBottom, hmax=Math.max(hmin, land.atmosTop); // 高さ④は ⑤地面の下限〜①空の上限 の範囲
+  const setH=(v)=>{ if(!land.regions[landSel]) return; const h=Math.max(hmin, Math.min(hmax, Math.round(v))); land.regions[landSel].h=h; const r=$('#lf-rh'); if(r) r.value=h; const s2=$('#lf-rh-s'); if(s2) s2.value=h; landPersist(); render(); };
+  const sl=$('#lf-rh-s'); if(sl){ sl.min=hmin; sl.max=hmax; sl.step=1; sl.value=Math.max(hmin, Math.min(hmax, rg.h)); sl.oninput=()=>setH(+sl.value); }
   const rh=$('#lf-rh'); if(rh) rh.oninput=()=>setH(+rh.value||0);
   const del=$('#lf-del'); if(del) del.onclick=landDelSel;
   const up=$('#lf-lup'); if(up) up.onclick=()=>landReorder(1);
