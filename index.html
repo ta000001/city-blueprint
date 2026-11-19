@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.33';
+const APP_VERSION='1.34';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1204,7 +1204,7 @@ function render(){
   const [ox,oy]=w2c(0,0);
   ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5;
   ctx.beginPath();ctx.moveTo(ox-8,oy);ctx.lineTo(ox+8,oy);ctx.moveTo(ox,oy-8);ctx.lineTo(ox,oy+8);ctx.stroke();
-  if(MODE==='land'){ renderLand(); return; } // 地形タブ：ヒートマップ＋エリアオーバーレイ
+  if(MODE==='land'){ try{ renderLand(); }catch(err){ landMsg('地形描画エラー: '+((err&&err.message)||err)); } return; } // 地形タブ：ヒートマップ＋エリアオーバーレイ
   // entries
   const ovl=computeOverlaps();
   plan.entries.forEach((e,i)=>{
@@ -1758,18 +1758,26 @@ function cellH(d,w){ const v=land&&land.cells?land.cells[d+','+w]:null; return (
 function landColor(t){ t=Math.max(0,Math.min(1,t)); const st=[[43,111,176],[73,163,123],[217,194,74],[217,144,43],[210,75,75]];
   const f=t*(st.length-1), i=Math.floor(f), r=f-i, a=st[i], b=st[Math.min(st.length-1,i+1)], c=k=>Math.round(a[k]+(b[k]-a[k])*r);
   return 'rgb('+c(0)+','+c(1)+','+c(2)+')'; }
-function setMode(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
+function setTab(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
   const tp=$('#tab-plan'), tl=$('#tab-land'); if(tp) tp.classList.toggle('on', m==='plan'); if(tl) tl.classList.toggle('on', m==='land');
   if(m==='land'){ ensureLand(); renderLandCtrl(); renderLandJson(); } render(); }
 // --- 描画（render() から MODE==='land' のとき呼ぶ。grid/原点は描画済み） ---
+const LAND_MAX_CELLS=2000000;   // これを超える範囲は編集/描画対象外（footprint を見直す）
+const LAND_DRAW_CELLS=20000;    // 1描画で塗る最大セル数（超過はストライドで間引き）
+const LAND_JSON_CELLS=5000;     // JSON プレビューに全セルを出す上限（超過はサマリ）
+function landCellCount(rng){ return rng?((rng.d[1]-rng.d[0]+1)*(rng.w[1]-rng.w[0]+1)):0; }
+function landMsg(txt){ ctx.fillStyle='#8a9b97'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText(txt, 12*devicePixelRatio, 30*devicePixelRatio); }
+function landMinMax(){ let lo=-1, hi=-1; if(land&&land.cells) for(const k in land.cells){ const v=land.cells[k]; if(v<lo)lo=v; if(v>hi)hi=v; } return [lo,hi]; } // 設定済みセルのみ走査（全範囲は走らない）
 function renderLand(){ const rng=landRange();
-  if(!rng){ ctx.fillStyle='#8a9b97'; ctx.font='bold '+(13*devicePixelRatio)+'px monospace'; ctx.textBaseline='alphabetic'; ctx.fillText('footprint 未設定（配置タブで設定してください）', 12*devicePixelRatio, 30*devicePixelRatio); return; }
+  if(!rng){ landMsg('footprint 未設定（配置タブで設定してください）'); return; }
   ensureLand();
-  let lo=Infinity, hi=-Infinity;
-  for(let d=rng.d[0]; d<=rng.d[1]; d++) for(let w=rng.w[0]; w<=rng.w[1]; w++){ const v=cellH(d,w); if(v<lo)lo=v; if(v>hi)hi=v; }
-  if(!isFinite(lo)){ lo=-1; hi=-1; } const span=(hi>lo)?(hi-lo):1, s=camo.scale;
-  for(let d=rng.d[0]; d<=rng.d[1]; d++) for(let w=rng.w[0]; w<=rng.w[1]; w++){ const v=cellH(d,w), [x,y]=w2c(d,w); ctx.fillStyle=landColor((v-lo)/span); ctx.fillRect(x-s/2, y-s/2, s+0.6, s+0.6); }
-  if(s>=16*devicePixelRatio){ ctx.fillStyle='#10171A'; ctx.font=Math.max(7,Math.floor(s/2.4))+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  const cnt=landCellCount(rng);
+  if(cnt>LAND_MAX_CELLS){ landMsg('範囲が広すぎます（'+cnt.toLocaleString()+' セル）。footprint を小さくしてください'); return; }
+  const [lo,hi]=landMinMax(); const span=(hi>lo)?(hi-lo):1, s=camo.scale;
+  const stride=Math.max(1, Math.ceil(Math.sqrt(cnt/LAND_DRAW_CELLS))); // 広い範囲はブロック単位に間引いて描画（クラッシュ防止）
+  const bs=stride*s;
+  for(let d=rng.d[0]; d<=rng.d[1]; d+=stride) for(let w=rng.w[0]; w<=rng.w[1]; w+=stride){ const v=cellH(d,w), [x,y]=w2c(d,w); ctx.fillStyle=landColor((v-lo)/span); ctx.fillRect(x-s/2, y-(stride-1)*s-s/2, bs+0.6, bs+0.6); }
+  if(stride===1 && s>=16*devicePixelRatio){ ctx.fillStyle='#10171A'; ctx.font=Math.max(7,Math.floor(s/2.4))+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
     for(let d=rng.d[0]; d<=rng.d[1]; d++) for(let w=rng.w[0]; w<=rng.w[1]; w++){ const [x,y]=w2c(d,w); ctx.fillText(''+cellH(d,w), x, y); } ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
   plan.entries.forEach(e=>{ if(isGroupParent(e)){ drawRegion(e,false); return; } const sh=worldShape(e);
@@ -1796,6 +1804,7 @@ function landPaint(e){ const rng=landRange(); if(!rng) return; ensureLand();
   render(); }
 // --- エリアに合わせて自動勾配（seed=エリア/エントリ底h → 緩和補間） ---
 function landAuto(){ const rng=landRange(); if(!rng){ status('footprint 未設定'); return; } ensureLand();
+  if(landCellCount(rng)>LAND_MAX_CELLS){ status('範囲が広すぎます（footprint を小さく）'); return; }
   const d0=rng.d[0],d1=rng.d[1],w0=rng.w[0],w1=rng.w[1], WN=w1-w0+1, idx=(d,w)=>(d-d0)*WN+(w-w0);
   const val=new Float64Array((d1-d0+1)*WN), seed=new Uint8Array(val.length);
   plan.entries.forEach(e=>{ const h=(e.relPos&&e.relPos.h)||0, b=entryBBox(e); if(!isFinite(b.d0)) return;
@@ -1812,7 +1821,10 @@ function landAuto(){ const rng=landRange(); if(!rng){ status('footprint 未設�
 function buildLandJson(){ ensureLand(); const rng=landRange(), cells=[];
   if(rng) for(let d=rng.d[0]; d<=rng.d[1]; d++) for(let w=rng.w[0]; w<=rng.w[1]; w++) cells.push({d, h:cellH(d,w), w});
   return JSON.stringify({ type:'landform', plan:planName, atmosTop:land.atmosTop, atmosMat:'air', groundBottom:land.groundBottom, groundMat:land.groundMat, cells }, null, 2)+'\n'; }
-function renderLandJson(){ const t=$('#landjson'); if(t) t.value=buildLandJson(); const jt=$('#lf-jtitle'); if(jt) jt.textContent=planName+'_land.json'; }
+function renderLandJson(){ const t=$('#landjson'), jt=$('#lf-jtitle'); if(jt) jt.textContent=planName+'_land.json'; if(!t) return;
+  const rng=landRange(), cnt=landCellCount(rng);
+  if(cnt>LAND_JSON_CELLS){ ensureLand(); t.value=JSON.stringify({type:'landform',plan:planName,atmosTop:land.atmosTop,atmosMat:'air',groundBottom:land.groundBottom,groundMat:land.groundMat,cells:'…('+cnt.toLocaleString()+' 件・保存時に書き出し)'},null,2); return; } // 大規模は巨大文字列でクラッシュするためサマリ
+  t.value=buildLandJson(); }
 function matLabelOf(m){ return m?(m.block||((m.form||'')+(m.mat?('/'+m.mat):''))||'dirt'):'dirt'; }
 function renderLandCtrl(){ const box=$('#landctrl'); if(!box) return; ensureLand(); const rng=landRange();
   const rows=[ frRow('① 空の上限','', numStepper('lf-atmos', land.atmosTop), '','','','', 'fp'),
@@ -1886,8 +1898,8 @@ function boot(){
   $('#cfghelp').onclick=e=>{if(e.target.id==='cfghelp')$('#cfghelp').classList.remove('on');}; // 項目ごとの?はrenderCfgで配線
   $('#pv-help').onclick=()=>$('#pvhelp').classList.add('on');
   // 地形 landform タブ
-  if($('#tab-plan')) $('#tab-plan').onclick=()=>setMode('plan');
-  if($('#tab-land')) $('#tab-land').onclick=()=>setMode('land');
+  if($('#tab-plan')) $('#tab-plan').onclick=()=>setTab('plan');
+  if($('#tab-land')) $('#tab-land').onclick=()=>setTab('land');
   if($('#lf-th-w')) $('#lf-th-w').innerHTML=numStepper('lf-th', -1);
   if($('#lf-br-w')) $('#lf-br-w').innerHTML=numStepper('lf-br', 1);
   if($('#lf-sm-w')) $('#lf-sm-w').innerHTML=numStepper('lf-sm', 3);
