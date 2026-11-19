@@ -216,8 +216,8 @@ body.mode-land .landtools{display:flex}
 </div>
 
 <div class="tabbar">
-  <button id="tab-plan" class="on" title="建物/エリアの配置">配置</button>
-  <button id="tab-land" title="地形(landform)の編集">地形</button>
+  <button id="tab-plan" class="on" title="建物/エリアの配置">plan</button>
+  <button id="tab-land" title="地形(landform)の編集">land</button>
 </div>
 <div class="cols">
   <div class="col">
@@ -232,7 +232,7 @@ body.mode-land .landtools{display:flex}
         <span class="cbg"><span class="cbl">コピー / 移動</span><span class="cbr"><button id="copy" title="選択エントリをコピー(複数可)。再押下/ダブルクリックで取消 (Ctrl/⌘+C)">⧉ コピー</button><button id="cut" title="選択エントリを切り取り(複数可)。貼り付けで移動 (Ctrl/⌘+X)">✂ 切り取り</button><button id="paste" title="コピー先に貼り付け (Ctrl/⌘+V)">貼り付け</button></span></span>
       </div>
       <div class="landtools" id="landtools">
-        <span class="grp"><label>高さ範囲を追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button></span>
+        <span class="grp"><label>高さ範囲を追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button><button id="lf-del2">削除</button></span>
         <span class="grp"><button class="pri" id="lf-gen">生成</button><label>なだらかさ</label><span id="lf-sm-w"></span></span>
         <span class="grp"><button id="lf-undo">元に戻す</button></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
@@ -353,7 +353,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.38';
+const APP_VERSION='1.39';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1796,6 +1796,9 @@ function renderLand(){ const g=landSyncGrid();
     if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); }
     else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.stroke(); } });
   drawLandRegions();
+  // カーソル（plan に寄せる）：非選択時に破線マーカー＋下部にラベル
+  if(landSel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
+  ctx.fillStyle='#8a9b97'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('cursor d'+cursor.d+' w'+cursor.w, 8*devicePixelRatio, cv.height-8*devicePixelRatio);
 }
 // 高さ指定オブジェクト（四角/丸）を描画。選択中は強調＋リサイズハンドル。
 function drawLandRegions(){ const s=camo.scale, HS=4*devicePixelRatio;
@@ -1818,16 +1821,17 @@ function landDown(e){ const p=landWorldAt(e);
   if(landSel>=0 && land.regions[landSel]){ const hd=landHandleAt(land.regions[landSel], p.px, p.py); if(hd){ snapshotLand(); landDrag={resize:true, idx:landSel, opp:hd.opp, circle:hd.circle}; cv.style.cursor='nwse-resize'; return; } }
   const hit=landRegionHit(p.d,p.w);
   if(hit>=0){ landSel=hit; const rg=land.regions[hit]; snapshotLand(); landDrag={move:true, idx:hit, gd:p.d, gw:p.w, o:JSON.parse(JSON.stringify(rg))}; renderLandCtrl(); render(); return; }
-  landSel=-1; landDrag={pan:true,x:e.clientX,y:e.clientY,ox:camo.x,oy:camo.y}; renderLandCtrl(); render(); }
+  landSel=-1; landDrag={pan:true,x:e.clientX,y:e.clientY,ox:camo.x,oy:camo.y,cd:p.d,cw:p.w,moved:false}; renderLandCtrl(); render(); } // 空タップ=カーソル移動/ドラッグ=パン（plan に寄せる）
 function landMove(e){ if(!landDrag) return; const p=landWorldAt(e);
-  if(landDrag.pan){ camo.x=landDrag.ox+(e.clientX-landDrag.x)*devicePixelRatio; camo.y=landDrag.oy+(e.clientY-landDrag.y)*devicePixelRatio; render(); return; }
+  if(landDrag.pan){ if(Math.abs(e.clientX-landDrag.x)+Math.abs(e.clientY-landDrag.y)>3) landDrag.moved=true; camo.x=landDrag.ox+(e.clientX-landDrag.x)*devicePixelRatio; camo.y=landDrag.oy+(e.clientY-landDrag.y)*devicePixelRatio; render(); return; }
   const rg=land.regions[landDrag.idx]; if(!rg) return;
   if(landDrag.move){ const dd=p.d-landDrag.gd, dw=p.w-landDrag.gw, o=landDrag.o; if(rg.shape==='RECT'){ rg.d0=o.d0+dd; rg.d1=o.d1+dd; rg.w0=o.w0+dw; rg.w1=o.w1+dw; } else { rg.cd=o.cd+dd; rg.cw=o.cw+dw; } render(); return; }
   if(landDrag.resize){ if(landDrag.circle){ rg.r=Math.max(1, Math.round(Math.hypot(p.d-rg.cd, p.w-rg.cw))); } else { const o=landDrag.opp; rg.d0=Math.min(p.d,o.d); rg.d1=Math.max(p.d,o.d); rg.w0=Math.min(p.w,o.w); rg.w1=Math.max(p.w,o.w); } render(); return; } }
-function landUp(){ if(landDrag&&(landDrag.move||landDrag.resize)) landPersist(); landDrag=null; cv.style.cursor='default'; }
+function landUp(){ if(landDrag){ if(landDrag.pan && !landDrag.moved){ cursor={d:landDrag.cd, w:landDrag.cw}; render(); } else if(landDrag.move||landDrag.resize){ landPersist(); } } landDrag=null; cv.style.cursor='default'; }
+function landDelSel(){ if(landSel>=0 && land.regions[landSel]){ snapshotLand(); land.regions.splice(landSel,1); landSel=-1; landPersist(); renderLandCtrl(); render(); status('高さ範囲を削除'); } else status('削除する範囲を選択してください'); }
 // 範囲追加：footprint 中心に既定サイズで。選択状態にする。
 function landAddRegion(shape){ const rng=landRange(); if(!rng){ status('先に配置タブで footprint を設定してください'); return; }
-  const cd=Math.round((rng.d[0]+rng.d[1])/2), cw=Math.round((rng.w[0]+rng.w[1])/2);
+  const cd=cursor.d, cw=cursor.w; // カーソル位置に追加（plan に寄せる）
   const sz=Math.max(2, Math.min(16, Math.floor(Math.min(rng.d[1]-rng.d[0], rng.w[1]-rng.w[0])/4)||8));
   snapshotLand(); ensureLand();
   const rg = (shape==='CIRCLE') ? {shape:'CIRCLE', cd, cw, r:sz, h:0} : {shape:'RECT', d0:cd-sz, w0:cw-sz, d1:cd+sz, w1:cw+sz, h:0};
@@ -1880,7 +1884,7 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box) return; ensureLand
   const cse=$('#lf-cs'); if(cse) cse.oninput=()=>{ land.cellSize=Math.max(1,Math.round(+cse.value||1)); landSyncGrid(); landPersist(); renderLandCtrl(); render(); };
   const mb=$('#lf-mat'); if(mb) mb.onclick=()=>bpOpen({land:true});
   const rh=$('#lf-rh'); if(rh) rh.oninput=()=>{ if(land.regions[landSel]){ land.regions[landSel].h=Math.round(+rh.value||0); landPersist(); render(); } };
-  const del=$('#lf-del'); if(del) del.onclick=()=>{ if(landSel>=0){ snapshotLand(); land.regions.splice(landSel,1); landSel=-1; landPersist(); renderLandCtrl(); render(); status('高さ範囲を削除'); } };
+  const del=$('#lf-del'); if(del) del.onclick=landDelSel;
   const fwd=$('#lf-fwd'); if(fwd) fwd.onclick=()=>landReorder(1);
   const back=$('#lf-back'); if(back) back.onclick=()=>landReorder(-1); }
 function landReorder(dir){ const j=landSel+dir; if(landSel<0||j<0||j>=land.regions.length) return; snapshotLand(); const a=land.regions, t=a[landSel]; a[landSel]=a[j]; a[j]=t; landSel=j; landPersist(); renderLandCtrl(); render(); status('優先順を変更（後に置いた方＝後がちが上書き）'); }
@@ -1954,6 +1958,7 @@ function boot(){
   if($('#lf-add-rect')) $('#lf-add-rect').onclick=()=>landAddRegion('RECT');
   if($('#lf-add-circle')) $('#lf-add-circle').onclick=()=>landAddRegion('CIRCLE');
   if($('#lf-gen')) $('#lf-gen').onclick=landGenerate;
+  if($('#lf-del2')) $('#lf-del2').onclick=landDelSel;
   if($('#lf-undo')) $('#lf-undo').onclick=landUndo;
   if($('#lf-save')) $('#lf-save').onclick=saveLandPicker;
   if($('#lf-open')) $('#lf-open').onclick=openLandPicker;
