@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.47';
+const APP_VERSION='1.48';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1799,12 +1799,11 @@ function renderLand(){ const g=landSyncGrid();
   const sL=SETTINGS.showLabels, sC=SETTINGS.showCoords, sH=SETTINGS.showH;
   plan.entries.forEach(e=>{ const rp=e.relPos||{};
     if(isGroupParent(e)){ drawRegion(e,false); const [lx,ly]=w2c(rp.d||0,rp.w||0); landEntryText(e,lx,ly,sL,sC,sH); return; }
-    const sh=worldShape(e); let ax,ay;
-    if(!sh){ const c=xform(0,0,rp,e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='rgba(220,229,226,.55)'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); ax=x; ay=y; }
+    const sh=worldShape(e); // エリア以外（建物等）は配置が分かる輪郭のみ。名前/座標/h トグルはエリアとレイヤーだけに効かせる
+    if(!sh){ const c=xform(0,0,rp,e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='rgba(220,229,226,.55)'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); }
     else { ctx.strokeStyle='rgba(220,229,226,.5)'; ctx.lineWidth=1;
-      if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); const [x,y]=w2c(sh.body[0].d,sh.body[0].w); ax=x; ay=y; }
-      else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.stroke(); ax=cx; ay=cy; } }
-    landEntryText(e,ax,ay,sL,sC,sH); });
+      if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); }
+      else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.stroke(); } } });
   drawLandRegions();
   // カーソル（plan に寄せる）：非選択時に破線マーカー＋下部にラベル
   if(landSel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
