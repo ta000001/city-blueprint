@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.36';
+const APP_VERSION='1.37';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1745,7 +1745,7 @@ let MODE='plan';            // 'plan' | 'land'
 // land（地図規模対応）: 高さは密な Int16Array（row-major cd*gW+cw・既定-1）。1マス=cellSize ブロック。
 //   { atmosTop①, groundBottom⑤, groundMat⑥, cellSize, d0,w0(範囲原点・block), gD,gW(グリッド寸), heights:Int16Array }
 let land=null;
-let landHist=[], landDrag=null, landStroke=null, landSaveT=null;
+let landHist=[], landDrag=null, landStroke=null, landSaveT=null, landHover=null;
 const LAND_MAX_CELLS=5000000;   // グリッドのマス数上限（2048²=約419万を許容）
 const LAND_DRAW_CELLS=20000;    // 1描画で塗る最大マス数（超過はストライドで間引き）
 const LAND_JSON_CELLS=5000;     // JSON プレビューに全マスを出す上限（超過はサマリ）
@@ -1780,7 +1780,7 @@ function landMsg(txt){ ctx.fillStyle='#8a9b97'; ctx.font='bold '+(13*devicePixel
 function landMinMax(stride){ stride=Math.max(1,stride|0); let lo=-1,hi=-1; const h=land&&land.heights; if(h) for(let i=0;i<h.length;i+=stride){ const v=h[i]; if(v<lo)lo=v; if(v>hi)hi=v; } return [lo,hi]; }
 function setTab(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
   const tp=$('#tab-plan'), tl=$('#tab-land'); if(tp) tp.classList.toggle('on', m==='plan'); if(tl) tl.classList.toggle('on', m==='land');
-  if(m==='land'){ ensureLand(); landSyncGrid(); renderLandCtrl(); renderLandJson(); } render(); }
+  if(m==='land'){ ensureLand(); landSyncGrid(); renderLandCtrl(); renderLandJson(); if(!plan.footprint) status('地形には plan の footprint が必要です：配置タブで設定してください', 6000); else status('地形: 筆でなぞって高さを編集（目標h を変えると変化が見えます）', 5000); } render(); }
 // --- 描画（render() から MODE==='land' のとき呼ぶ。grid/原点は描画済み） ---
 function renderLand(){ const g=landSyncGrid();
   if(!g){ landMsg('footprint 未設定（配置タブで設定してください）'); return; }
@@ -1793,6 +1793,7 @@ function renderLand(){ const g=landSyncGrid();
     for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const bd=g.d0+cd*cs, bw=g.w0+cw*cs, [x,y]=w2c(bd,bw); ctx.fillText(''+getCell(cd,cw), x+(cs-1)*s/2*0, y-(cs-1)*s/2); } ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
   const rng=landRange();
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
+  if(landHover){ const E=(2*landHover.rad+1)*cs, bd=g.d0+(landHover.cd-landHover.rad)*cs, bw=g.w0+(landHover.cw-landHover.rad)*cs, [hx,hy]=w2c(bd,bw); ctx.strokeStyle='#F0D98A'; ctx.lineWidth=2; ctx.strokeRect(hx-s/2, hy-(E-1)*s-s/2, E*s, E*s); } // ブラシ位置
   plan.entries.forEach(e=>{ if(isGroupParent(e)){ drawRegion(e,false); return; } const sh=worldShape(e);
     if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='#DCE5E2'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); return; }
     ctx.strokeStyle='rgba(220,229,226,.85)'; ctx.lineWidth=1.2;
@@ -1808,10 +1809,13 @@ function landMove(e){ if(!landDrag) return;
   if(landDrag.pan){ camo.x=landDrag.ox+(e.clientX-landDrag.x)*devicePixelRatio; camo.y=landDrag.oy+(e.clientY-landDrag.y)*devicePixelRatio; render(); return; }
   if(landDrag.paint) landPaint(e); }
 function landUp(){ if(landDrag&&landDrag.paint) landPersist(); landDrag=null; landStroke=null; cv.style.cursor='default'; }
-function landPaint(e){ const g=landSyncGrid(); if(!g) return; const {cd,cw}=landCellIndexAt(e);
+function landPaint(e){ const g=landSyncGrid(); if(!g){ status('footprint 未設定：配置タブで footprint を設定してください'); return; } const {cd,cw}=landCellIndexAt(e);
   const br=Math.max(1,(($('#lf-br')||{}).value|0)||1), rad=br-1, th=(($('#lf-th')||{}).value|0), tool=landDrag.tool;
-  for(let a=cd-rad; a<=cd+rad; a++) for(let b=cw-rad; b<=cw+rad; b++){ if(a<0||a>=g.gD||b<0||b>=g.gW) continue; const i=a*g.gW+b;
+  if(cd<-rad||cd>=g.gD+rad||cw<-rad||cw>=g.gW+rad){ status('範囲外です（footprint の内側を塗ってください）'); return; }
+  landHover={cd,cw,rad}; let n=0;
+  for(let a=cd-rad; a<=cd+rad; a++) for(let b=cw-rad; b<=cw+rad; b++){ if(a<0||a>=g.gD||b<0||b>=g.gW) continue; const i=a*g.gW+b; n++;
     if(tool==='set'){ land.heights[i]=th; } else { if(landStroke.has(i)) continue; landStroke.add(i); land.heights[i]=land.heights[i]+(tool==='raise'?1:-1); } }
+  if(n) status(tool==='set'?('h='+th+' に設定'):(tool==='raise'?'盛る(+1)':'削る(-1)'), 1500);
   render(); }
 // --- エリアに合わせて自動勾配（seed=エリア/エントリ底h → 緩和補間・マス単位） ---
 function landAuto(){ const g=landSyncGrid(); if(!g){ status('footprint 未設定'); return; } const cells=g.gD*g.gW;
