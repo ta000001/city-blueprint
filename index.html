@@ -195,6 +195,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .tabbar button.on{background:var(--panel);color:var(--brass);border-color:var(--brass-dim)}
 .p-land,.p-landjson{display:none}
 body.mode-land .p-entries,body.mode-land .p-params,body.mode-land .p-json,body.mode-land .canbar{display:none}
+body.mode-land #fit{display:none}
 body.mode-land .p-land,body.mode-land .p-landjson{display:block}
 .landtools{display:none;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0 2px}
 body.mode-land .landtools{display:flex}
@@ -354,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.46';
+const APP_VERSION='1.47';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1795,16 +1796,26 @@ function renderLand(){ const g=landSyncGrid();
   for(let cd=0; cd<g.gD; cd+=stride) for(let cw=0; cw<g.gW; cw+=stride){ const v=getCell(cd,cw), bd=g.d0+cd*cs, bw=g.w0+cw*cs, [x,y]=w2c(bd,bw); ctx.fillStyle=landColor((v-lo)/span); ctx.fillRect(x-s/2, y-(cs*stride-1)*s-s/2, bs+0.6, bs+0.6); }
   const rng=landRange();
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
-  plan.entries.forEach(e=>{ if(isGroupParent(e)){ drawRegion(e,false); return; } const sh=worldShape(e);
-    if(!sh){ const c=xform(0,0,e.relPos||{},e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='rgba(220,229,226,.55)'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); return; }
-    ctx.strokeStyle='rgba(220,229,226,.5)'; ctx.lineWidth=1;
-    if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); }
-    else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.stroke(); } });
+  const sL=SETTINGS.showLabels, sC=SETTINGS.showCoords, sH=SETTINGS.showH;
+  plan.entries.forEach(e=>{ const rp=e.relPos||{};
+    if(isGroupParent(e)){ drawRegion(e,false); const [lx,ly]=w2c(rp.d||0,rp.w||0); landEntryText(e,lx,ly,sL,sC,sH); return; }
+    const sh=worldShape(e); let ax,ay;
+    if(!sh){ const c=xform(0,0,rp,e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='rgba(220,229,226,.55)'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); ax=x; ay=y; }
+    else { ctx.strokeStyle='rgba(220,229,226,.5)'; ctx.lineWidth=1;
+      if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.stroke(); const [x,y]=w2c(sh.body[0].d,sh.body[0].w); ax=x; ay=y; }
+      else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.stroke(); ax=cx; ay=cy; } }
+    landEntryText(e,ax,ay,sL,sC,sH); });
   drawLandRegions();
   // カーソル（plan に寄せる）：非選択時に破線マーカー＋下部にラベル
   if(landSel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
   ctx.fillStyle='#8a9b97'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('cursor d'+cursor.d+' w'+cursor.w, 8*devicePixelRatio, cv.height-8*devicePixelRatio);
 }
+// overlay エントリの名前/座標/高さ（plan の各トグルを land でも反映）
+function landEntryText(e,x,y,sL,sC,sH){ const rp=e.relPos||{}; ctx.textAlign='left'; ctx.font=(10*devicePixelRatio)+'px monospace';
+  if(sL){ ctx.fillStyle='#DCE5E2'; ctx.textBaseline='alphabetic'; ctx.fillText(idOf(e), x+7, y-6); }
+  if(sC){ ctx.fillStyle='#8a9b97'; ctx.textBaseline='top'; ctx.fillText('d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0), x+7, y+6); }
+  else if(sH){ ctx.fillStyle='#F0D98A'; ctx.textBaseline='top'; ctx.fillText('h'+(rp.h||0), x+7, y+6); }
+  ctx.textBaseline='alphabetic'; }
 // 高さ指定オブジェクト（四角/丸）を描画。選択中は強調＋リサイズハンドル。
 function landLayerColor(i,n){ const t=n>1?i/(n-1):0; return 'hsl('+Math.round(210-190*t)+',72%,58%)'; } // 下layer=青→上layer(後がち)=赤
 function drawLandRegions(){ const s=camo.scale, HS=4*devicePixelRatio, n=(land.regions||[]).length;
@@ -1816,8 +1827,8 @@ function drawLandRegions(){ const s=camo.scale, HS=4*devicePixelRatio, n=(land.r
       if(on){ ctx.fillStyle='#FFFFFF'; [[rg.d0,rg.w0],[rg.d0,rg.w1],[rg.d1,rg.w0],[rg.d1,rg.w1]].forEach(([d,w])=>{ const [hx,hy]=w2c(d,w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); } }
     else { const [c0,c1]=w2c(rg.cd,rg.cw); ctx.save(); ctx.globalAlpha=on?0.2:0.14; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(c0,c1,rg.r*s,0,7); ctx.fill(); ctx.restore(); ctx.beginPath(); ctx.arc(c0,c1,rg.r*s,0,7); ctx.stroke(); cx=c0; topY=c1-rg.r*s;
       if(on){ ctx.fillStyle='#FFFFFF'; const [hx,hy]=w2c(rg.cd,rg.cw+rg.r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } }
-    // 等高線なのでラベルは線の近く（上辺のすぐ上）に「L{layer} h{値}」。色は layer 色（選択は白）
-    ctx.fillStyle=on?'#FFFFFF':col; ctx.font='bold '+(11*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('L'+(i+1)+' h'+rg.h, cx, topY-2*devicePixelRatio); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }); }
+    // 等高線なのでラベルは線の近く（上辺のすぐ上）に「L{layer} h{値}」。h表示トグルで表示/非表示（選択中は常に表示）
+    if(SETTINGS.showH){ ctx.fillStyle=on?'#FFFFFF':col; ctx.font='bold '+(11*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('L'+(i+1)+' h'+rg.h, cx, topY-2*devicePixelRatio); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; } }); }
 // --- 編集（ポインタ・配置タブ風：選択/移動/リサイズ） ---
 function landWorldAt(e){ const r=cv.getBoundingClientRect(), px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return { d:Math.round((camo.y-py)/camo.scale), w:Math.round((px-camo.x)/camo.scale), px, py }; }
 function landRegionArea(rg){ return rg.shape==='RECT' ? ((Math.abs(rg.d1-rg.d0)+1)*(Math.abs(rg.w1-rg.w0)+1)) : (Math.PI*rg.r*rg.r); }
