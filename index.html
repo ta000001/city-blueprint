@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.41';
+const APP_VERSION='1.42';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1816,9 +1816,14 @@ function drawLandRegions(){ const s=camo.scale, HS=4*devicePixelRatio, n=(land.r
     ctx.fillStyle=on?'#FFFFFF':col; ctx.font='bold '+(11*devicePixelRatio)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText('L'+(i+1)+' h'+rg.h, cx, topY-2*devicePixelRatio); ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }); }
 // --- 編集（ポインタ・配置タブ風：選択/移動/リサイズ） ---
 function landWorldAt(e){ const r=cv.getBoundingClientRect(), px=(e.clientX-r.left)*devicePixelRatio, py=(e.clientY-r.top)*devicePixelRatio; return { d:Math.round((camo.y-py)/camo.scale), w:Math.round((px-camo.x)/camo.scale), px, py }; }
-function landRegionHit(d,w){ for(let i=land.regions.length-1;i>=0;i--){ const rg=land.regions[i];
-  if(rg.shape==='RECT'){ if(d>=Math.min(rg.d0,rg.d1)&&d<=Math.max(rg.d0,rg.d1)&&w>=Math.min(rg.w0,rg.w1)&&w<=Math.max(rg.w0,rg.w1)) return i; }
-  else { if((d-rg.cd)*(d-rg.cd)+(w-rg.cw)*(w-rg.cw)<=rg.r*rg.r) return i; } } return -1; }
+function landRegionArea(rg){ return rg.shape==='RECT' ? ((Math.abs(rg.d1-rg.d0)+1)*(Math.abs(rg.w1-rg.w0)+1)) : (Math.PI*rg.r*rg.r); }
+function landInside(rg,d,w){ return rg.shape==='RECT' ? (d>=Math.min(rg.d0,rg.d1)&&d<=Math.max(rg.d0,rg.d1)&&w>=Math.min(rg.w0,rg.w1)&&w<=Math.max(rg.w0,rg.w1)) : ((d-rg.cd)*(d-rg.cd)+(w-rg.cw)*(w-rg.cw)<=rg.r*rg.r); }
+function landCandidatesAt(d,w){ const list=[]; (land.regions||[]).forEach((rg,i)=>{ if(landInside(rg,d,w)) list.push(i); });
+  list.sort((a,b)=>(landRegionArea(land.regions[a])-landRegionArea(land.regions[b]))||(b-a)); return list; } // 面積昇順（内側の小さい範囲を先に）・同面積は上 layer 優先
+let landHitSig='', landHitIdx=0;
+function landRegionHit(d,w){ const c=landCandidatesAt(d,w); if(!c.length){ landHitSig=''; landHitIdx=0; return -1; }
+  const sig=c.join(','); if(sig===landHitSig) landHitIdx=(landHitIdx+1)%c.length; else { landHitSig=sig; landHitIdx=0; } // 同じ重なり集合を再タップ→次の範囲へ周回（plan 踏襲）
+  if(c.length>1) status('重なり'+c.length+'件 — '+(landHitIdx+1)+'/'+c.length+'（同じ場所を再タップで切替）'); return c[landHitIdx]; }
 function landHandleAt(rg, px, py){ const HR=11*devicePixelRatio;
   if(rg.shape==='RECT'){ for(const [d,w] of [[rg.d0,rg.w0],[rg.d0,rg.w1],[rg.d1,rg.w0],[rg.d1,rg.w1]]){ const [cx,cy]=w2c(d,w); if(Math.abs(cx-px)<=HR&&Math.abs(cy-py)<=HR) return {opp:{d:(d===rg.d0?rg.d1:rg.d0), w:(w===rg.w0?rg.w1:rg.w0)}}; } return null; }
   const [ex,ey]=w2c(rg.cd, rg.cw+rg.r); if(Math.abs(ex-px)<=HR&&Math.abs(ey-py)<=HR) return {circle:true}; return null; }
