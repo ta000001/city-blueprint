@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.42';
+const APP_VERSION='1.43';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1898,9 +1898,11 @@ function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
   const rg=land.regions[landSel];
   g.innerHTML='<label>layer '+(landSel+1)+'/'+land.regions.length+' ('+(rg.shape==='CIRCLE'?'丸':'四角')+')</label>'
     +'<button id="lf-lup" title="layer を上げる（重なった所でこの範囲が上になる）">layer↑</button><button id="lf-ldn" title="layer を下げる">layer↓</button>'
-    +'<label>高さh</label><span id="lf-rh-w"></span><button id="lf-del">削除</button>';
+    +'<label>高さh</label><input type="range" id="lf-rh-s" style="width:120px;vertical-align:middle"><span id="lf-rh-w"></span><button id="lf-del">削除</button>';
   const rw=$('#lf-rh-w'); if(rw) rw.innerHTML=numStepper('lf-rh', rg.h); wireSteppers(g);
-  const rh=$('#lf-rh'); if(rh) rh.oninput=()=>{ if(land.regions[landSel]){ land.regions[landSel].h=Math.round(+rh.value||0); landPersist(); render(); } };
+  const setH=(v)=>{ if(!land.regions[landSel]) return; const h=Math.round(v); land.regions[landSel].h=h; const r=$('#lf-rh'); if(r) r.value=h; const s2=$('#lf-rh-s'); if(s2){ if(h<+s2.min) s2.min=h; if(h>+s2.max) s2.max=h; s2.value=h; } landPersist(); render(); };
+  const sl=$('#lf-rh-s'); if(sl){ const lo=Math.min(land.groundBottom, rg.h), hi=Math.max(land.atmosTop, rg.h); sl.min=lo; sl.max=hi; sl.step=1; sl.value=rg.h; sl.oninput=()=>setH(+sl.value); }
+  const rh=$('#lf-rh'); if(rh) rh.oninput=()=>setH(+rh.value||0);
   const del=$('#lf-del'); if(del) del.onclick=landDelSel;
   const up=$('#lf-lup'); if(up) up.onclick=()=>landReorder(1);
   const dn=$('#lf-ldn'); if(dn) dn.onclick=()=>landReorder(-1); }
