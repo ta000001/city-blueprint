@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.65';
+const APP_VERSION='1.66';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1912,9 +1912,9 @@ function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未�
   if(N>LAND_MAX_CELLS){ status('範囲が広すぎます'); return; }
   snapshotLand(); const val=new Float64Array(N), seed=new Uint8Array(N);
   areas.slice().sort((a,b)=>areaLayer(a)-areaLayer(b)).forEach(e=>{ rasterAreaCells(e, g, (i)=>{ val[i]=areaH(e); seed[i]=1; }); }); // layer 昇順→高 layer が後から上書き（後がち）
-  let any=false,sum=0,n=0; for(let i=0;i<N;i++) if(seed[i]){ any=true; sum+=val[i]; n++; }
+  let any=false; for(let i=0;i<N;i++) if(seed[i]){ any=true; break; }
   if(!any){ status('area が footprint 内にありません'); return; }
-  const avg=sum/n; for(let i=0;i<N;i++) if(!seed[i]) val[i]=avg;
+  // 未シード（area の無いマス）は基準 0 のまま。relax で area から 0 へ勾配を作る＝area が無い所は h0（ヒートマップ上は透明）。
   const slope=Math.max(0,Math.min(30,(($('#lf-sm')||{value:3}).value|0))); const iters=slope*20; // 値が大きいほど補間反復を増やす＝よりなめらか（小さいほど急）
   for(let it=0; it<iters; it++) for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
     if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
