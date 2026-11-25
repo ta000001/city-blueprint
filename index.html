@@ -236,7 +236,7 @@ body.mode-land .landtools{display:flex}
       <div class="landtools" id="landtools">
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
-        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>なだらかさ</label><span id="lf-sm-w"></span></span>
+        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜度</label><input type="range" id="lf-sm" min="0" max="10" step="1" value="3" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -340,7 +340,7 @@ body.mode-land .landtools{display:flex}
 <div class="modal" id="lfhelp"><div class="m"><h3>地形（landform）</h3><div class="hbody">
 <p><b>2層モデル</b>（対応 plan と同じ相対座標 d,h,w・原点共通）。<b>地形タブ</b>で編集し、<b>&lt;plan名&gt;_land.json</b> を書き出します。plan のエリア/footprint を薄く重ねて表示します（読み取り専用）。</p>
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
-<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、間を<b>なだらかに補間</b>した高さマップを作ります（「なだらかさ」で滑らかさ調整）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
+<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、間を補間した高さマップを作ります。<b>「傾斜度」</b>スライダーで勾配を調整（低い＝なだらか／高い＝急）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
 <p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.61';
+const APP_VERSION='1.62';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1817,6 +1817,9 @@ function renderLand(){ const g=landSyncGrid();
     ctx.restore(); }
   const rng=landRange();
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
+  if(sel<0 && plan.footprint){ const fp=plan.footprint, HS=4*devicePixelRatio; ctx.fillStyle='#4F8A7B'; // footprint 編集ハンドル（land でも plan 同等に編集可）
+    if(FP.isRect(fp)){ const dd=FP.dRange(fp),ww=FP.wRange(fp); [[dd[0],ww[0]],[dd[1],ww[0]],[dd[1],ww[1]],[dd[0],ww[1]]].forEach(([d,w])=>{ const [hx,hy]=w2c(d,w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); }
+    else { const r=FP.radius(fp), [hx,hy]=w2c(0,r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } }
   // 家などエリア以外のエントリは輪郭のみ（ラベルは出さない）。area は drawLandAreas で layer 色＋編集表示。
   plan.entries.forEach(e=>{ if(isGroupParent(e)) return; const rp=e.relPos||{}; const sh=worldShape(e);
     if(!sh){ const c=xform(0,0,rp,e.relDir), [x,y]=w2c(c.d,c.w); ctx.strokeStyle='rgba(220,229,226,.55)'; ctx.lineWidth=1; ctx.beginPath();ctx.arc(x,y,5,0,7);ctx.stroke(); }
@@ -1860,16 +1863,26 @@ function landAreaHit(d,w){ const c=landAreaIdxs().filter(i=>areaContains(plan.en
   if(c.length>1) status('重なり'+c.length+'件 — '+(landHitIdx+1)+'/'+c.length+'（同じ場所を再タップで切替）'); return c[landHitIdx]; }
 function landDown(e){ const p=landWorldAt(e);
   if(sel>=0 && plan.entries[sel] && isGroupParent(plan.entries[sel])){ const hz=resizeHandleAt(plan.entries[sel], p.px, p.py); if(hz){ snapshotLand(); landDrag={resize:true, idx:sel, handle:hz, moved:false}; cv.style.cursor='nwse-resize'; return; } } // area のリサイズ（plan と同じ角/縁ハンドル）
+  if(sel<0 && plan.footprint){ const fz=fpHandleAt(p.px,p.py); if(fz){ snapshotLand(); if(fz.rim) landDrag={fpresize:true, circle:true, moved:false}; else { const cs=fpWorldCorners(); landDrag={fpresize:true, opp:cs[(fz.corner+2)%4], moved:false}; } cv.style.cursor='nwse-resize'; return; } } // footprint サイズ（plan と同等・land でも編集可）
   const hit=landAreaHit(p.d,p.w);
   if(hit>=0){ snapshotLand(); selOne(hit); const grp=[...groupDescendants([hit])].map(idx=>({idx, d:(plan.entries[idx].relPos||{}).d||0, w:(plan.entries[idx].relPos||{}).w||0}));
     landDrag={move:true, idx:hit, gd:p.d, gw:p.w, grp, moved:false}; renderEntries(); renderEditor(); renderLandCtrl(); render(); return; } // area 本体ドラッグ=移動（配下の子も一緒に動く＝plan 踏襲）・選択は plan と共有
+  if(sel<0 && fpBorderHit(p.d,p.w)){ snapshotLand(); const fp=plan.footprint, orig={d:FP.dRange(fp), w:FP.wRange(fp), h:FP.hRange(fp)}; landDrag={fpmove:true, startD:p.d, startW:p.w, orig, moved:false}; cv.style.cursor='move'; return; } // footprint 枠ドラッグ=移動（RECT のみ）
   selOne(-1); landDrag={pan:true,x:e.clientX,y:e.clientY,ox:camo.x,oy:camo.y,cd:p.d,cw:p.w,moved:false}; renderEntries(); renderEditor(); renderLandCtrl(); render(); } // 空タップ=カーソル移動/ドラッグ=パン
 function landMove(e){ if(!landDrag) return; const p=landWorldAt(e);
   if(landDrag.pan){ if(Math.abs(e.clientX-landDrag.x)+Math.abs(e.clientY-landDrag.y)>3) landDrag.moved=true; camo.x=landDrag.ox+(e.clientX-landDrag.x)*devicePixelRatio; camo.y=landDrag.oy+(e.clientY-landDrag.y)*devicePixelRatio; render(); return; }
+  if(landDrag.fpresize){ const fp=plan.footprint; if(!fp){ landDrag=null; return; } const h=FP.hRange(fp); // footprint サイズ（CIRCLE=原点中心で径／RECT=対角固定）
+    if(landDrag.circle){ plan.footprint=FP.circle(Math.max(1,Math.round(2*Math.hypot(p.d,p.w))), h[0], h[1]); }
+    else { const Pd=Math.round(p.d),Pw=Math.round(p.w),o=landDrag.opp; plan.footprint=FP.rect({d:Math.min(Pd,o.d),w:Math.min(Pw,o.w),h:h[0]},{d:Math.max(Pd,o.d),w:Math.max(Pw,o.w),h:h[1]}); }
+    landDrag.moved=true; cv.style.cursor='nwse-resize'; render(); return; }
+  if(landDrag.fpmove){ const fp=plan.footprint; if(!fp){ landDrag=null; return; } const dd=Math.round(p.d-landDrag.startD), dw=Math.round(p.w-landDrag.startW), o=landDrag.orig; // footprint 平行移動（サイズ保持）
+    plan.footprint=FP.rect({d:o.d[0]+dd,w:o.w[0]+dw,h:o.h[0]},{d:o.d[1]+dd,w:o.w[1]+dw,h:o.h[1]}); if(dd||dw) landDrag.moved=true; cv.style.cursor='move'; render(); return; }
   const a=plan.entries[landDrag.idx]; if(!a) return;
   if(landDrag.move){ const dd=p.d-landDrag.gd, dw=p.w-landDrag.gw; landDrag.grp.forEach(s=>{ const rp=plan.entries[s.idx].relPos||(plan.entries[s.idx].relPos={d:0,h:0,w:0}); rp.d=s.d+dd; rp.w=s.w+dw; }); landDrag.moved=true; render(); return; }
   if(landDrag.resize){ applyResize(a, {d:p.d, w:p.w}, landDrag.handle); landDrag.moved=true; render(); return; } }
-function landUp(){ if(landDrag){ if(landDrag.pan && !landDrag.moved){ cursor={d:landDrag.cd, w:landDrag.cw}; render(); } else if((landDrag.move||landDrag.resize) && landDrag.moved){ persist(); renderEntries(); } } landDrag=null; cv.style.cursor='default'; }
+function landUp(){ if(landDrag){ if(landDrag.pan && !landDrag.moved){ cursor={d:landDrag.cd, w:landDrag.cw}; render(); }
+    else if((landDrag.fpmove||landDrag.fpresize) && landDrag.moved){ persist(); landPersistNow(); renderTParams(); renderLandCtrl(); } // footprint 編集確定（範囲変更→heights 再サンプルも保存）
+    else if((landDrag.move||landDrag.resize) && landDrag.moved){ persist(); renderEntries(); } } landDrag=null; cv.style.cursor='default'; }
 function landDelSel(){ const e=(sel>=0)?plan.entries[sel]:null; if(e && isGroupParent(e)){ snapshotLand(); const rm=groupDescendants([sel]); plan.entries=plan.entries.filter((_,i)=>!rm.has(i)); selOne(-1); persist(); renderEntries(); renderEditor(); renderLandCtrl(); render(); status('area を削除'); } else status('削除する area を選択してください'); }
 // area 追加：カーソル位置に既定サイズの area（layer=1）を作成し選択。RECT は relPos=左奥角、CIRCLE は relPos=中心。
 function landAddArea(shape){ const rng=landRange(); if(!rng){ status('先に配置タブで footprint を設定してください'); return; }
@@ -1896,7 +1909,7 @@ function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未�
   let any=false,sum=0,n=0; for(let i=0;i<N;i++) if(seed[i]){ any=true; sum+=val[i]; n++; }
   if(!any){ status('area が footprint 内にありません'); return; }
   const avg=sum/n; for(let i=0;i<N;i++) if(!seed[i]) val[i]=avg;
-  const iters=Math.max(0,(($('#lf-sm')||{}).value|0))*20;
+  const slope=Math.max(0,Math.min(10,(($('#lf-sm')||{value:3}).value|0))); const iters=(10-slope)*20; // 傾斜度が高いほど補間反復を減らす＝急勾配に（低いほど緩やか）
   for(let it=0; it<iters; it++) for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
     if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
   for(let i=0;i<N;i++) land.heights[i]=Math.round(val[i]);
@@ -1999,7 +2012,7 @@ function boot(){
   // 地形 landform タブ
   if($('#tab-plan')) $('#tab-plan').onclick=()=>setTab('plan');
   if($('#tab-land')) $('#tab-land').onclick=()=>setTab('land');
-  if($('#lf-sm-w')) $('#lf-sm-w').innerHTML=numStepper('lf-sm', 3);
+  { const sm=$('#lf-sm'), sv=$('#lf-sm-v'); if(sm){ const upd=()=>{ if(sv) sv.textContent=sm.value; }; upd(); sm.oninput=upd; } } // 傾斜度スライダーの現在値表示
   wireSteppers(document);
   if($('#lf-add-rect')) $('#lf-add-rect').onclick=()=>landAddArea('RECT');
   if($('#lf-add-circle')) $('#lf-add-circle').onclick=()=>landAddArea('CIRCLE');
