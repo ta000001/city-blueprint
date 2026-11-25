@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.51';
+const APP_VERSION='1.52';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -592,8 +592,8 @@ function snapshot(){ const s=JSON.stringify(plan), now=Date.now();
   history=history.slice(0,histIdx+1); history.push(s); histIdx=history.length-1; lastHist=now;
   if(history.length>120){ history.shift(); histIdx--; } }
 function restoreHist(){ plan=JSON.parse(history[histIdx]); sel=-1; selset.clear(); try{localStorage.setItem('city-blueprint:plan',history[histIdx]);}catch(_){ } renderEntries(); renderEditor(); renderJson(); render(); }
-function undo(){ if(histIdx>0){ histIdx--; restoreHist(); status('戻る'); } else status('これ以上戻れません'); }
-function redo(){ if(histIdx<history.length-1){ histIdx++; restoreHist(); status('進む'); } else status('これ以上進めません'); }
+function undo(){ if(MODE==='land'){ landUndo(); return; } if(histIdx>0){ histIdx--; restoreHist(); status('戻る'); } else status('これ以上戻れません'); }
+function redo(){ if(MODE==='land'){ landRedo(); return; } if(histIdx<history.length-1){ histIdx++; restoreHist(); status('進む'); } else status('これ以上進めません'); }
 // 選択した親の全子孫 index（group 連鎖をたどる・childplan ネスト対応）
 function groupDescendants(startIdxs){ const rm=new Set(startIdxs); let changed=true;
   while(changed){ changed=false; const pids=new Set();
@@ -624,8 +624,9 @@ function updateTools(){ const en=(id,ok)=>{ const b=$('#'+id); if(b) b.disabled=
   en('up', sel>0);
   en('down', sel>=0&&sel<plan.entries.length-1);
   en('rot', !copyMode&&(selset.size>0||sel>=0));
-  document.querySelectorAll('.hundo').forEach(b=>b.disabled=!(histIdx>0));
-  document.querySelectorAll('.hredo').forEach(b=>b.disabled=!(histIdx<history.length-1));
+  const canU=(MODE==='land')?(landHist.length>0):(histIdx>0), canR=(MODE==='land')?(landFuture.length>0):(histIdx<history.length-1);
+  document.querySelectorAll('.hundo').forEach(b=>b.disabled=!canU);
+  document.querySelectorAll('.hredo').forEach(b=>b.disabled=!canR);
 }
 function newEntry(type){
   const e={relPos:{d:0,h:0,w:0}, relDir:'FRONT', type};
@@ -1194,6 +1195,7 @@ function render(){
   const W=cv.width=cv.clientWidth*devicePixelRatio, H=cv.height=cv.clientHeight*devicePixelRatio;
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,W,H);
   saveCamDebounced(); // 表示状態を記憶
+  try{ updateTools(); }catch(_){} // 戻る/進む等の有効状態を land/plan 両モードで更新
   if(!SCHEMA) return;
   // grid
   ctx.strokeStyle='#16211F'; ctx.lineWidth=1;
@@ -1750,7 +1752,7 @@ let MODE='plan';            // 'plan' | 'land'
 // land: 高さ指定オブジェクト(regions)を等高線のように置き、「生成」で滑らかな高さマップ(heights)を作る。
 //   regions[]: {shape:'RECT', d0,w0,d1,w1, h} | {shape:'CIRCLE', cd,cw,r, h}   layer=配列順・上(後)ほど優先（後がち）。
 //   heights: 生成結果の密 Int16Array（row-major cd*gW+cw・既定-1）。export/mod はこの heights。
-let land=null, landSel=-1, landHist=[], landDrag=null, landSaveT=null;
+let land=null, landSel=-1, landHist=[], landFuture=[], landDrag=null, landSaveT=null;
 const LAND_MAX_CELLS=5000000;   // グリッドのマス数上限（2048²=約419万を許容）
 const LAND_DRAW_CELLS=20000;    // 1描画で塗る最大マス数（超過はストライドで間引き）
 const LAND_JSON_CELLS=5000;     // JSON プレビューに全マスを出す上限（超過はサマリ）
@@ -1773,8 +1775,10 @@ function landSyncGrid(){ ensureLand(); const rng=landRange(); if(!rng) return nu
   land.d0=d0; land.w0=w0; land.gD=gD; land.gW=gW; land.cellSize=cs; land.heights=nh; return {d0,w0,cs,gD,gW}; }
 function getCell(cd,cw){ return (cd<0||cd>=land.gD||cw<0||cw>=land.gW)?-1:land.heights[cd*land.gW+cw]; }
 function landClone(){ ensureLand(); return { atmosTop:land.atmosTop, groundBottom:land.groundBottom, groundMat:land.groundMat, cellSize:land.cellSize, regions:JSON.parse(JSON.stringify(land.regions)), d0:land.d0,w0:land.w0,gD:land.gD,gW:land.gW, heights:land.heights.slice() }; }
-function snapshotLand(){ const max=(land&&land.heights&&land.heights.length>500000)?3:20; landHist.push(landClone()); while(landHist.length>max) landHist.shift(); }
-function landUndo(){ if(landHist.length){ land=landHist.pop(); landSel=-1; landPersistNow(); renderLandCtrl(); render(); status('地形: 元に戻す'); } else status('これ以上戻れません'); }
+function snapshotLand(){ const max=(land&&land.heights&&land.heights.length>500000)?3:20; landHist.push(landClone()); while(landHist.length>max) landHist.shift(); landFuture.length=0; } // 新操作で redo 分岐を破棄
+function landRestore(st){ land=st; landSel=-1; landSyncGrid(); landPersistNow(); renderLandCtrl(); render(); }
+function landUndo(){ if(landHist.length){ landFuture.push(landClone()); landRestore(landHist.pop()); status('地形: 戻る'); } else status('これ以上戻れません'); }
+function landRedo(){ if(landFuture.length){ landHist.push(landClone()); landRestore(landFuture.pop()); status('地形: 進む'); } else status('これ以上進めません'); }
 function landPersistNow(){ ensureLand(); try{ idbSet(landKey(), land); }catch(_){} }
 function landPersist(){ ensureLand(); renderLandJson(); if(landSaveT) clearTimeout(landSaveT); landSaveT=setTimeout(landPersistNow, 400); } // 大きいので idb へ・頻発書込は間引き
 async function landLoad(){ try{ const l=await idbGet(landKey()); if(l&&l.heights){ land=l; if(land.cellSize==null) land.cellSize=1; if(!land.regions) land.regions=[]; } }catch(_){} }
