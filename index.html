@@ -236,7 +236,7 @@ body.mode-land .landtools{display:flex}
       <div class="landtools" id="landtools">
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button><button id="lf-add-poly">多角形</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
-        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜度</label><input type="range" id="lf-sm" min="0" max="30" step="1" value="3" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
+        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜度</label><input type="range" id="lf-sm" min="0" max="100" step="1" value="3" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.67';
+const APP_VERSION='1.68';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1951,7 +1951,7 @@ function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未�
   let any=false; for(let i=0;i<N;i++) if(seed[i]){ any=true; break; }
   if(!any){ status('area が footprint 内にありません'); return; }
   // 未シード（area の無いマス）は基準 0 のまま。relax で area から 0 へ勾配を作る＝area が無い所は h0（ヒートマップ上は透明）。
-  const slope=Math.max(0,Math.min(30,(($('#lf-sm')||{value:3}).value|0))); const iters=slope*20; // 値が大きいほど補間反復を増やす＝よりなめらか（小さいほど急）
+  const slope=Math.max(0,Math.min(100,(($('#lf-sm')||{value:3}).value|0))); const iters=slope*20; // 値が大きいほど補間反復を増やす＝よりなめらか（小さいほど急）。最大2000反復
   for(let it=0; it<iters; it++) for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
     if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
   for(let i=0;i<N;i++) land.heights[i]=Math.round(val[i]);
