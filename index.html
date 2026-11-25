@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.59';
+const APP_VERSION='1.60';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -664,8 +664,8 @@ function renderEntries(){
     else if(e.cond&&Object.keys(e.cond).length) ref='抽選'+Object.keys(e.cond).length+'項';
     const grp=e.group?(' ⚭'+e.group):'';
     li.innerHTML='<span class="t">'+idOf(e)+'</span> <span class="m">d'+(rp.d||0)+' h'+(rp.h||0)+' w'+(rp.w||0)+' · '+(e.relDir||'FRONT')+(ref?(' · '+ref):'')+grp+'</span>';
-    li.onclick=(ev)=>{ if(ev.ctrlKey||ev.metaKey||multiMode) selToggleParentChildren(i); else selParentChildren(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); };
-    li.ondblclick=()=>{ multiMode=!multiMode; updateMultiBtn(); if(multiMode) selToggle(i); renderEntries(); renderEditor(); render(); };
+    li.onclick=(ev)=>{ if(MODE==='land') selOne(i); else if(ev.ctrlKey||ev.metaKey||multiMode) selToggleParentChildren(i); else selParentChildren(i); cursor={d:(e.relPos&&e.relPos.d)||0,w:(e.relPos&&e.relPos.w)||0}; renderEntries(); renderEditor(); render(); }; // land は単一選択
+    li.ondblclick=()=>{ if(MODE==='land') return; multiMode=!multiMode; updateMultiBtn(); if(multiMode) selToggle(i); renderEntries(); renderEditor(); render(); }; // land は複数選択モード切替なし
     ul.appendChild(li);
   });
   updateTools();
@@ -1798,7 +1798,9 @@ function landMinMax(stride){ stride=Math.max(1,stride|0); let lo=-1,hi=-1; const
 function setTab(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
   const tp=$('#tab-plan'), tl=$('#tab-land'); if(tp) tp.classList.toggle('on', m==='plan'); if(tl) tl.classList.toggle('on', m==='land');
   if(m==='land'){ ensureLand(); landSyncGrid();
+    multiMode=false; rangeMode=false; rangeBand=null; updateMultiBtn(); // land は単一選択のみ（複数/範囲選択は使わない）
     if(sel>=0 && !(plan.entries[sel] && isGroupParent(plan.entries[sel]))) selOne(-1); // land は area のみ編集：area 以外を選択したままタブ移動したら解除
+    else if(sel>=0) selOne(sel); // area 選択は単一に正規化（子を selset に含めない＝複数選択化を防ぐ）
     renderLandCtrl(); renderLandJson(); if(!plan.footprint) status('地形には plan の footprint が必要です：配置タブで設定してください', 6000); else status('地形: area を追加/選択→layer と高さh を設定→「生成」で勾配を作成', 6000); }
   renderEntries(); renderEditor(); render(); } // タブ切替でエントリ一覧の絞り込み(land=areaのみ)とパラメータ欄も更新
 // --- 描画（render() から MODE==='land' のとき呼ぶ。grid/原点は描画済み） ---
@@ -1855,7 +1857,7 @@ function landAreaHit(d,w){ const c=landAreaIdxs().filter(i=>areaContains(plan.en
 function landDown(e){ const p=landWorldAt(e);
   if(sel>=0 && plan.entries[sel] && isGroupParent(plan.entries[sel])){ const hz=resizeHandleAt(plan.entries[sel], p.px, p.py); if(hz){ snapshotLand(); landDrag={resize:true, idx:sel, handle:hz, moved:false}; cv.style.cursor='nwse-resize'; return; } } // area のリサイズ（plan と同じ角/縁ハンドル）
   const hit=landAreaHit(p.d,p.w);
-  if(hit>=0){ snapshotLand(); selParentChildren(hit); const grp=[...groupDescendants([hit])].map(idx=>({idx, d:(plan.entries[idx].relPos||{}).d||0, w:(plan.entries[idx].relPos||{}).w||0}));
+  if(hit>=0){ snapshotLand(); selOne(hit); const grp=[...groupDescendants([hit])].map(idx=>({idx, d:(plan.entries[idx].relPos||{}).d||0, w:(plan.entries[idx].relPos||{}).w||0}));
     landDrag={move:true, idx:hit, gd:p.d, gw:p.w, grp, moved:false}; renderEntries(); renderEditor(); renderLandCtrl(); render(); return; } // area 本体ドラッグ=移動（配下の子も一緒に動く＝plan 踏襲）・選択は plan と共有
   selOne(-1); landDrag={pan:true,x:e.clientX,y:e.clientY,ox:camo.x,oy:camo.y,cd:p.d,cw:p.w,moved:false}; renderEntries(); renderEditor(); renderLandCtrl(); render(); } // 空タップ=カーソル移動/ドラッグ=パン
 function landMove(e){ if(!landDrag) return; const p=landWorldAt(e);
@@ -2092,7 +2094,7 @@ function boot(){
   };
   cv.onpointercancel=e=>{ pointers.delete(e.pointerId); if(pointers.size<2) pinch=null; if(pointers.size===0){ if(drag&&drag.mode==='range') rangeBand=null; drag=null; cv.style.cursor='default'; render(); } };
   cv.onwheel=e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(); const mx=(e.clientX-r.left)*devicePixelRatio, my=(e.clientY-r.top)*devicePixelRatio; zoomAround(mx,my, camo.scale*(e.deltaY<0?1.1:1/1.1)); }; // ホイールズーム(デスクトップ・カーソル軸)
-  cv.ondblclick=e=>{ if(copyMode){ cancelCopy(); return; } const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); multiMode=!multiMode; updateMultiBtn(); if(multiMode&&hit>=0){ if(!selset.has(hit)) selToggle(hit); sel=hit; } renderEntries(); renderEditor(); render(); }; // ダブルクリックで複数選択モードを切替（コピー中は取消）
+  cv.ondblclick=e=>{ if(MODE==='land') return; if(copyMode){ cancelCopy(); return; } const p=ptWorld(e), hit=pickAt(p.d,p.w,p.px,p.py); multiMode=!multiMode; updateMultiBtn(); if(multiMode&&hit>=0){ if(!selset.has(hit)) selToggle(hit); sel=hit; } renderEntries(); renderEditor(); render(); }; // ダブルクリックで複数選択モードを切替（コピー中は取消）。land は無効
   // キーボード: R=回転 / Ctrl+Z=戻る / Ctrl+Shift+Z・Ctrl+Y=進む
   addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='S')){ e.preventDefault(); const b=$('#save'); if(b) b.click(); return; } // Ctrl/⌘+S で保存（フォーカス位置を問わず）
