@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.68';
+const APP_VERSION='1.69';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1942,7 +1942,7 @@ function rasterAreaCells(e, g, cb){ const {gD,gW,cs,d0,w0}=g, sh=regionShape(e);
   else { const cx=sh.center.d, cwc=sh.center.w, r=sh.r, r2=r*r, a0=Math.max(0,Math.floor((cx-r-d0)/cs)), a1=Math.min(gD-1,Math.floor((cx+r-d0)/cs)), b0=Math.max(0,Math.floor((cwc-r-w0)/cs)), b1=Math.min(gW-1,Math.floor((cwc+r-w0)/cs));
     for(let cd=a0;cd<=a1;cd++) for(let cw=b0;cw<=b1;cw++){ const bd=d0+cd*cs, bw=w0+cw*cs; if((bd-cx)*(bd-cx)+(bw-cwc)*(bw-cwc)<=r2) cb(cd*gW+cw); } } }
 // 生成：layer>0 の area を種（layer 昇順で塗る＝高 layer が後がち）に、間を緩和補間して高さマップを作る。
-function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未設定'); return; } const N=g.gD*g.gW;
+async function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未設定'); return; } const N=g.gD*g.gW;
   const areas=landAreaIdxs().map(i=>plan.entries[i]).filter(e=>areaLayer(e)>0);
   if(!areas.length){ status('先に layer を1以上にした area を置いてください'); return; }
   if(N>LAND_MAX_CELLS){ status('範囲が広すぎます'); return; }
@@ -1952,10 +1952,17 @@ function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未�
   if(!any){ status('area が footprint 内にありません'); return; }
   // 未シード（area の無いマス）は基準 0 のまま。relax で area から 0 へ勾配を作る＝area が無い所は h0（ヒートマップ上は透明）。
   const slope=Math.max(0,Math.min(100,(($('#lf-sm')||{value:3}).value|0))); const iters=slope*20; // 値が大きいほど補間反復を増やす＝よりなめらか（小さいほど急）。最大2000反復
-  for(let it=0; it<iters; it++) for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
-    if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
-  for(let i=0;i<N;i++) land.heights[i]=Math.round(val[i]);
-  landPersist(); render(); status('生成: area の高さ（layer>0）から勾配を作成しました'); }
+  const yld=()=>new Promise(r=>requestAnimationFrame(()=>r())); busy(true,'生成中…'); await yld(); // 重い緩和補間の前にスピナーを描画
+  try{
+    let t0=performance.now();
+    for(let it=0; it<iters; it++){
+      for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
+        if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
+      if((performance.now()-t0)>50){ busy(true,'生成中… '+Math.round((it+1)/iters*100)+'%'); await yld(); t0=performance.now(); } // 50ms毎に描画を譲る→スピナーが回る＆UIが固まらない
+    }
+    for(let i=0;i<N;i++) land.heights[i]=Math.round(val[i]);
+    landPersist(); render(); status('生成: area の高さ（layer>0）から勾配を作成しました');
+  } finally { busy(false); } }
 // --- JSON / 入出力（効率形式: 範囲＋グリッド＋高さRLE＋regions） ---
 function heightsRle(h){ const out=[]; let i=0; while(i<h.length){ const v=h[i]; let j=i+1; while(j<h.length && h[j]===v) j++; out.push([v, j-i]); i=j; } return out; }
 function rleExpand(rle, len){ const a=new Int16Array(len); a.fill(-1); let i=0; if(Array.isArray(rle)) for(const pair of rle){ const v=pair[0]|0, c=pair[1]|0; for(let k=0;k<c&&i<len;k++) a[i++]=v; } return a; }
