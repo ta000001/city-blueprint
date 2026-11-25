@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.58';
+const APP_VERSION='1.59';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -690,7 +690,7 @@ function renderEditor(){
   const e=plan.entries[sel], rp=e.relPos||(e.relPos={d:0,h:0,w:0});
   // 行 descriptor（key, エディタHTML）。基本も1つの共通テンプレで生成（固定+結果値+fix無効）
   const rows=[
-    ['relPos', 'd<input type="number" id="e-d" value="'+(rp.d||0)+'">h<input type="number" id="e-h" value="'+(rp.h||0)+'">w<input type="number" id="e-w" value="'+(rp.w||0)+'">'+(Area.is(e)?'<button type="button" id="area-uh" title="配下の子の h をこの h に揃える">エリアの高さを統一</button>':'')],
+    ['relPos', 'd<input type="number" id="e-d" value="'+(rp.d||0)+'">h<input type="number" id="e-h" value="'+(rp.h||0)+'">w<input type="number" id="e-w" value="'+(rp.w||0)+'">'+((Area.is(e)&&MODE!=='land')?'<button type="button" id="area-uh" title="配下の子の h をこの h に揃える">エリアの高さを統一</button>':'')],
     ['relDir', '<select id="e-dir">'+['FRONT','RIGHT','BACK','LEFT'].map(d=>'<option'+(e.relDir===d?' selected':'')+'>'+d+'</option>').join('')+'</select>']
   ];
   if(!Area.is(e)) rows.push(['group', groupSelectHtml(e)]); // group 行は非area のみ（area は専用エディタで nestable に応じ表示）
@@ -709,7 +709,7 @@ function renderEditor(){
   const upd=(k)=>{ if(k) refreshBasic(e,k); persist(); renderEntries(); };
   $('#e-d').oninput=ev=>{rp.d=+ev.target.value||0; upd('relPos');};
   $('#e-h').oninput=ev=>{ const nh=+ev.target.value||0;
-    if(isGroupParent(e)){ const dh=nh-(rp.h||0); if(dh) groupDescendants([sel]).forEach(j=>{ if(j===sel) return; const r=plan.entries[j].relPos||(plan.entries[j].relPos={d:0,h:0,w:0}); r.h=(r.h||0)+dh; }); } // area は h を変えると配下の子（ネスト含む）も同じ差分だけ上下＝area単位の高さ調整
+    if(isGroupParent(e)&&MODE!=='land'){ const dh=nh-(rp.h||0); if(dh) groupDescendants([sel]).forEach(j=>{ if(j===sel) return; const r=plan.entries[j].relPos||(plan.entries[j].relPos={d:0,h:0,w:0}); r.h=(r.h||0)+dh; }); } // area は h を変えると配下の子も同差分だけ上下＝area単位の高さ調整（land は area 自身=地形高さのみ変更・子に波及させない）
     rp.h=nh; upd('relPos'); render(); };
   $('#e-w').oninput=ev=>{rp.w=+ev.target.value||0; upd('relPos');};
   if($('#area-uh')) $('#area-uh').onclick=()=>{ snapshot(); const h=rp.h||0; let n=0; groupDescendants([sel]).forEach(j=>{ if(j===sel) return; const r=plan.entries[j].relPos||(plan.entries[j].relPos={d:0,h:0,w:0}); r.h=h; n++; }); persist(); renderEntries(); renderEditor(); render(); status('配下の子 '+n+'件の h を '+h+' に統一'); }; // エリアの高さを統一：子の h を area の h に揃える
