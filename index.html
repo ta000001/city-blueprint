@@ -236,7 +236,7 @@ body.mode-land .landtools{display:flex}
       <div class="landtools" id="landtools">
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
-        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜度</label><input type="range" id="lf-sm" min="0" max="10" step="1" value="3" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
+        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜度</label><input type="range" id="lf-sm" min="0" max="30" step="1" value="3" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -340,7 +340,7 @@ body.mode-land .landtools{display:flex}
 <div class="modal" id="lfhelp"><div class="m"><h3>地形（landform）</h3><div class="hbody">
 <p><b>2層モデル</b>（対応 plan と同じ相対座標 d,h,w・原点共通）。<b>地形タブ</b>で編集し、<b>&lt;plan名&gt;_land.json</b> を書き出します。plan のエリア/footprint を薄く重ねて表示します（読み取り専用）。</p>
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
-<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、間を補間した高さマップを作ります。<b>「傾斜度」</b>スライダーで勾配を調整（低い＝なだらか／高い＝急）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
+<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、間を補間した高さマップを作ります。<b>「傾斜度」</b>スライダーで勾配を調整（大きいほど<b>なめらか</b>／小さいほど急）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
 <p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.63';
+const APP_VERSION='1.64';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1811,9 +1811,11 @@ function renderLand(){ const g=landSyncGrid();
   if(cells>LAND_MAX_CELLS){ landMsg('範囲が広すぎます（'+cells.toLocaleString()+' マス）。footprint か「1マス=Nブロック」を見直してください'); return; }
   const s=camo.scale;
   if(SETTINGS.showHeat){ const stride=Math.max(1, Math.ceil(Math.sqrt(cells/LAND_DRAW_CELLS))); // 広域は間引き描画
-    const [lo,hi]=landMinMax(stride); const span=(hi>lo)?(hi-lo):1, cs=g.cs, bs=s*cs*stride;
-    ctx.save(); ctx.globalAlpha=0.5; // ②半透明にしてラベルを読みやすく
-    for(let cd=0; cd<g.gD; cd+=stride) for(let cw=0; cw<g.gW; cw+=stride){ const v=getCell(cd,cw); if(v===-1) continue; /* ③未生成セルは色なし */ const bd=g.d0+cd*cs, bw=g.w0+cw*cs, [x,y]=w2c(bd,bw); ctx.fillStyle=landColor((v-lo)/span); ctx.fillRect(x-s/2, y-(cs*stride-1)*s-s/2, bs+0.6, bs+0.6); }
+    const [lo,hi]=landMinMax(stride); const span=(hi>lo)?(hi-lo):1, cs=g.cs, bs=s*cs*stride, maxAbs=Math.max(Math.abs(lo),Math.abs(hi),1);
+    ctx.save();
+    for(let cd=0; cd<g.gD; cd+=stride) for(let cw=0; cw<g.gW; cw+=stride){ const v=getCell(cd,cw); if(v===-1) continue; /* ③未生成セルは色なし */
+      const a=Math.min(0.6, Math.abs(v)/maxAbs*0.6); if(a<0.02) continue; // h0 は透明に近づく（0 から離れるほど濃く）
+      const bd=g.d0+cd*cs, bw=g.w0+cw*cs, [x,y]=w2c(bd,bw); ctx.globalAlpha=a; ctx.fillStyle=landColor((v-lo)/span); ctx.fillRect(x-s/2, y-(cs*stride-1)*s-s/2, bs+0.6, bs+0.6); }
     ctx.restore(); }
   const rng=landRange();
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
@@ -1908,7 +1910,7 @@ function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未�
   let any=false,sum=0,n=0; for(let i=0;i<N;i++) if(seed[i]){ any=true; sum+=val[i]; n++; }
   if(!any){ status('area が footprint 内にありません'); return; }
   const avg=sum/n; for(let i=0;i<N;i++) if(!seed[i]) val[i]=avg;
-  const slope=Math.max(0,Math.min(10,(($('#lf-sm')||{value:3}).value|0))); const iters=(10-slope)*20; // 傾斜度が高いほど補間反復を減らす＝急勾配に（低いほど緩やか）
+  const slope=Math.max(0,Math.min(30,(($('#lf-sm')||{value:3}).value|0))); const iters=slope*20; // 値が大きいほど補間反復を増やす＝よりなめらか（小さいほど急）
   for(let it=0; it<iters; it++) for(let cd=0; cd<g.gD; cd++) for(let cw=0; cw<g.gW; cw++){ const i=cd*g.gW+cw; if(seed[i]) continue; let s=0,c=0;
     if(cd>0){s+=val[i-g.gW];c++;} if(cd<g.gD-1){s+=val[i+g.gW];c++;} if(cw>0){s+=val[i-1];c++;} if(cw<g.gW-1){s+=val[i+1];c++;} if(c) val[i]=s/c; }
   for(let i=0;i<N;i++) land.heights[i]=Math.round(val[i]);
