@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.57';
+const APP_VERSION='1.58';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1797,7 +1797,9 @@ function landMsg(txt){ ctx.fillStyle='#8a9b97'; ctx.font='bold '+(13*devicePixel
 function landMinMax(stride){ stride=Math.max(1,stride|0); let lo=-1,hi=-1; const h=land&&land.heights; if(h) for(let i=0;i<h.length;i+=stride){ const v=h[i]; if(v<lo)lo=v; if(v>hi)hi=v; } return [lo,hi]; }
 function setTab(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
   const tp=$('#tab-plan'), tl=$('#tab-land'); if(tp) tp.classList.toggle('on', m==='plan'); if(tl) tl.classList.toggle('on', m==='land');
-  if(m==='land'){ ensureLand(); landSyncGrid(); renderLandCtrl(); renderLandJson(); if(!plan.footprint) status('地形には plan の footprint が必要です：配置タブで設定してください', 6000); else status('地形: area を追加/選択→layer と高さh を設定→「生成」で勾配を作成', 6000); }
+  if(m==='land'){ ensureLand(); landSyncGrid();
+    if(sel>=0 && !(plan.entries[sel] && isGroupParent(plan.entries[sel]))) selOne(-1); // land は area のみ編集：area 以外を選択したままタブ移動したら解除
+    renderLandCtrl(); renderLandJson(); if(!plan.footprint) status('地形には plan の footprint が必要です：配置タブで設定してください', 6000); else status('地形: area を追加/選択→layer と高さh を設定→「生成」で勾配を作成', 6000); }
   renderEntries(); renderEditor(); render(); } // タブ切替でエントリ一覧の絞り込み(land=areaのみ)とパラメータ欄も更新
 // --- 描画（render() から MODE==='land' のとき呼ぶ。grid/原点は描画済み） ---
 function renderLand(){ const g=landSyncGrid();
