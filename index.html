@@ -354,7 +354,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.56';
+const APP_VERSION='1.57';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -819,17 +819,19 @@ function renderTParams(){
       if(!(data.entries||[]).length && !(data.meta||[]).length){ status('子にエントリがありません'); return; }
       snapshot(); const n=expandRef(e, sel, data, nm); persist(); selParentChildren(Math.min(sel,plan.entries.length-1)); renderEntries(); renderEditor(); render(); status('展開: '+n+'件を取り込み（Undo可）', 4000); };
     wireGroupSel(e); return; }
-  if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e);   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
-    const rows = Area.fields(e).map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
+  if(Area.is(e)){ e.params=e.params||Area.defaults(e.type); const rand=Area.hasRandom(e), landMode=(MODE==='land');   // area（randomarea/childplan）は同一パス。差分は Area の能力（random/nestable）だけ
+    const flds = landMode ? Area.regionFields(e) : Area.fields(e);   // land は配置系(形状/サイズ/layer)のみ。ランダム散布などの非配置系は出さない
+    const rows = flds.map(([k,kind])=>areaFieldRow(e,k,kind)).join('');
     box.innerHTML = meta + rows;   // 説明は書かない（必要な説明は「?」モーダルに集約）
-    if(ht) ht.innerHTML = (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'
-                                : (e.type==='childplan' ? '<button id="cp-tofoot">planに戻す</button>' : ''))   // planに戻すは childplan（plan展開の派生）のみ。基底 area は戻す先が無いので非表示
+    if(ht) ht.innerHTML = (landMode ? ''   // land では抽選/子削除/planに戻す（＝配置系以外）は出さない
+      : (rand ? '<button class="pri" id="ra-run">抽選</button><button id="ra-clear">子削除</button>'
+              : (e.type==='childplan' ? '<button id="cp-tofoot">planに戻す</button>' : '')))   // planに戻すは childplan（plan展開の派生）のみ。基底 area は戻す先が無いので非表示
       + '<span class="qbtn" id="area-help" role="button" tabindex="0" title="areaの説明">?</span>';   // 抽選/子削除/planに戻すは能力別・説明は「?」へ
-    wireAreaFields(e, Area.fields(e));
-    if(rand) wireRandomButtons(e);
-    else if($('#cp-tofoot')) $('#cp-tofoot').onclick=()=>{ snapshot(); const n=collapseToPlan(e, sel); selOne(-1); persist(); renderEntries(); renderEditor(); render(); status('planに戻す'+(n?'（子'+n+'件を削除・Undo可）':'（Undo可）'), 4000); };
+    wireAreaFields(e, flds);
+    if(!landMode && rand) wireRandomButtons(e);
+    else if(!landMode && $('#cp-tofoot')) $('#cp-tofoot').onclick=()=>{ snapshot(); const n=collapseToPlan(e, sel); selOne(-1); persist(); renderEntries(); renderEditor(); render(); status('planに戻す'+(n?'（子'+n+'件を削除・Undo可）':'（Undo可）'), 4000); };
     if($('#area-help')) $('#area-help').onclick=()=>$('#areahelp').classList.add('on');
-    if(Area.nestable(e)) wireGroupSel(e);
+    if(!landMode && Area.nestable(e)) wireGroupSel(e);
     return; }
   normalizeEntry(e); // params を全(有効)フィールドで充填
   const fields=SCHEMA.builders[t].fields, canRoll=rollable(e);
