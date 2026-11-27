@@ -348,7 +348,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 <div class="modal" id="areahelp"><div class="m"><h3>area（基底 / childplan / randomarea）</h3><div class="hbody">
 <p><b>area</b> は子エントリを束ねる枠です（meta 扱い・mod は無視）。region（RECT＝depth/width ／ CIRCLE＝diameter）を持ち、プレビューで <b>角・縁ドラッグ</b>または数値で大きさを変えられます。親を選ぶと子も一緒に選択・移動・削除されます。<b>childplan / randomarea は area の派生</b>です。</p>
-<p><b>area（基底）</b>：ランダム機能を持たないグループ用の枠です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめます。<b>area/childplan はパラメータ欄の group で他の area 配下へネストできます（land タブでも可）</b>。地形では <b>親の layer＜子の layer</b> になるよう制御され（親候補は layer が自分より小さい area のみ・layer 変更時も自動で丸め）、randomarea 配下へのネストはできません（再抽選で消えるため）。</p>
+<p><b>area（基底）</b>：ランダム機能を持たないグループ用の枠です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめます。<b>area/childplan はパラメータ欄の group で他の area 配下へネストできます（land タブでも可）</b>。地形では <b>親の layer＜子の layer</b> を保つため、ネストや layer 変更で条件を満たさなくなると<b>子の layer を自動で引き上げます</b>（メッセージ表示・禁止はしません）。randomarea 配下へのネストはできません（再抽選で消えるため）。</p>
 <p><b>高さ（h）の一括調整</b>：area 選択中に 2 通りあります。<br>① 基本情報の <b>relPos の h</b> ＝<b>差分シフト</b>：子（ネスト含む）を相対関係を保ったまま同じ差分だけ上下。<br>② relPos 右の <b>「エリアの高さを統一」</b>ボタン ＝<b>絶対値で統一</b>：配下の子の h を relPos の h に全部揃える（高さを平らにそろえたい時）。<br>d/w は横方向なのでプレビュー上のドラッグで area ごと移動できます。</p>
 <p><b>childplan</b>：plan 参照を「子を展開」して生まれる area の派生です。元 plan を覚えており、<b>planに戻す</b>で復元できます。</p>
 <p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>する area の派生です（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。<b>他の area 配下に子としてネスト可</b>（移動/削除は一緒・再抽選は自分の散布子だけを作り直すので親側に影響しません）。ただし randomarea 自身を<b>親にはできません</b>（配下は再抽選で入れ替わるため）。</p>
@@ -356,7 +356,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.79';
+const APP_VERSION='1.80';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -687,7 +687,7 @@ function basicVal(e,k){ const rp=e.relPos||{};
   return ''; }
 function descendantIds(e){ const ids=new Set(e&&e.id?[e.id]:[]); let changed=true; // e の全子孫id（group連鎖・自身含む）＝グループ先候補から除外しサイクル防止
   while(changed){ changed=false; plan.entries.forEach(x=>{ if(x.group&&ids.has(x.group)&&x.id&&!ids.has(x.id)){ ids.add(x.id); changed=true; } }); } return ids; }
-function groupSelectHtml(e){ const banned=descendantIds(e), isA=Area.is(e), myL=areaLayer(e); const ids=plan.entries.filter(x=>isGroupParent(x)&&x.id&&!banned.has(x.id)&&!(isA&&Area.hasRandom(x))&&!(isA&&areaLayer(x)>=myL)).map(x=>x.id), cur=e.group||''; // 親候補＝area/childplan(+非areaの親は randomarea 含む)。自身と子孫は除外＝サイクル防止。area のネスト時は randomarea 配下と「layer が自分以上の親」を除外（親<子 を強制）
+function groupSelectHtml(e){ const banned=descendantIds(e), isA=Area.is(e); const ids=plan.entries.filter(x=>isGroupParent(x)&&x.id&&!banned.has(x.id)&&!(isA&&Area.hasRandom(x))).map(x=>x.id), cur=e.group||''; // 親候補＝area/childplan(+非areaの親は randomarea 含む)。自身と子孫は除外＝サイクル防止。area のネスト時は randomarea 配下のみ除外（親<子 は禁止せず layer 自動引上げで担保）
   const extra=(cur&&!ids.includes(cur))?('<option value="'+cur+'" selected>'+cur+'（欠番）</option>'):'';
   return '<select id="e-group"><option value="">（なし）</option>'+ids.map(id=>'<option value="'+id+'"'+(cur===id?' selected':'')+'>'+id+'</option>').join('')+extra+'</select>'; }
 function refreshBasic(e,k){ const s=$('#br-'+k); if(s) s.textContent=basicVal(e,k); }
@@ -733,7 +733,8 @@ function renderEditor(){
 // type別パラメータ（選択中エントリの params / 参照 / randomarea 条件）をインライン表示
 // group は基本パラメータとして #editor 側に表示（groupSelectHtml/renderEditor）。metaRow は後方互換のため空を返す
 function metaRow(e){ return ''; }
-function wireGroupSel(e){ const g=$('#e-group'); if(g) g.onchange=()=>{ const v=g.value; if(v) e.group=v; else delete e.group; persist(); renderEntries(); renderEditor(); render(); }; }
+function wireGroupSel(e){ const g=$('#e-group'); if(g) g.onchange=()=>{ const v=g.value; if(v) e.group=v; else delete e.group; const n=enforceParentChildLayers(); // ネスト時に親<子 を保つよう子の layer を自動引き上げ
+  persist(); renderEntries(); renderEditor(); renderTParams(); render(); if(n) status('ネストに合わせて layer を自動で引き上げました（'+n+'件）'); }; }
 function hiddenSizeFields(type, probe){ const b=SCHEMA.builders[type]; if(!b||!Array.isArray(b.footprint)) return new Set(); // ⑯ 非活性なサイズ場を隠す
   const active=new Set(footprintSizeFields(type,probe)), hid=new Set();
   b.footprint.forEach(r=>(r.size||[]).forEach(s=>{ if(!active.has(s)) hid.add(s); })); return hid; }
@@ -1533,9 +1534,8 @@ function wireAreaFields(e, fields){ const p=e.params=e.params||{}; wireSteppers(
     if(kind==='enum2'||kind==='enum3') el.onchange=()=>{ const nv=el.value, old=p.shape||'RECT'; switchAreaShape(e, old, nv); persist();renderEntries();renderTParams();render(); }; // RECT/CIRCLE/POLY 切替（位置を保つよう原点変換）
     else if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
     else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source=DEF_KEY; persist();renderEntries();renderTParams(); };
-    else if(k==='layer'){ el.oninput=()=>{ const want=Math.max(0,Math.round(+el.value||0)); const nv=clampAreaLayer(e,want); // 親<子 制約で丸め
-        if(nv==null){ el.value=p.layer||0; status('親<子 を満たす layer 値がありません（親/子の layer を調整してください）'); return; }
-        p.layer=nv; if(nv!==want) status('layer を 親<子 になるよう '+nv+' に調整しました'); persist(); renderEntries(); renderTParams(); render(); }; } // layer 変更で地形フィールド(傾斜距離/ぼかし)の表示切替も renderTParams で反映
+    else if(k==='layer'){ el.oninput=()=>{ const want=Math.max(0,Math.round(+el.value||0)); p.layer=want; const n=enforceParentChildLayers(); // 禁止せず、親<子 を保つよう子の layer を自動引き上げ
+        if(n) status('親<子 を保つため layer を自動で引き上げました（'+n+'件）'); persist(); renderEntries(); renderTParams(); render(); }; } // layer 変更で地形フィールド(傾斜距離/ぼかし)の表示切替も renderTParams で反映
     else if(k==='slopeDist'||k==='smooth'){ const isS=(k==='slopeDist'), mx=isS?(SETTINGS.slopeMax||256):(SETTINGS.smoothMax||60); const num=$('#ar-'+k), sl=$('#ars-'+k); // 傾斜距離/ぼかし：ステッパー↔スライダー同期＋上限クランプ
       const apply=val=>{ const nv=Math.max(0,Math.min(mx,Math.round(val||0))); p[k]=nv; if(num&&(+num.value!==nv)) num.value=nv; if(sl&&(+sl.value!==nv)) sl.value=nv; persist();renderEntries();render(); };
       if(num) num.oninput=()=>apply(+num.value); if(sl) sl.oninput=()=>apply(+sl.value); }
@@ -1899,10 +1899,11 @@ function renderLand(){ const g=landSyncGrid();
 function areaLayer(e){ return Math.round(((e&&e.params)||{}).layer||0); } // 0=地形に使わない / 正=使う(大きいほど後がち)
 function areaH(e){ return Math.round(((e&&e.relPos)||{}).h||0); }        // area の高さ=relPos.h
 function areaParentEntry(e){ return (e&&e.group)?(plan.entries.find(x=>x.id===e.group&&isGroupParent(x))||null):null; } // 親グループ(area)
-// 親<子 制約を満たす layer の範囲へ丸める：親より大・直下の子 area より小。満たせなければ現状維持。
-function clampAreaLayer(e, want){ let lo=0, hi=Infinity; const par=areaParentEntry(e); if(par) lo=areaLayer(par)+1;
-  const id=e&&e.id; if(id) plan.entries.forEach(x=>{ if(isGroupParent(x)&&x.group===id) hi=Math.min(hi, areaLayer(x)-1); });
-  if(lo>hi) return null; return Math.max(lo, Math.min(hi, Math.max(0,Math.round(want||0)))); }
+// 親<子 を「禁止せず」強制：子の layer が親以下なら親+1へ引き上げ、安定するまで繰り返す（チェーンも伝播）。引き上げた件数を返す。
+function enforceParentChildLayers(){ let changed=0, loop=true, guard=0;
+  while(loop && guard++<2000){ loop=false; plan.entries.forEach(e=>{ if(!isGroupParent(e)||!e.group) return; const par=areaParentEntry(e); if(!par) return;
+    if(areaLayer(e)<=areaLayer(par)){ e.params=e.params||{}; e.params.layer=areaLayer(par)+1; changed++; loop=true; } }); }
+  return changed; }
 function landAreaIdxs(){ const out=[]; plan.entries.forEach((e,i)=>{ if(isGroupParent(e)) out.push(i); }); return out; }
 // land：plan の area を「高さ」で色分け（ヒートマップと同じ landColor スケール）。選択中は枠強調＋リサイズハンドル。h表示で「L{layer} h{値}」。
 function drawLandAreas(hlo, hspan){ const s=camo.scale, HS=4*devicePixelRatio, sL=SETTINGS.showLabels, sC=SETTINGS.showCoords, sH=SETTINGS.showH;
