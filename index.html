@@ -236,7 +236,7 @@ body.mode-land .landtools{display:flex}
       <div class="landtools" id="landtools">
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button><button id="lf-add-poly">多角形</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
-        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜距離</label><input type="range" id="lf-sm" min="0" max="1024" step="1" value="24" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
+        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜距離</label><input type="range" id="lf-sm" min="0" max="256" step="1" value="24" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.71';
+const APP_VERSION='1.72';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -378,7 +378,7 @@ function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true, showH:false, showHeat:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true, showH:false, showHeat:true, slopeMax:256 }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -1757,6 +1757,9 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
     +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div>'
     +'<div class="cfgfill">試行回数（最も密な結果を採用） <input type="number" id="cfg-scTries" value="'+SETTINGS.scTries+'"></div>'
     +'<div class="muted cfgval">配置をこの回数だけやり直し、いちばん多く入った結果を採用します。大きいほど密になりやすい（その分遅い）。既定 12。</div></div>'
+    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">地形：傾斜距離スライダーの上限</span><span class="cfhdtools"><button class="cfgrst" id="cfg-rst-slope" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+    +'<div class="cfgfill">上限（ブロック） <input type="number" id="cfg-slopeMax" value="'+SETTINGS.slopeMax+'"></div>'
+    +'<div class="muted cfgval">地形タブの「傾斜距離」スライダーで選べる最大ブロック数。大きいほど緩やかな傾斜を作れます。既定 256。</div></div>'
     +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（plan）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-dir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
@@ -1774,6 +1777,8 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
     +'</div>';
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scCand',1); bind('scTries',1);
+  { const el=$('#cfg-slopeMax'); if(el) el.oninput=()=>{ SETTINGS.slopeMax=Math.max(1,Math.round(+el.value||256)); saveSettings(); applySlopeMax(); }; } // 傾斜距離の上限→スライダーへ即反映
+  if($('#cfg-rst-slope')) $('#cfg-rst-slope').onclick=()=>{ SETTINGS.slopeMax=CFG_DEF.slopeMax; saveSettings(); applySlopeMax(); renderCfg(); status('「傾斜距離の上限」を既定に戻しました'); };
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
   if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; SETTINGS.scTries=CFG_DEF.scTries; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
@@ -1942,6 +1947,7 @@ function rasterAreaCells(e, g, cb){ const {gD,gW,cs,d0,w0}=g, sh=regionShape(e);
   else { const cx=sh.center.d, cwc=sh.center.w, r=sh.r, r2=r*r, a0=Math.max(0,Math.floor((cx-r-d0)/cs)), a1=Math.min(gD-1,Math.floor((cx+r-d0)/cs)), b0=Math.max(0,Math.floor((cwc-r-w0)/cs)), b1=Math.min(gW-1,Math.floor((cwc+r-w0)/cs));
     for(let cd=a0;cd<=a1;cd++) for(let cw=b0;cw<=b1;cw++){ const bd=d0+cd*cs, bw=w0+cw*cs; if((bd-cx)*(bd-cx)+(bw-cwc)*(bw-cwc)<=r2) cb(cd*gW+cw); } } }
 // 生成：layer>0 の area を種（layer 昇順で塗る＝高 layer が後がち）に、間を緩和補間して高さマップを作る。
+function applySlopeMax(){ const sm=$('#lf-sm'); if(!sm) return; const mx=Math.max(1,(SETTINGS.slopeMax|0)||256); sm.max=mx; if((+sm.value||0)>mx){ sm.value=mx; const sv=$('#lf-sm-v'); if(sv) sv.textContent=sm.value+'blk'; } } // 傾斜距離スライダーの上限を設定値に反映（超過時はクランプ）
 async function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未設定'); return; } const N=g.gD*g.gW;
   const areas=landAreaIdxs().map(i=>plan.entries[i]).filter(e=>areaLayer(e)>0);
   if(!areas.length){ status('先に layer を1以上にした area を置いてください'); return; }
@@ -2072,7 +2078,7 @@ function boot(){
   // 地形 landform タブ
   if($('#tab-plan')) $('#tab-plan').onclick=()=>setTab('plan');
   if($('#tab-land')) $('#tab-land').onclick=()=>setTab('land');
-  { const sm=$('#lf-sm'), sv=$('#lf-sm-v'); if(sm){ const upd=()=>{ if(sv) sv.textContent=sm.value+'blk'; }; upd(); sm.oninput=upd; } } // 傾斜距離スライダーの現在値表示（ブロック）
+  { const sm=$('#lf-sm'), sv=$('#lf-sm-v'); if(sm){ const upd=()=>{ if(sv) sv.textContent=sm.value+'blk'; }; applySlopeMax(); upd(); sm.oninput=upd; } } // 傾斜距離スライダー（上限は設定・現在値はブロック表示）
   wireSteppers(document);
   if($('#lf-add-rect')) $('#lf-add-rect').onclick=()=>landAddArea('RECT');
   if($('#lf-add-circle')) $('#lf-add-circle').onclick=()=>landAddArea('CIRCLE');
@@ -2203,7 +2209,7 @@ if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存�
 if(FS_OK) idbGet('dir_structure').then(h=>{ if(h) SDIR=h; }).catch(()=>{}); // structure 参照の読込先（⚙設定で指定）
 if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadPresetFile(); if(sel>=0) renderTParams(); } }).catch(()=>{}); // preset同期フォルダ
 loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
-loadSettings(); // 各種設定を復元
+loadSettings(); applySlopeMax(); // 各種設定を復元→傾斜距離スライダー上限に反映
 if('serviceWorker' in navigator){
   // 新しいSWが制御を奪ったら1度だけ自動リロード（更新を確実に反映。iOSのウォーム復帰対策）
   let swReloaded=false;
