@@ -142,6 +142,7 @@ textarea{width:100%;height:46vh;resize:vertical;background:#0C1214;color:var(--c
 .fr-head button.pdirty{border-color:#D24B4B;color:#D24B4B}
 .fr.fdirty .c-name{color:#D24B4B}
 .fr.fp .c-res{display:none}
+.arsl{width:100%;vertical-align:middle;margin:0}
 .c-set :disabled{opacity:.5;cursor:not-allowed}
 .pfolder{font-size:11px;color:var(--dim);margin-bottom:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .plist{max-height:42vh;overflow:auto;border:1px solid var(--rule);border-radius:6px;margin-bottom:8px}
@@ -340,7 +341,7 @@ body.mode-land .landtools{display:flex}
 <div class="modal" id="lfhelp"><div class="m"><h3>地形（landform）</h3><div class="hbody">
 <p><b>2層モデル</b>（対応 plan と同じ相対座標 d,h,w・原点共通）。<b>地形タブ</b>で編集し、<b>&lt;plan名&gt;_land.json</b> を書き出します。plan のエリア/footprint を薄く重ねて表示します（読み取り専用）。</p>
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
-<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>傾斜距離・ぼかしは area ごと</b>に設定します（layer を1以上にすると area のパラメータ欄に出ます）。<b>「傾斜距離」</b>（ブロック）＝その area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「ぼかし」</b>＝生成後にその area 周りの斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると地形が広がります）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
+<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>傾斜距離・ぼかしは area ごと</b>に設定します（layer を1以上にすると area のパラメータ欄に出ます）。<b>「傾斜距離」</b>（ブロック）＝その area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「ぼかし」</b>＝生成後にその area 周りの斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると地形が広がります）。<b>スライダー表示の有無・上限・既定値は ⚙各種設定</b>で変更できます。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
 <p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
@@ -355,7 +356,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.74';
+const APP_VERSION='1.75';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -378,7 +379,7 @@ function flashBtn(el){ if(!el||!el.classList) return; el.classList.remove('flash
 /* ---------- data (mod から一方向 sync した正典を読む) ---------- */
 let SCHEMA=null, PRESETS=null, DICT=[], SCHEMA_VER=null, PRESETS_VER=null, DICT_VER=null, BLOCKS_ALL={}, DICT_BY_BLOCK={};
 // 各種設定（端末に保存・デフォルトにリセット可）。散布の試行上限の式の係数など
-const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true, showH:false, showHeat:true }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
+const CFG_DEF={ scCand:30, scTries:12, showCoords:true, showLabels:true, showH:false, showHeat:true, terrSlider:true, slopeMax:256, slopeDef:24, smoothMax:60, smoothDef:4 }; let SETTINGS={...CFG_DEF}; const CFG_KEY='city-blueprint:settings';
 function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem(CFG_KEY)); if(s&&typeof s==='object') SETTINGS=Object.assign({...CFG_DEF}, s); }catch(_){} }
 function saveSettings(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(SETTINGS)); }catch(_){} }
 async function loadData(){
@@ -466,9 +467,9 @@ const Area = {
     return [['shape',shapeKind]].concat(geo).concat([['layer','int']]).concat(terr); }, // layer=地形の重ね順(0=地形に使わない・正=使う/大きいほど後がち)
   randomFields(){ return [['builder','enum'],['source','enum'],['countMin','int'],['countMax','int'],['facing','enum'],['gap','int'],['childMargin','int'],['seed','int']]; },
   fields(e){ return Area.hasRandom(e) ? Area.regionFields(e).concat(Area.randomFields()) : Area.regionFields(e); },
-  defaults(type){ return (Area.types[type]||{}).random
-      ? { shape:'RECT', depth:24, width:24, diameter:24, layer:0, slopeDist:24, smooth:4, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'outward', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) }
-      : { shape:'RECT', depth:1, width:1, layer:0, slopeDist:24, smooth:4 }; },
+  defaults(type){ const sd=(SETTINGS.slopeDef!=null?SETTINGS.slopeDef:24), sm=(SETTINGS.smoothDef!=null?SETTINGS.smoothDef:4); return (Area.types[type]||{}).random
+      ? { shape:'RECT', depth:24, width:24, diameter:24, layer:0, slopeDist:sd, smooth:sm, builder:builderTypes()[0]||'house', source:DEF_KEY, countMin:0, countMax:0, facing:'outward', gap:0, childMargin:2, seed:Math.floor(Math.random()*1e9) }
+      : { shape:'RECT', depth:1, width:1, layer:0, slopeDist:sd, smooth:sm }; },
 };
 const isGroupParent=Area.is;   // 後方互換の別名（＝Area.is）。area 判定は Area.is に一本化
 function childIdxsOf(i){ const e=plan.entries[i]; if(!isGroupParent(e)) return []; const id=e.id; if(!id) return []; const out=[]; plan.entries.forEach((x,j)=>{ if(x.group===id) out.push(j); }); return out; }
@@ -1519,6 +1520,9 @@ function areaFieldRow(e,k,kind){ const p=e.params, v=p[k], lbl=AREA_FIELD_LABEL[
   if(kind==='enum'){ const vals=k==='facing'?['front','random','outward']:(k==='builder')?builderTypes():allPresets(p.builder);
     return frRow(k,'', '<select id="ar-'+k+'">'+vals.map(o=>'<option'+(v===o?' selected':'')+'>'+o+'</option>').join('')+'</select>', '','','', '', 'fp'); }
   if(kind==='bool') return frRow(k,'', '<label class="chk"><input type="checkbox" id="ar-'+k+'"'+(v?' checked':'')+'></label>', '','','', '', 'fp');
+  if(k==='slopeDist'||k==='smooth'){ const isS=(k==='slopeDist'); const def=isS?(SETTINGS.slopeDef||0):(SETTINGS.smoothDef||0), mx=isS?(SETTINGS.slopeMax||256):(SETTINGS.smoothMax||60), cur=(v==null?def:v); // 地形パラメータ：ステッパー＋（設定でON時）右側スライダー
+    const sl=SETTINGS.terrSlider?('<input type="range" class="arsl" id="ars-'+k+'" min="0" max="'+mx+'" step="1" value="'+cur+'">'):'';
+    return frRow(lbl,'', numStepper('ar-'+k, cur), '', sl, '', '', SETTINGS.terrSlider?'':'fp'); } // slider 有り時は c-res を表示（fp を外す）
   return frRow(lbl,'', numStepper('ar-'+k, v||0), '','','', '', 'fp'); }
 function wireAreaFields(e, fields){ const p=e.params=e.params||{}; wireSteppers(document);   // area 共通のフィールド結線（frRow＋ステッパー・randomarea/childplan 共通）
   fields.forEach(([k,kind])=>{
@@ -1528,6 +1532,9 @@ function wireAreaFields(e, fields){ const p=e.params=e.params||{}; wireSteppers(
     if(kind==='enum2'||kind==='enum3') el.onchange=()=>{ const nv=el.value, old=p.shape||'RECT'; switchAreaShape(e, old, nv); persist();renderEntries();renderTParams();render(); }; // RECT/CIRCLE/POLY 切替（位置を保つよう原点変換）
     else if(kind==='bool') el.onchange=()=>{ p[k]=el.checked; persist(); };
     else if(kind==='enum') el.onchange=()=>{ p[k]=el.value; if(k==='builder') p.source=DEF_KEY; persist();renderEntries();renderTParams(); };
+    else if(k==='slopeDist'||k==='smooth'){ const isS=(k==='slopeDist'), mx=isS?(SETTINGS.slopeMax||256):(SETTINGS.smoothMax||60); const num=$('#ar-'+k), sl=$('#ars-'+k); // 傾斜距離/ぼかし：ステッパー↔スライダー同期＋上限クランプ
+      const apply=val=>{ const nv=Math.max(0,Math.min(mx,Math.round(val||0))); p[k]=nv; if(num&&(+num.value!==nv)) num.value=nv; if(sl&&(+sl.value!==nv)) sl.value=nv; persist();renderEntries();render(); };
+      if(num) num.oninput=()=>apply(+num.value); if(sl) sl.oninput=()=>apply(+sl.value); }
     else { const min=(k==='depth'||k==='width'||k==='diameter')?1:0; el.oninput=()=>{ p[k]=Math.max(min,Math.round(+el.value||0)); persist();renderEntries(); if(k==='layer') renderTParams(); render(); }; } // layer 変更で地形フィールド(傾斜距離/ぼかし)の表示切替
   });
 }
@@ -1759,6 +1766,11 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
     +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div>'
     +'<div class="cfgfill">試行回数（最も密な結果を採用） <input type="number" id="cfg-scTries" value="'+SETTINGS.scTries+'"></div>'
     +'<div class="muted cfgval">配置をこの回数だけやり直し、いちばん多く入った結果を採用します。大きいほど密になりやすい（その分遅い）。既定 12。</div></div>'
+    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">地形パラメータ（area の傾斜距離・ぼかし）</span><span class="cfhdtools"><button class="cfgrst" id="cfg-rst-terr" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+    +'<div class="cfgfill"><label class="chk"><input type="checkbox" id="cfg-terrSlider"'+(SETTINGS.terrSlider?' checked':'')+'> パラメータ欄にスライダーを表示</label></div>'
+    +'<div class="cfgfill">傾斜距離　上限 <input type="number" id="cfg-slopeMax" value="'+SETTINGS.slopeMax+'">　既定 <input type="number" id="cfg-slopeDef" value="'+SETTINGS.slopeDef+'"></div>'
+    +'<div class="cfgfill">ぼかし　上限 <input type="number" id="cfg-smoothMax" value="'+SETTINGS.smoothMax+'">　既定 <input type="number" id="cfg-smoothDef" value="'+SETTINGS.smoothDef+'"></div>'
+    +'<div class="muted cfgval">上限＝スライダー/入力の最大値。既定＝新しく layer を1以上にした area の初期値。既定 傾斜距離24・ぼかし4。</div></div>'
     +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（plan）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-dir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
@@ -1776,6 +1788,11 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
     +'</div>';
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scCand',1); bind('scTries',1);
+  const reParams=()=>{ if(sel>=0 && Area.is(plan.entries[sel])) renderTParams(); }; // 地形パラメータ設定の変更をパラメータ欄へ反映
+  const bindTerr=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); reParams(); }; };
+  bindTerr('slopeMax',1); bindTerr('slopeDef',0); bindTerr('smoothMax',1); bindTerr('smoothDef',0);
+  { const el=$('#cfg-terrSlider'); if(el) el.onchange=()=>{ SETTINGS.terrSlider=el.checked; saveSettings(); reParams(); }; }
+  if($('#cfg-rst-terr')) $('#cfg-rst-terr').onclick=()=>{ ['terrSlider','slopeMax','slopeDef','smoothMax','smoothDef'].forEach(k=>SETTINGS[k]=CFG_DEF[k]); saveSettings(); renderCfg(); reParams(); status('「地形パラメータ」を既定に戻しました'); };
   if($('#cfg-help-scatter')) $('#cfg-help-scatter').onclick=()=>$('#cfghelp').classList.add('on'); // 項目ごとの ?
   if($('#cfg-rst-scatter')) $('#cfg-rst-scatter').onclick=()=>{ SETTINGS.scCand=CFG_DEF.scCand; SETTINGS.scTries=CFG_DEF.scTries; saveSettings(); renderCfg(); status('「散布 密度」を既定に戻しました'); }; // 項目ごとの既定リセット
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
@@ -1945,8 +1962,8 @@ function rasterAreaCells(e, g, cb){ const {gD,gW,cs,d0,w0}=g, sh=regionShape(e);
     for(let cd=a0;cd<=a1;cd++) for(let cw=b0;cw<=b1;cw++){ const bd=d0+cd*cs, bw=w0+cw*cs; if((bd-cx)*(bd-cx)+(bw-cwc)*(bw-cwc)<=r2) cb(cd*gW+cw); } } }
 // 生成：layer>0 の area を種（layer 昇順で塗る＝高 layer が後がち）に、間を緩和補間して高さマップを作る。
 // 地形パラメータは area ごと（layer>0 の時のみ有効）。傾斜距離=0へ減衰する距離(ブロック)、ぼかし=斜面を平均化する回数。
-function areaSlope(e){ const v=e&&e.params?e.params.slopeDist:null; return Math.max(0,(v==null?24:v)|0); }
-function areaSmooth(e){ const v=e&&e.params?e.params.smooth:null; return Math.max(0,(v==null?4:v)|0); }
+function areaSlope(e){ const v=e&&e.params?e.params.slopeDist:null; return Math.max(0,(v==null?(SETTINGS.slopeDef!=null?SETTINGS.slopeDef:24):v)|0); }
+function areaSmooth(e){ const v=e&&e.params?e.params.smooth:null; return Math.max(0,(v==null?(SETTINGS.smoothDef!=null?SETTINGS.smoothDef:4):v)|0); }
 async function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint 未設定'); return; } const N=g.gD*g.gW;
   const areas=landAreaIdxs().map(i=>plan.entries[i]).filter(e=>areaLayer(e)>0);
   if(!areas.length){ status('先に layer を1以上にした area を置いてください'); return; }
