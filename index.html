@@ -292,7 +292,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 <p><b>座標</b>：上＝d＋ ／ 下＝d− ／ 右＝w＋ ／ 左＝w− ／ <b>原点＝左下</b>（d0,w0）。h＝高さ（上下、プレビューは上から見た図）。</p>
 <p><b>図の記号</b>：<b>footprint＝本体</b>（塗りの四角）／<b>破線＝margin</b>（確保領域）／<b>塗り＝ground</b>（地面）。</p>
 <p><b>type ラベル</b>：文字の天（上）が建物の <b>front</b> 方向。outward などで回転して表示されます。</p>
-<p><b>表示切替</b>（右上）：<b>エントリ名表示</b>＝名前ラベル（id・▦area・plan footprint）／<b>座標表示</b>＝各点の座標(d,h,w)／<b>h表示</b>＝各エントリの中心に h 座標／<b>サイズ表示</b>＝各エントリの大きさ（d/h/w。area は d/w）。それぞれ ON/OFF でき、点灯中が表示状態です。</p>
+<p><b>表示切替</b>（右上）：<b>エントリ名表示</b>＝名前ラベル（id・▦area・plan footprint）／<b>座標表示</b>＝各点の座標(d,h,w)／<b>h表示</b>＝各エントリの中心に h 座標／<b>サイズ表示</b>＝各エントリの大きさ（d/h/w。area は d/w）。これらは <b>plan footprint にも適用</b>されます（名前・座標・h・サイズ）。それぞれ ON/OFF でき、点灯中が表示状態です。</p>
 <p class="muted">操作：ドラッグで移動／角をドラッグでサイズ変更（fix した軸は不可）／2本指ピンチでズーム／↻で回転。</p>
 <p><b>キー操作</b></p>
 <ul class="klist">
@@ -361,7 +361,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.85';
+const APP_VERSION='1.86';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -491,6 +491,22 @@ function entrySize(e){ let d=0,h=0,w=0;
   if(isGroupParent(e)){ const p=e.params||{}; if(p.shape==='CIRCLE') d=w=p.diameter||0; else if(p.shape==='RECT'){ d=p.depth||0; w=p.width||0; } else { const b=entryBBox(e); d=Math.max(0,Math.round(b.d1-b.d0)); w=Math.max(0,Math.round(b.w1-b.w0)); } return {d:d|0,h:0,w:w|0}; }
   if(e.type==='plan'||e.type==='structure'){ const fp=e.footprint; if(fp){ if(FP.isCircle(fp)){ d=w=Math.round(FP.radius(fp)*2); } else { const dr=FP.dRange(fp), wr=FP.wRange(fp); d=Math.round(dr[1]-dr[0]); w=Math.round(wr[1]-wr[0]); } h=Math.round(FP.height(fp)||0); } return {d:d|0,h:h|0,w:w|0}; }
   const b=entryBBox(e); return { d:Math.max(0,Math.round(b.d1-b.d0)), h:Math.max(0,Math.round(heightOf(e)||0)), w:Math.max(0,Math.round(b.w1-b.w0)) }; }
+// footprint（plan 自身）のサイズ（d/h/w）。h は min〜max の幅。
+function footprintSize(fp){ if(!fp) return {d:0,h:0,w:0}; const hr=FP.hRange(fp)||[0,0], h=Math.round((hr[1]||0)-(hr[0]||0));
+  if(FP.isCircle(fp)){ const dia=Math.round(FP.radius(fp)*2); return {d:dia,h,w:dia}; }
+  const dr=FP.dRange(fp), wr=FP.wRange(fp); return {d:Math.round(dr[1]-dr[0]), h, w:Math.round(wr[1]-wr[0])}; }
+// footprint（plan 自身・原点基準）に全表示トグル（名前/座標/h/サイズ）を描画（plan・land 両タブ共通）
+function drawFootprintLabels(fp){ if(!fp) return; const sL=SETTINGS.showLabels, sC=SETTINGS.showCoords, sH=SETTINGS.showH, sS=SETTINGS.showSize; if(!(sL||sC||sH||sS)) return;
+  const dpr=devicePixelRatio, hr=FP.hRange(fp)||[0,0], h0=hr[0]||0, h1=hr[1]||0, hlabel=(h1!==h0)?('h'+h0+'〜'+h1):('h'+h0); let ccx, ccy, nx, ny;
+  if(FP.isCircle(fp)){ const r=FP.radius(fp)*camo.scale, c=w2c(0,0); ccx=c[0]; ccy=c[1]; nx=ccx; ny=ccy-r;
+    if(sC){ ctx.fillStyle='#4F8A7B'; ctx.font=(8*dpr)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('d0 h'+h0+' w0', ccx, ccy+3*dpr); } }
+  else { const dr=FP.dRange(fp), wr=FP.wRange(fp), pts=[[dr[0],wr[0]],[dr[1],wr[0]],[dr[1],wr[1]],[dr[0],wr[1]]], S=pts.map(([d,w])=>w2c(d,w));
+    ccx=S.reduce((a,s)=>a+s[0],0)/4; ccy=S.reduce((a,s)=>a+s[1],0)/4; nx=S[0][0]; ny=S[0][1];
+    if(sC){ ctx.fillStyle='#4F8A7B'; ctx.font=(8*dpr)+'px monospace'; pts.forEach((p,k)=>{ const sx=S[k][0], sy=S[k][1]; ctx.textAlign=sx<ccx?'right':'left'; ctx.textBaseline=sy<ccy?'bottom':'top'; ctx.fillText('d'+Math.round(p[0])+' h'+h0+' w'+Math.round(p[1]), sx+(sx<ccx?-2:2), sy+(sy<ccy?-2:2)); }); } }
+  if(sL){ ctx.fillStyle='#4F8A7B'; ctx.font=(10*dpr)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', nx+3, ny-3); }
+  if(sH){ ctx.fillStyle='#F0D98A'; ctx.font='bold '+(12*dpr)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom'; ctx.fillText(hlabel, ccx, ccy-2*dpr); }
+  if(sS){ const sz=footprintSize(fp); ctx.fillStyle='#8fd3c0'; ctx.font=(9*dpr)+'px monospace'; ctx.textAlign='center'; ctx.textBaseline='top'; ctx.fillText('d'+sz.d+' h'+sz.h+' w'+sz.w, ccx, ccy+2*dpr); }
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic'; }
 // エントリの垂直寸法（高さ候補の目安）。tower/spiral は概算。
 function heightOf(e){
   if(e.type==='plan'||e.type==='structure'){ return e.footprint?FP.height(e.footprint):0; }
@@ -1293,13 +1309,13 @@ function render(){
   // この plan 自身の footprint（親から参照された時の形）を破線のベルドグリーンで表示
   if(plan.footprint){ const sh=shapeFromFp(plan.footprint, {d:0,h:0,w:0}, 'FRONT', marginOf({})); if(sh){
     ctx.setLineDash([7,5]); ctx.lineWidth=1.6; ctx.strokeStyle='#4F8A7B'; ctx.fillStyle='rgba(79,138,123,.07)';
-    if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); if(SETTINGS.showLabels){ const[lx,ly]=w2c(sh.body[0].d,sh.body[0].w); ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', lx+3, ly-3); } }
-    else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); if(SETTINGS.showLabels){ ctx.fillStyle='#4F8A7B'; ctx.font=(10*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='bottom'; ctx.fillText('plan footprint', cx+3, cy-sh.r*camo.scale-3); } }
+    if(sh.shape==='RECT'){ ctx.beginPath(); sh.body.forEach((p,k)=>{const[x,y]=w2c(p.d,p.w); k?ctx.lineTo(x,y):ctx.moveTo(x,y);}); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else { const[cx,cy]=w2c(sh.center.d,sh.center.w); ctx.beginPath();ctx.arc(cx,cy,sh.r*camo.scale,0,7);ctx.fill();ctx.stroke(); }
     ctx.setLineDash([]);
     if(sel<0){ ctx.fillStyle='#4F8A7B'; const HS=4*devicePixelRatio; // 編集中（非選択時）はハンドルを描画：RECT=四隅ドラッグでサイズ/本体ドラッグで移動、CIRCLE=縁ドラッグで径
       if(sh.shape==='RECT') sh.body.forEach(p=>{ const h=w2c(p.d,p.w); ctx.fillRect(h[0]-HS,h[1]-HS,HS*2,HS*2); });
       else { const rh=w2c(sh.center.d,sh.center.w+sh.r); ctx.fillRect(rh[0]-HS,rh[1]-HS,HS*2,HS*2); } }
-    ctx.textBaseline='alphabetic'; } }
+    ctx.textBaseline='alphabetic'; } drawFootprintLabels(plan.footprint); } // 名前/座標/h/サイズ トグルを footprint にも適用
   // コピーモード：コピー元（金）と貼り付け先ゴースト（緑）を可視化
   if(copyMode&&clip){ const off={d:pasteCursor.d-clip.anchor.d, w:pasteCursor.w-clip.anchor.w};
     clip.entries.forEach(e=>drawClipGhost(e,{d:0,w:0},'#D4A93C','rgba(212,169,60,.08)')); // 元
@@ -1906,6 +1922,7 @@ function renderLand(){ const g=landSyncGrid();
     ctx.restore(); }
   const rng=landRange();
   { const [x0,y0]=w2c(rng.d[1], rng.w[0]), [x1,y1]=w2c(rng.d[0], rng.w[1]); ctx.strokeStyle='#4F8A7B'; ctx.lineWidth=1.5; ctx.strokeRect(x0-s/2, y0-s/2, (x1-x0)+s, (y1-y0)+s); }
+  drawFootprintLabels(plan.footprint); // footprint にも 名前/座標/h/サイズ トグルを適用（land タブ）
   if(sel<0 && plan.footprint){ const fp=plan.footprint, HS=4*devicePixelRatio; ctx.fillStyle='#4F8A7B'; // footprint 編集ハンドル（land でも plan 同等に編集可）
     if(FP.isRect(fp)){ const dd=FP.dRange(fp),ww=FP.wRange(fp); [[dd[0],ww[0]],[dd[1],ww[0]],[dd[1],ww[1]],[dd[0],ww[1]]].forEach(([d,w])=>{ const [hx,hy]=w2c(d,w); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); }); }
     else { const r=FP.radius(fp), [hx,hy]=w2c(0,r); ctx.fillRect(hx-HS,hy-HS,HS*2,HS*2); } }
