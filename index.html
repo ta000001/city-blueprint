@@ -237,6 +237,7 @@ body.mode-land .landtools{display:flex}
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button><button id="lf-add-poly">多角形</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
         <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜距離</label><input type="range" id="lf-sm" min="0" max="256" step="1" value="24" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
+        <span class="grp"><label>なじませ</label><input type="range" id="lf-bl" min="0" max="60" step="1" value="4" style="width:90px;vertical-align:middle"><span id="lf-bl-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -340,7 +341,7 @@ body.mode-land .landtools{display:flex}
 <div class="modal" id="lfhelp"><div class="m"><h3>地形（landform）</h3><div class="hbody">
 <p><b>2層モデル</b>（対応 plan と同じ相対座標 d,h,w・原点共通）。<b>地形タブ</b>で編集し、<b>&lt;plan名&gt;_land.json</b> を書き出します。plan のエリア/footprint を薄く重ねて表示します（読み取り専用）。</p>
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
-<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>「傾斜距離」</b>スライダー（ブロック）＝area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
+<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>「傾斜距離」</b>スライダー（ブロック）＝area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「なじませ」</b>は生成後に斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると全体がなだらかに広がります）。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
 <p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
@@ -355,7 +356,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.72';
+const APP_VERSION='1.73';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1976,9 +1977,19 @@ async function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint
       if(cd<gD-1&&cw<gW-1){ const k=i+gW+1, nd=dist[k]+SQ; if(nd<bd){bd=nd;bs=src[k];} }
       if(cd<gD-1&&cw>0){    const k=i+gW-1, nd=dist[k]+SQ; if(nd<bd){bd=nd;bs=src[k];} }
       dist[i]=bd; src[i]=bs; }
-    for(let i=0;i<N;i++){ if(seed[i]){ land.heights[i]=Math.round(val[i]); continue; } const dc=dist[i]; // area 内はそのまま・外は傾斜距離で減衰
-      land.heights[i]= (Rcell>0 && dc<=Rcell) ? Math.round(src[i]*(1-dc/Rcell)) : 0; }
-    landPersist(); render(); status('生成: area の高さから傾斜距離 '+Rblk+' ブロックで勾配を作成しました');
+    let fh=new Float64Array(N); for(let i=0;i<N;i++){ if(seed[i]){ fh[i]=val[i]; continue; } const dc=dist[i]; // area 内はそのまま・外は傾斜距離で減衰
+      fh[i]= (Rcell>0 && dc<=Rcell) ? src[i]*(1-dc/Rcell) : 0; }
+    // なじませ：area(seed) は固定したまま斜面を3x3平均で複数回ならす＝円錐の継ぎ目・距離Rの打ち切り・等高線の角張りを自然に
+    const blend=Math.max(0,Math.min(60,(($('#lf-bl')||{value:4}).value|0)));
+    if(blend>0){ let buf=new Float64Array(N); let t0=performance.now();
+      for(let p=0;p<blend;p++){ for(let cd=0; cd<gD; cd++) for(let cw=0; cw<gW; cw++){ const i=cd*gW+cw; if(seed[i]){ buf[i]=fh[i]; continue; }
+          let s=fh[i], c=1; if(cd>0){s+=fh[i-gW];c++;} if(cd<gD-1){s+=fh[i+gW];c++;} if(cw>0){s+=fh[i-1];c++;} if(cw<gW-1){s+=fh[i+1];c++;}
+          if(cd>0&&cw>0){s+=fh[i-gW-1];c++;} if(cd>0&&cw<gW-1){s+=fh[i-gW+1];c++;} if(cd<gD-1&&cw>0){s+=fh[i+gW-1];c++;} if(cd<gD-1&&cw<gW-1){s+=fh[i+gW+1];c++;}
+          buf[i]=s/c; }
+        const tmp=fh; fh=buf; buf=tmp;
+        if((performance.now()-t0)>50){ busy(true,'生成中… ならし '+(p+1)+'/'+blend); await yld(); t0=performance.now(); } } }
+    for(let i=0;i<N;i++) land.heights[i]=Math.round(fh[i]);
+    landPersist(); render(); status('生成: 傾斜距離 '+Rblk+'blk／なじませ '+blend+' で勾配を作成しました');
   } finally { busy(false); } }
 // --- JSON / 入出力（効率形式: 範囲＋グリッド＋高さRLE＋regions） ---
 function heightsRle(h){ const out=[]; let i=0; while(i<h.length){ const v=h[i]; let j=i+1; while(j<h.length && h[j]===v) j++; out.push([v, j-i]); i=j; } return out; }
@@ -2079,6 +2090,7 @@ function boot(){
   if($('#tab-plan')) $('#tab-plan').onclick=()=>setTab('plan');
   if($('#tab-land')) $('#tab-land').onclick=()=>setTab('land');
   { const sm=$('#lf-sm'), sv=$('#lf-sm-v'); if(sm){ const upd=()=>{ if(sv) sv.textContent=sm.value+'blk'; }; applySlopeMax(); upd(); sm.oninput=upd; } } // 傾斜距離スライダー（上限は設定・現在値はブロック表示）
+  { const bl=$('#lf-bl'), bv=$('#lf-bl-v'); if(bl){ const upd=()=>{ if(bv) bv.textContent=bl.value; }; upd(); bl.oninput=upd; } } // なじませ（境界ならし回数）の現在値表示
   wireSteppers(document);
   if($('#lf-add-rect')) $('#lf-add-rect').onclick=()=>landAddArea('RECT');
   if($('#lf-add-circle')) $('#lf-add-circle').onclick=()=>landAddArea('CIRCLE');
