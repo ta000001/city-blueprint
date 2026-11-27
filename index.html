@@ -361,7 +361,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.86';
+const APP_VERSION='1.87';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -2077,11 +2077,8 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
     frRow('⑤ 地面の下限','', numStepper('lf-gbot', land.groundBottom), '','','','', 'fp'),
     frRow('⑥ 地面の素材','', '<button id="lf-mat">'+matLabelOf(land.groundMat)+'</button>', '','','','', 'fp'),
     frRow('1マス=Nブロック','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp'),
-    frRow('この地形を plan に','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+'>'+(plan.landform?('設定中（解除）'):'設定')+'</button>'+(plan.landform?('<span class="muted" style="margin-left:6px">'+plan.landform+'</span>'):''), '','','','', 'fp') ].join('');
-  const nArea=landAreaIdxs().filter(i=>areaLayer(plan.entries[i])>0).length;
-  const info = rng ? ('<div class="muted" style="margin-top:6px">範囲: d['+rng.d[0]+'..'+rng.d[1]+'] w['+rng.w[0]+'..'+rng.w[1]+']／1マス='+(land.cellSize||1)+'ブロック → グリッド '+(g?g.gD+'×'+g.gW:'-')+'（'+(g?(g.gD*g.gW).toLocaleString():0)+'マス）／area(layer>0) '+nArea+'個</div>')
-    : '<div class="muted" style="margin-top:6px">plan に footprint が未設定です。<b>配置タブで plan の footprint を設定</b>してください（地形は footprint の範囲に作成します）。</div>';
-  box.innerHTML = rows + info; wireSteppers(box);
+    frRow('この地形を plan に','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+'>'+(plan.landform?('設定中（解除）'):'設定')+'</button>', '','','','', 'fp') ].join('');
+  box.innerHTML = rows; wireSteppers(box); // 情報行(範囲/マス数/area数)やファイル名の画面直書きは廃止（説明は「?」・未設定案内はキャンバス表示に集約）
   const at=$('#lf-atmos'); if(at) at.oninput=()=>{ land.atmosTop=Math.round(+at.value||0); landPersist(); render(); };
   const gb=$('#lf-gbot'); if(gb) gb.oninput=()=>{ land.groundBottom=Math.round(+gb.value||0); landPersist(); render(); };
   const cse=$('#lf-cs'); if(cse) cse.oninput=()=>{ land.cellSize=Math.max(1,Math.round(+cse.value||1)); landSyncGrid(); landPersist(); renderLandCtrl(); render(); };
