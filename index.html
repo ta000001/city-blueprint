@@ -351,12 +351,12 @@ body.mode-land .landtools{display:flex}
 <p><b>area（基底）</b>：ランダム機能を持たないグループ用の枠です。追加メニューから直接作って空のエリアを置き、各エントリの <b>group</b> でこの area 配下へまとめます。<b>area/childplan はパラメータ欄の group で他の area 配下へネストできます（land タブでも可）</b>。地形では <b>親の layer＜子の layer</b> になるよう制御され（親候補は layer が自分より小さい area のみ・layer 変更時も自動で丸め）、randomarea 配下へのネストはできません（再抽選で消えるため）。</p>
 <p><b>高さ（h）の一括調整</b>：area 選択中に 2 通りあります。<br>① 基本情報の <b>relPos の h</b> ＝<b>差分シフト</b>：子（ネスト含む）を相対関係を保ったまま同じ差分だけ上下。<br>② relPos 右の <b>「エリアの高さを統一」</b>ボタン ＝<b>絶対値で統一</b>：配下の子の h を relPos の h に全部揃える（高さを平らにそろえたい時）。<br>d/w は横方向なのでプレビュー上のドラッグで area ごと移動できます。</p>
 <p><b>childplan</b>：plan 参照を「子を展開」して生まれる area の派生です。元 plan を覚えており、<b>planに戻す</b>で復元できます。</p>
-<p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>する area の派生です（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。</p>
+<p><b>randomarea</b>：region 内に builder を<b>ランダム配置</b>する area の派生です（抽選）。countMin〜countMax（0＝詰める）・facing・gap などランダム項目を持ちます。<b>他の area 配下に子としてネスト可</b>（移動/削除は一緒・再抽選は自分の散布子だけを作り直すので親側に影響しません）。ただし randomarea 自身を<b>親にはできません</b>（配下は再抽選で入れ替わるため）。</p>
 <p><b>planに戻す</b>（childplan のみ）：childplan を元の <b>plan 参照</b>（展開前のマーカー）へ戻します。region は footprint に変換して引き継ぎ、<b>配下の子エントリ（孫含む）はすべて削除</b>します（Undo 可）。「子を展開」の逆操作です。</p>
 </div></div></div>
 
 <script>
-const APP_VERSION='1.78';
+const APP_VERSION='1.79';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -455,7 +455,7 @@ function ensureIds(){ const raMap={};
 //  area 固有の振る舞い（判定/能力/region フィールド/既定値/エディタ）は全てここに集約し、
 //  個別関数からは Area.is(e) / Area.hasRandom(e) で1本呼びする（type ごとに別コードを書かない）。
 const Area = {
-  types: { area:{ random:false, nestable:true }, childplan:{ random:false, nestable:true }, randomarea:{ random:true, nestable:false } },   // area=基底（手作りグループ）／childplan=plan展開の派生／randomarea=ランダム派生（差分はここだけ：random=抽選/ランダム項目・nestable=他area配下へネスト）
+  types: { area:{ random:false, nestable:true }, childplan:{ random:false, nestable:true }, randomarea:{ random:true, nestable:true } },   // area=基底（手作りグループ）／childplan=plan展開の派生／randomarea=ランダム派生（差分はここだけ：random=抽選/ランダム項目・nestable=他area配下へ子としてネスト可。※randomareaは「親」にはしない＝親候補から除外）
   is(e){ return !!e && !!(e.type in Area.types); },
   hasRandom(e){ return !!e && !!(Area.types[e.type]||{}).random; },
   nestable(e){ return !!e && !!(Area.types[e.type]||{}).nestable; },
