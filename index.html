@@ -341,7 +341,7 @@ body.mode-land .landtools{display:flex}
 <div class="modal" id="lfhelp"><div class="m"><h3>地形（landform）</h3><div class="hbody">
 <p><b>2層モデル</b>（対応 plan と同じ相対座標 d,h,w・原点共通）。<b>地形タブ</b>で編集し、<b>&lt;plan名&gt;_land.json</b> を書き出します。plan のエリア/footprint を薄く重ねて表示します（読み取り専用）。</p>
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
-<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>傾斜距離・ぼかしは area ごと</b>に設定します（layer を1以上にすると area のパラメータ欄に出ます）。<b>「傾斜距離」</b>（ブロック）＝その area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「ぼかし」</b>＝生成後にその area 周りの斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると地形が広がります）。<b>スライダー表示の有無・上限・既定値は ⚙各種設定</b>で変更できます。重なりは <b>layer の高い方が優先</b>（くぼみ/谷も作れます）。</p>
+<p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>傾斜距離・ぼかしは area ごと</b>に設定します（layer を1以上にすると area のパラメータ欄に出ます）。<b>「傾斜距離」</b>（ブロック）＝その area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「ぼかし」</b>＝生成後にその area 周りの斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると地形が広がります）。<b>スライダー表示の有無・上限・既定値は ⚙各種設定</b>で変更できます。<b>重なった場合は layer の高い方を上に合成</b>し、上 layer の傾斜は 0 ではなく<b>下 layer の高さへ降りて接続</b>します（2段の高低差に傾斜がつく・くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
 <p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
@@ -356,7 +356,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.75';
+const APP_VERSION='1.76';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1969,34 +1969,40 @@ async function landGenerate(){ const g=landSyncGrid(); if(!g){ status('footprint
   if(!areas.length){ status('先に layer を1以上にした area を置いてください'); return; }
   if(N>LAND_MAX_CELLS){ status('範囲が広すぎます'); return; }
   snapshotLand(); const gD=g.gD, gW=g.gW, cs=land.cellSize||1; const INF=1e15, SQ=Math.SQRT2;
-  const seed=new Uint8Array(N), src=new Float64Array(N), srcR=new Float64Array(N), srcB=new Float64Array(N), dist=new Float64Array(N);
-  for(let i=0;i<N;i++){ dist[i]=INF; } // 距離の初期値（種で0）
-  // layer 昇順→高 layer が後から上書き（後がち）。種に area の 高さ/傾斜距離(セル)/ぼかし回数 を保持
-  areas.slice().sort((a,b)=>areaLayer(a)-areaLayer(b)).forEach(e=>{ const h=areaH(e), Rc=areaSlope(e)>0?areaSlope(e)/cs:0, bb=areaSmooth(e);
-    rasterAreaCells(e, g, (i)=>{ seed[i]=1; dist[i]=0; src[i]=h; srcR[i]=Rc; srcB[i]=bb; }); });
-  let any=false, maxB=0; for(let i=0;i<N;i++){ if(seed[i]){ any=true; if(srcB[i]>maxB) maxB=srcB[i]; } }
-  if(!any){ status('area が footprint 内にありません'); return; }
+  const base=new Float64Array(N), seed=new Uint8Array(N), bsm=new Float64Array(N), dist=new Float64Array(N); // base=高さ(下地)/seed=area内部(固定)/bsm=そのマスのぼかし回数
   const yld=()=>new Promise(r=>requestAnimationFrame(()=>r())); busy(true,'生成中…'); await yld(); // 計算前にスピナーを描画
   try{
-    // チャンファ距離変換（前進→後退の2パス・O(N)）で最近傍 area までの距離 dist と、その area の 高さsrc/傾斜距離srcR/ぼかしsrcB を全マスへ伝播
-    const relax=(i,k,w)=>{ const nd=dist[k]+w; if(nd<dist[i]){ dist[i]=nd; src[i]=src[k]; srcR[i]=srcR[k]; srcB[i]=srcB[k]; } };
-    for(let cd=0; cd<gD; cd++) for(let cw=0; cw<gW; cw++){ const i=cd*gW+cw;
-      if(cd>0) relax(i,i-gW,1); if(cw>0) relax(i,i-1,1); if(cd>0&&cw>0) relax(i,i-gW-1,SQ); if(cd>0&&cw<gW-1) relax(i,i-gW+1,SQ); }
-    await yld();
-    for(let cd=gD-1; cd>=0; cd--) for(let cw=gW-1; cw>=0; cw--){ const i=cd*gW+cw;
-      if(cd<gD-1) relax(i,i+gW,1); if(cw<gW-1) relax(i,i+1,1); if(cd<gD-1&&cw<gW-1) relax(i,i+gW+1,SQ); if(cd<gD-1&&cw>0) relax(i,i+gW-1,SQ); }
-    // area 内はそのまま・外は「その area の傾斜距離」で 0 へ減衰（R 外は 0＝透明を維持）
-    let fh=new Float64Array(N); for(let i=0;i<N;i++){ if(seed[i]){ fh[i]=src[i]; continue; } const R=srcR[i], dc=dist[i]; fh[i]=(R>0 && dc<=R)?src[i]*(1-dc/R):0; }
-    // ぼかし：area(seed) 固定のまま、各マスを「その area のぼかし回数」ぶん 3x3 平均（円錐の継ぎ目・距離Rの打ち切り・等高線の角張りを自然に）
-    if(maxB>0){ let buf=new Float64Array(N); let t0=performance.now();
-      for(let p=0;p<maxB;p++){ for(let cd=0; cd<gD; cd++) for(let cw=0; cw<gW; cw++){ const i=cd*gW+cw; if(seed[i]||p>=srcB[i]){ buf[i]=fh[i]; continue; } // そのマスのぼかし回数に達したら以降は据え置き
+    // layer 昇順に area を合成。各 area の傾斜は「0」ではなく『現在の下地 base』へ接続＝重なると上 layer の傾斜が下 layer の高さへ降りる。
+    const sorted=areas.slice().sort((a,b)=>areaLayer(a)-areaLayer(b));
+    let any=false, t0=performance.now();
+    for(let ai=0; ai<sorted.length; ai++){ const e=sorted[ai], H=areaH(e), Rc=areaSlope(e)>0?areaSlope(e)/cs:0, bb=areaSmooth(e);
+      for(let i=0;i<N;i++) dist[i]=INF; rasterAreaCells(e, g, (i)=>{ dist[i]=0; }); // この area のマス＝距離0
+      // チャンファ距離変換（この area の境界からの距離・前進→後退）
+      for(let cd=0; cd<gD; cd++) for(let cw=0; cw<gW; cw++){ const i=cd*gW+cw; let bd=dist[i];
+        if(cd>0&&dist[i-gW]+1<bd)bd=dist[i-gW]+1; if(cw>0&&dist[i-1]+1<bd)bd=dist[i-1]+1;
+        if(cd>0&&cw>0&&dist[i-gW-1]+SQ<bd)bd=dist[i-gW-1]+SQ; if(cd>0&&cw<gW-1&&dist[i-gW+1]+SQ<bd)bd=dist[i-gW+1]+SQ; dist[i]=bd; }
+      for(let cd=gD-1; cd>=0; cd--) for(let cw=gW-1; cw>=0; cw--){ const i=cd*gW+cw; let bd=dist[i];
+        if(cd<gD-1&&dist[i+gW]+1<bd)bd=dist[i+gW]+1; if(cw<gW-1&&dist[i+1]+1<bd)bd=dist[i+1]+1;
+        if(cd<gD-1&&cw<gW-1&&dist[i+gW+1]+SQ<bd)bd=dist[i+gW+1]+SQ; if(cd<gD-1&&cw>0&&dist[i+gW-1]+SQ<bd)bd=dist[i+gW-1]+SQ; dist[i]=bd; }
+      // 合成：内部(dc=0)=H（平ら・固定）／傾斜(0<dc≤R)=下地から H へブレンド／範囲外=据え置き
+      for(let i=0;i<N;i++){ const dc=dist[i];
+        if(dc===0){ base[i]=H; seed[i]=1; bsm[i]=bb; any=true; }
+        else if(Rc>0 && dc<=Rc){ base[i]=base[i]+(H-base[i])*(1-dc/Rc); seed[i]=0; bsm[i]=bb; } } // 上 layer の傾斜が下地（下 layer の高さ or 0）へ降りる
+      if((performance.now()-t0)>50){ busy(true,'生成中… 合成 '+(ai+1)+'/'+sorted.length); await yld(); t0=performance.now(); }
+    }
+    if(!any){ status('area が footprint 内にありません'); return; }
+    // ぼかし：area 内部(seed)は固定・各マスを「その下地 area のぼかし回数」ぶん 3x3 平均（継ぎ目・境界を自然に）
+    let maxB=0; for(let i=0;i<N;i++) if(!seed[i] && bsm[i]>maxB) maxB=bsm[i];
+    let fh=base;
+    if(maxB>0){ let buf=new Float64Array(N); let t1=performance.now();
+      for(let p=0;p<maxB;p++){ for(let cd=0; cd<gD; cd++) for(let cw=0; cw<gW; cw++){ const i=cd*gW+cw; if(seed[i]||p>=bsm[i]){ buf[i]=fh[i]; continue; }
           let s=fh[i], c=1; if(cd>0){s+=fh[i-gW];c++;} if(cd<gD-1){s+=fh[i+gW];c++;} if(cw>0){s+=fh[i-1];c++;} if(cw<gW-1){s+=fh[i+1];c++;}
           if(cd>0&&cw>0){s+=fh[i-gW-1];c++;} if(cd>0&&cw<gW-1){s+=fh[i-gW+1];c++;} if(cd<gD-1&&cw>0){s+=fh[i+gW-1];c++;} if(cd<gD-1&&cw<gW-1){s+=fh[i+gW+1];c++;}
           buf[i]=s/c; }
         const tmp=fh; fh=buf; buf=tmp;
-        if((performance.now()-t0)>50){ busy(true,'生成中… ぼかし '+(p+1)+'/'+maxB); await yld(); t0=performance.now(); } } }
+        if((performance.now()-t1)>50){ busy(true,'生成中… ぼかし '+(p+1)+'/'+maxB); await yld(); t1=performance.now(); } } }
     for(let i=0;i<N;i++) land.heights[i]=Math.round(fh[i]);
-    landPersist(); render(); status('生成: area ごとの傾斜距離／ぼかしで勾配を作成しました');
+    landPersist(); render(); status('生成: layer を重ねて勾配を作成しました（上 layer の傾斜は下 layer へ接続）');
   } finally { busy(false); } }
 // --- JSON / 入出力（効率形式: 範囲＋グリッド＋高さRLE＋regions） ---
 function heightsRle(h){ const out=[]; let i=0; while(i<h.length){ const v=h[i]; let j=i+1; while(j<h.length && h[j]===v) j++; out.push([v, j-i]); i=j; } return out; }
