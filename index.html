@@ -358,7 +358,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.82';
+const APP_VERSION='1.83';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1895,7 +1895,8 @@ function renderLand(){ const g=landSyncGrid();
   drawLandAreas(hlo, hspan);
   // カーソル（plan に寄せる）：非選択時に破線マーカー＋下部にラベル
   if(sel<0){ const [mx,my]=w2c(cursor.d,cursor.w); ctx.strokeStyle='#D4A93C'; ctx.lineWidth=1.2; ctx.setLineDash([3,2]); ctx.strokeRect(mx-6,my-6,12,12); ctx.setLineDash([]); }
-  ctx.fillStyle='#8a9b97'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('cursor d'+cursor.d+' w'+cursor.w, 8*devicePixelRatio, cv.height-8*devicePixelRatio);
+  const chv=getCell(Math.floor((cursor.d-land.d0)/(land.cellSize||1)), Math.floor((cursor.w-land.w0)/(land.cellSize||1))); // カーソル位置の地形高さ（-1=未生成）
+  ctx.fillStyle='#8a9b97'; ctx.font=(11*devicePixelRatio)+'px monospace'; ctx.textAlign='left'; ctx.textBaseline='alphabetic'; ctx.fillText('cursor d'+cursor.d+' w'+cursor.w+' h'+(chv===-1?'-':chv), 8*devicePixelRatio, cv.height-8*devicePixelRatio);
 }
 // overlay エントリの名前/座標/高さ（plan の各トグルを land でも反映）
 // land は plan の area（group parent）を直接編集する。選択は plan と共有（sel）。
