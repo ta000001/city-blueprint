@@ -236,7 +236,7 @@ body.mode-land .landtools{display:flex}
       <div class="landtools" id="landtools">
         <span class="grp"><label>area 追加</label><button id="lf-add-rect">四角</button><button id="lf-add-circle">丸</button><button id="lf-add-poly">多角形</button></span>
         <span id="lf-selgrp" style="display:contents"></span>
-        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜距離</label><input type="range" id="lf-sm" min="0" max="256" step="1" value="24" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
+        <span class="grp"><button class="pri" id="lf-gen">生成</button><label>傾斜距離</label><input type="range" id="lf-sm" min="0" max="1024" step="1" value="24" style="width:110px;vertical-align:middle"><span id="lf-sm-v" class="muted"></span></span>
         <span class="landlegend">低<span class="bar"></span>高</span>
       </div>
     </div>
@@ -355,7 +355,7 @@ body.mode-land .landtools{display:flex}
 </div></div></div>
 
 <script>
-const APP_VERSION='1.70';
+const APP_VERSION='1.71';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
