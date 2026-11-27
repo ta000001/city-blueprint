@@ -230,7 +230,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
     <div class="panel p-preview">
       <div class="ph"><h2>配置プレビュー <span class="qbtn" id="pv-help" role="button" tabindex="0" title="座標と記号の説明">?</span></h2>
         <span class="htools"><button id="pv-labels" title="エントリ名ラベルの表示切替">エントリ名表示</button><button id="pv-coords" title="各点の座標(d,h,w)の表示切替">座標表示</button><button id="pv-h" title="各エントリの h 座標を表示">h表示</button><button id="pv-heat" title="ヒートマップの表示切替">ヒートマップ</button><button id="zin" title="拡大">＋</button><button id="zout" title="縮小">－</button><button id="fit" title="全体を表示">全体表示</button></span></div>
-      <div class="cvwrap"><canvas id="cv"></canvas><span class="landlegend">低<span class="bar"></span>高</span></div>
+      <div class="cvwrap"><canvas id="cv"></canvas><span class="landlegend"><span id="lf-lmin">低</span><span class="bar"></span><span id="lf-lmax">高</span></span></div>
       <div class="canbar">
         <span class="cbg"><span class="cbl">追加</span><span class="cbr"><select id="addtype"></select><button id="add" title="選択中/カーソル位置に新規エントリを追加">＋追加</button></span></span>
         <span class="cbg"><span class="cbl">選択</span><span class="cbr"><button id="multi" title="複数選択モード (Ctrl/⌘+クリック・ダブルクリックでも)">複数選択</button><button id="selall" title="全エントリを選択">全選択</button></span></span>
@@ -358,7 +358,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.81';
+const APP_VERSION='1.82';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1873,6 +1873,7 @@ function renderLand(){ const g=landSyncGrid();
   if(cells>LAND_MAX_CELLS){ landMsg('範囲が広すぎます（'+cells.toLocaleString()+' マス）。footprint か「1マス=Nブロック」を見直してください'); return; }
   const s=camo.scale;
   const [hlo,hhi]=landHeightRange(), hspan=(hhi>hlo)?(hhi-hlo):1, hMaxAbs=Math.max(Math.abs(hlo),Math.abs(hhi),1); // 高さ色スケール（ヒートマップと area 色で共通）
+  { const lm=$('#lf-lmin'), lx=$('#lf-lmax'); if(lm) lm.textContent=hlo; if(lx) lx.textContent=hhi; } // 凡例に現時点の min/max 高さを表示
   if(SETTINGS.showHeat){ const stride=Math.max(1, Math.ceil(Math.sqrt(cells/LAND_DRAW_CELLS))); // 広域は間引き描画
     const cs=g.cs, bs=s*cs*stride;
     ctx.save();
