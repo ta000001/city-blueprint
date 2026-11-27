@@ -361,7 +361,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.88';
+const APP_VERSION='1.89';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -2077,7 +2077,7 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
     frRow('⑤ 地面の下限','', numStepper('lf-gbot', land.groundBottom), '','','','', 'fp'),
     frRow('⑥ 地面の素材','', '<button id="lf-mat">'+matLabelOf(land.groundMat)+'</button>', '','','','', 'fp'),
     frRow('1マス=Nブロック','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp'),
-    frRow('','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+' title="この地形を plan に設定/解除">'+(plan.landform?'plan 解除':'plan に設定')+'</button>', '','','','', 'fp') ].join('');
+    frRow('','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+' title="この地形を plan に設定/解除">'+(plan.landform?'landを解除':'landを設定')+'</button>', '','','','', 'fp') ].join('');
   box.innerHTML = rows; wireSteppers(box); // 情報行(範囲/マス数/area数)やファイル名の画面直書きは廃止（説明は「?」・未設定案内はキャンバス表示に集約）
   const at=$('#lf-atmos'); if(at) at.oninput=()=>{ land.atmosTop=Math.round(+at.value||0); landPersist(); render(); };
   const gb=$('#lf-gbot'); if(gb) gb.oninput=()=>{ land.groundBottom=Math.round(+gb.value||0); landPersist(); render(); };
