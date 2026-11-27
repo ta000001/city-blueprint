@@ -268,9 +268,6 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
     <div class="panel p-landjson">
       <h2 id="lf-jtitle">plan_land.json</h2>
       <textarea id="landjson" readonly spellcheck="false" style="margin-top:0"></textarea>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <button id="lf-save">地形を保存</button><button id="lf-open">地形を開く</button>
-      </div>
     </div>
   </div>
 </div>
@@ -321,9 +318,14 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 <p class="muted">候補は「辺寄せ・角寄せ・一様」から生成し、最も近い外周2辺への距離が小さい＝ぴったり詰まる位置を優先します。これで外周リングから内側へ順に埋まります。</p>
 <p class="muted">置ける場所が無くなったら自動で打ち切り。個数は randomarea 側の「countMin〜countMax（0=詰める）」で制御します。</p>
 </div></div></div>
-<div class="modal" id="dirhelp"><div class="m"><h3>保存先フォルダ（plan）</h3><div class="hbody">
+<div class="modal" id="dirhelp"><div class="m"><h3>保存先/読込フォルダ（plan）</h3><div class="hbody">
 <p>plan の「保存」「開く」で使うフォルダです。設定すると「保存」がこのフォルダに直接書き込み、「開く」もここから選べます。<b>未設定</b>ならダウンロード／ファイル選択になります。</p>
 <p class="muted">mod の <b>data/.../transaction/plan/</b> を選ぶと、保存した plan.json をそのまま mod で読めます。</p>
+<p class="muted">この端末（iOS 等）が File System Access 非対応の場合は使えません（保存はダウンロード）。</p>
+</div></div></div>
+<div class="modal" id="ldirhelp"><div class="m"><h3>保存先/読込フォルダ（plan_land）</h3><div class="hbody">
+<p>地形（<b>&lt;plan名&gt;_land.json</b>）の「保存」「開く」で最初に開くフォルダです。右上アイコンは land タブで地形の保存/読込に切り替わります。<b>未設定</b>なら plan フォルダ、無ければダウンロード／ファイル選択になります。</p>
+<p class="muted">mod の <b>data/.../transaction/landform/</b> を選ぶと、保存した地形 JSON をそのまま mod で読めます。</p>
 <p class="muted">この端末（iOS 等）が File System Access 非対応の場合は使えません（保存はダウンロード）。</p>
 </div></div></div>
 <div class="modal" id="sdirhelp"><div class="m"><h3>読込フォルダ（structure）</h3><div class="hbody">
@@ -331,7 +333,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 <p class="muted">mod の <b>data/.../transaction/structure/</b> を選ぶと、mc-blueprint で作った structure.json をそのまま参照できます。</p>
 <p class="muted">plan 参照は「保存先フォルダ（plan）」から読みます（別管理）。この端末（iOS 等）が File System Access 非対応の場合は使えません（都度ファイル選択）。</p>
 </div></div></div>
-<div class="modal" id="pdirhelp"><div class="m"><h3>保存先フォルダ（preset）</h3><div class="hbody">
+<div class="modal" id="pdirhelp"><div class="m"><h3>保存先/読込フォルダ（preset）</h3><div class="hbody">
 <p>ユーザープリセットは常に端末内に保存されますが、このフォルダを設定すると <b>user_presets.json</b> を保存/削除/取込のたび自動で書き出し、起動時に読み込みます。端末間の共有/バックアップ向け。</p>
 <p class="muted">非対応端末（iOS 等）では使えません（端末内保存＋書出/取込アイコンで対応）。</p>
 </div></div></div>
@@ -345,7 +347,8 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 <p><b>atmospheric（空気層）</b>：上限 <b>①</b>＝全dw一律（設定）／下限＝地面上限+1（自動）／素材＝air 固定。<br><b>ground（地面層）</b>：上限 <b>④</b>＝dw毎の h（<b>この編集が肝</b>）／下限 <b>⑤</b>＝全dw一律（設定）／素材 <b>⑥</b>＝全dw一律（既定=土）。</p>
 <p><b>④ の作り方（area→生成）</b>：地形の高さは <b>plan の area</b> で決めます。area に <b>layer</b>（0＝地形に使わない／正＝使う・大きいほど後がち＝上）と <b>高さh</b> を設定し、配置タブと同じ操作で<b>移動・リサイズ</b>できます（land タブからも編集可）。area の<b>形状は 四角／丸／多角形</b>（多角形は各頂点をドラッグで変形・「頂点＋/−」で増減）。<b>layer が1以上</b>の area を種にして <b>「生成」</b>を押すと、高さマップを作ります。<b>傾斜距離・ぼかしは area ごと</b>に設定します（layer を1以上にすると area のパラメータ欄に出ます）。<b>「傾斜距離」</b>（ブロック）＝その area の高さが <b>0 へ直線的に減衰するまでの距離</b>。<b>長くするほど緩やかな傾斜</b>になり、その距離より外は 0（area の無い所＝ヒートマップ上は透明）のままです。<b>「ぼかし」</b>＝生成後にその area 周りの斜面を平均化する回数で、<b>大きいほど継ぎ目や境界が自然</b>になります（area 本体の高さは固定／上げすぎると地形が広がります）。<b>スライダー表示の有無・上限・既定値は ⚙各種設定</b>で変更できます。<b>重なった場合は layer の高い方を上に合成</b>し、上 layer の傾斜は 0 ではなく<b>下 layer の高さへ降りて接続</b>します（2段の高低差に傾斜がつく・くぼみ/谷も作れます）。</p>
 <p><b>layer（重なり）＝上の layer ほど優先（後がち＝上書き）</b>。各範囲は layer（色：下=青→上=赤）で、枠の近くに <b>L番号・高さh</b> を表示。選択中の <b>layer↑/↓</b> で順序を入れ替え（低い高さを上 layer にすればくぼみ・谷も作れる）。輪郭（多角形）は今後追加予定。</p>
-<p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。保存すると plan 側に <b>landform</b> 参照が付きます。</p>
+<p><b>範囲</b>＝plan.footprint の d/w。<b>footprint が未設定だと地形は作成できません</b>（配置タブで設定してください）。</p>
+<p><b>保存／開く</b>は画面右上のアイコン（land タブでは地形用に切り替わります）。保存すると plan 側に <b>landform</b> 参照が付きます。<b>「この地形を plan に」</b>ボタンで参照の設定／解除を手動で切り替えられます（解除すると mod は整地をスキップ）。保存先は ⚙設定の <b>保存先/読込フォルダ（plan_land）</b> で指定できます。</p>
 <p>mod：plan 建築の前に <b>landform builder</b> が各列を <b>[⑤..④]=⑥ 充填＋[④+1..①]=air 除去</b>で整地します（水系は今後）。</p>
 </div></div></div>
 <div class="modal" id="areahelp"><div class="m"><h3>area（基底 / childplan / randomarea）</h3><div class="hbody">
@@ -358,7 +361,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.83';
+const APP_VERSION='1.84';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -1581,9 +1584,11 @@ async function libGet(name){ if(!name) return null; try{ return await idbGet(pla
 async function ensurePerm(h, mode){ const o={mode:mode||'readwrite'}; if(await h.queryPermission(o)==='granted') return true; return (await h.requestPermission(o))==='granted'; }
 let DIR=null;    // plan の保存＋plan参照の読込フォルダ
 let SDIR=null;   // structure 参照の読込フォルダ（読取専用・任意）
+let LDIR=null;   // plan_land（地形）の保存/読込フォルダ（任意）
 const refDir=kind=>(kind==='structure'?SDIR:DIR);   // 参照 type 別の既定読込フォルダ
 async function pickDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-plan'}); DIR=h; try{await idbSet('dir_plan',h);}catch(_){} renderCfg(); status('保存先: '+h.name); }catch(_){} }
 async function pickStructDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'read',id:'cb-structure'}); SDIR=h; try{await idbSet('dir_structure',h);}catch(_){} renderCfg(); status('structure 読込先: '+h.name); }catch(_){} }
+async function pickLandDir(){ if(!FS_OK){status('この端末はフォルダ保存に非対応');return;} try{ const h=await window.showDirectoryPicker({mode:'readwrite',id:'cb-land'}); LDIR=h; try{await idbSet('dir_land',h);}catch(_){} renderCfg(); status('plan_land 保存/読込先: '+h.name); }catch(_){} }
 let planName='my_plan'; // ⑧ 保存時のファイル名（押下時にpromptの既定値、入力値を記憶）
 async function saveFile(text,fname){ await libPut(fname, text);   // アプリ内ライブラリにも保管（iOS等で名前解決に使う）
   if(DIR){ try{ if(await ensurePerm(DIR)){
@@ -1766,32 +1771,38 @@ function importPlan(text){
 }
 
 /* ---------- wire ---------- */
-function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
-  b.innerHTML='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の密度</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+function renderCfg(){ const b=$('#cfgbody'); if(!b) return; const landT=(MODE==='land'); // 設定も選択中タブで使う項目だけ表示
+  const secScatter='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">散布（randomarea）の密度</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-scatter" role="button" tabindex="0" title="説明">?</span><button class="cfgrst" id="cfg-rst-scatter" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
     +'<div class="cfgfill">1配置あたりの候補数 <input type="number" id="cfg-scCand" value="'+SETTINGS.scCand+'"></div>'
     +'<div class="muted cfgval">多いほど角・辺に密着して<b>密</b>に詰まります（その分やや遅く）。既定 30。</div>'
     +'<div class="cfgfill">試行回数（最も密な結果を採用） <input type="number" id="cfg-scTries" value="'+SETTINGS.scTries+'"></div>'
-    +'<div class="muted cfgval">配置をこの回数だけやり直し、いちばん多く入った結果を採用します。大きいほど密になりやすい（その分遅い）。既定 12。</div></div>'
-    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">地形パラメータ（area の傾斜距離・ぼかし）</span><span class="cfhdtools"><button class="cfgrst" id="cfg-rst-terr" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
+    +'<div class="muted cfgval">配置をこの回数だけやり直し、いちばん多く入った結果を採用します。大きいほど密になりやすい（その分遅い）。既定 12。</div></div>';
+  const secTerr='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">地形パラメータ（area の傾斜距離・ぼかし）</span><span class="cfhdtools"><button class="cfgrst" id="cfg-rst-terr" title="この項目を既定に戻す">⟳ 既定</button></span></div>'
     +'<div class="cfgfill"><label class="chk"><input type="checkbox" id="cfg-terrSlider"'+(SETTINGS.terrSlider?' checked':'')+'> パラメータ欄にスライダーを表示</label></div>'
     +'<div class="cfgfill">傾斜距離　上限 <input type="number" id="cfg-slopeMax" value="'+SETTINGS.slopeMax+'">　既定 <input type="number" id="cfg-slopeDef" value="'+SETTINGS.slopeDef+'"></div>'
     +'<div class="cfgfill">ぼかし　上限 <input type="number" id="cfg-smoothMax" value="'+SETTINGS.smoothMax+'">　既定 <input type="number" id="cfg-smoothDef" value="'+SETTINGS.smoothDef+'"></div>'
-    +'<div class="muted cfgval">上限＝スライダー/入力の最大値。既定＝新しく layer を1以上にした area の初期値。既定 傾斜距離24・ぼかし4。</div></div>'
-    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（plan）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-dir" role="button" tabindex="0" title="説明">?</span></span></div>'
+    +'<div class="muted cfgval">上限＝スライダー/入力の最大値。既定＝新しく layer を1以上にした area の初期値。既定 傾斜距離24・ぼかし4。</div></div>';
+  const secDir='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先/読込フォルダ（plan）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-dir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(DIR?(DIR.name+'/'):'未設定（保存はダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickdir">フォルダを選択</button>'+(DIR?' <button id="cfg-cleardir">解除</button>':'')+'</div>')
         : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（保存はダウンロード／開くはファイル選択）</div>')
-    +'</div>'
-    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">読込フォルダ（structure）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-sdir" role="button" tabindex="0" title="説明">?</span></span></div>'
+    +'</div>';
+  const secLDir='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先/読込フォルダ（plan_land）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-ldir" role="button" tabindex="0" title="説明">?</span></span></div>'
+      +(FS_OK
+        ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(LDIR?(LDIR.name+'/'):'未設定（plan フォルダ／ダウンロード）')+'</b></div><div class="cfgfoot"><button id="cfg-pickldir">フォルダを選択</button>'+(LDIR?' <button id="cfg-clearldir">解除</button>':'')+'</div>')
+        : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（地形の保存はダウンロード／開くはファイル選択）</div>')
+    +'</div>';
+  const secSDir='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">読込フォルダ（structure）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-sdir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(SDIR?(SDIR.name+'/'):'未設定（都度ファイル選択）')+'</b></div><div class="cfgfoot"><button id="cfg-pickstructdir">フォルダを選択</button>'+(SDIR?' <button id="cfg-clearstructdir">解除</button>':'')+'</div>')
         : '<div class="muted" style="font-size:11px">この端末はフォルダ指定に非対応（structure 参照は都度ファイル選択）</div>')
-    +'</div>'
-    +'<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先フォルダ（preset）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-pdir" role="button" tabindex="0" title="説明">?</span></span></div>'
+    +'</div>';
+  const secPDir='<div class="cfgsec"><div class="cfghead"><span class="cfglbl">保存先/読込フォルダ（preset）</span><span class="cfhdtools"><span class="qbtn" id="cfg-help-pdir" role="button" tabindex="0" title="説明">?</span></span></div>'
       +(FS_OK
         ? ('<div class="cfgfill" style="font-size:12px;line-height:1.6">現在：<b>'+(PDIR?(PDIR.name+'/'):'未設定（端末内のみ）')+'</b></div><div class="cfgfoot"><button id="cfg-pickpdir">フォルダを選択</button>'+(PDIR?' <button id="cfg-clearpdir">解除</button>':'')+'</div>')
         : '<div class="muted" style="font-size:11px">この端末はフォルダ保存に非対応（プリセットは端末内に保存・書出/取込は可）</div>')
     +'</div>';
+  b.innerHTML = landT ? (secTerr + secDir + secLDir) : (secScatter + secDir + secSDir + secPDir); // land=地形パラメータ＋plan/plan_landフォルダ／plan=散布＋plan/structure/presetフォルダ
   const bind=(key,min)=>{ const el=$('#cfg-'+key); if(el) el.oninput=()=>{ SETTINGS[key]=Math.max(min||0,Math.round(+el.value||0)); saveSettings(); }; };
   bind('scCand',1); bind('scTries',1);
   const reParams=()=>{ if(sel>=0 && Area.is(plan.entries[sel])) renderTParams(); }; // 地形パラメータ設定の変更をパラメータ欄へ反映
@@ -1804,6 +1815,9 @@ function renderCfg(){ const b=$('#cfgbody'); if(!b) return;
   if($('#cfg-help-dir')) $('#cfg-help-dir').onclick=()=>$('#dirhelp').classList.add('on');
   if($('#cfg-pickdir')) $('#cfg-pickdir').onclick=()=>pickDir();
   if($('#cfg-cleardir')) $('#cfg-cleardir').onclick=async()=>{ DIR=null; try{await idbSet('dir_plan',null);}catch(_){} renderCfg(); status('保存先フォルダを解除しました'); };
+  if($('#cfg-help-ldir')) $('#cfg-help-ldir').onclick=()=>$('#ldirhelp').classList.add('on');
+  if($('#cfg-pickldir')) $('#cfg-pickldir').onclick=()=>pickLandDir();
+  if($('#cfg-clearldir')) $('#cfg-clearldir').onclick=async()=>{ LDIR=null; try{await idbSet('dir_land',null);}catch(_){} renderCfg(); status('plan_land フォルダを解除しました'); };
   if($('#cfg-help-sdir')) $('#cfg-help-sdir').onclick=()=>$('#sdirhelp').classList.add('on');
   if($('#cfg-pickstructdir')) $('#cfg-pickstructdir').onclick=()=>pickStructDir();
   if($('#cfg-clearstructdir')) $('#cfg-clearstructdir').onclick=async()=>{ SDIR=null; try{await idbSet('dir_structure',null);}catch(_){} renderCfg(); status('structure 読込フォルダを解除しました'); };
@@ -1860,6 +1874,7 @@ function landHeightRange(){ let lo=Infinity,hi=-Infinity; const h=land&&land.hei
   if(lo===Infinity){ lo=0; hi=0; } return [lo,hi]; }
 function setTab(m){ MODE=m; document.body.classList.toggle('mode-land', m==='land');
   const tp=$('#tab-plan'), tl=$('#tab-land'); if(tp) tp.classList.toggle('on', m==='plan'); if(tl) tl.classList.toggle('on', m==='land');
+  const sv=$('#save'), op=$('#open'); if(sv){ sv.title=(m==='land')?'地形を保存（Ctrl/⌘+S）':'plan を保存（保存先フォルダを選んで保存・Ctrl/⌘+S）'; sv.setAttribute('aria-label',(m==='land')?'地形を保存':'保存'); } if(op){ op.title=(m==='land')?'地形を開く':'plan を開く'; op.setAttribute('aria-label',(m==='land')?'地形を開く':'開く'); } // 右上アイコンはタブ連動
   if(m==='land'){ ensureLand(); landSyncGrid();
     multiMode=false; rangeMode=false; rangeBand=null; updateMultiBtn(); // land は単一選択のみ（複数/範囲選択は使わない）
     if(sel>=0 && !(plan.entries[sel] && isGroupParent(plan.entries[sel]))) selOne(-1); // land は area のみ編集：area 以外を選択したままタブ移動したら解除
@@ -2035,7 +2050,8 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
   const rows=[ frRow('① 空の上限','', numStepper('lf-atmos', land.atmosTop), '','','','', 'fp'),
     frRow('⑤ 地面の下限','', numStepper('lf-gbot', land.groundBottom), '','','','', 'fp'),
     frRow('⑥ 地面の素材','', '<button id="lf-mat">'+matLabelOf(land.groundMat)+'</button>', '','','','', 'fp'),
-    frRow('1マス=Nブロック','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp') ].join('');
+    frRow('1マス=Nブロック','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp'),
+    frRow('この地形を plan に','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+'>'+(plan.landform?('設定中（解除）'):'設定')+'</button>'+(plan.landform?('<span class="muted" style="margin-left:6px">'+plan.landform+'</span>'):''), '','','','', 'fp') ].join('');
   const nArea=landAreaIdxs().filter(i=>areaLayer(plan.entries[i])>0).length;
   const info = rng ? ('<div class="muted" style="margin-top:6px">範囲: d['+rng.d[0]+'..'+rng.d[1]+'] w['+rng.w[0]+'..'+rng.w[1]+']／1マス='+(land.cellSize||1)+'ブロック → グリッド '+(g?g.gD+'×'+g.gW:'-')+'（'+(g?(g.gD*g.gW).toLocaleString():0)+'マス）／area(layer>0) '+nArea+'個</div>')
     : '<div class="muted" style="margin-top:6px">plan に footprint が未設定です。<b>配置タブで plan の footprint を設定</b>してください（地形は footprint の範囲に作成します）。</div>';
@@ -2044,6 +2060,7 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
   const gb=$('#lf-gbot'); if(gb) gb.oninput=()=>{ land.groundBottom=Math.round(+gb.value||0); landPersist(); render(); };
   const cse=$('#lf-cs'); if(cse) cse.oninput=()=>{ land.cellSize=Math.max(1,Math.round(+cse.value||1)); landSyncGrid(); landPersist(); renderLandCtrl(); render(); };
   const mb=$('#lf-mat'); if(mb) mb.onclick=()=>bpOpen({land:true});
+  const rb=$('#lf-ref'); if(rb) rb.onclick=()=>{ if(plan.landform){ delete plan.landform; status('plan の landform 参照を解除しました'); } else { plan.landform=planName+'_land'; status('plan に landform 参照を設定: '+plan.landform); } persist(); renderLandCtrl(); }; // ⑤ landform を plan に設定/解除
   renderLandSel(); }
 // 選択中 area はプレビュー下に「選択 id ＋ 削除」だけ（layer/高さh/サイズ/形状の編集は右のパラメータ欄で＝plan に寄せる）
 function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
@@ -2052,7 +2069,7 @@ function renderLandSel(){ const g=$('#lf-selgrp'); if(!g) return;
   g.innerHTML='<span class="grp"><label>選択 '+idOf(e)+'</label><button id="lf-del">削除</button></span>';
   const del=$('#lf-del'); if(del) del.onclick=landDelSel; }
 async function saveLandPicker(){ const text=buildLandJson(), nm=planName+'_land';
-  if(window.showSaveFilePicker){ try{ const h=await window.showSaveFilePicker({suggestedName:nm+'.json', types:[{description:'landform json',accept:{'application/json':['.json']}}], id:'cb-landform'});
+  if(window.showSaveFilePicker){ try{ const opts={suggestedName:nm+'.json', types:[{description:'landform json',accept:{'application/json':['.json']}}], id:'cb-landform'}; if(LDIR||DIR) opts.startIn=LDIR||DIR; const h=await window.showSaveFilePicker(opts);
       const w=await h.createWritable(); await w.write(text); await w.close(); plan.landform=nm; persist(); status('地形を保存: '+h.name); return true;
     }catch(err){ if(err&&err.name==='AbortError') return false; status('保存できません: '+((err&&err.message)||err)); return false; } }
   await saveFile(text, nm+'.json'); plan.landform=nm; persist(); return true; }
@@ -2062,7 +2079,7 @@ function applyLandJson(text){ try{ const o=JSON.parse(text), l=landDef();
     else { land=l; l.cellSize=1; landSyncGrid(); if(Array.isArray(o.cells)) o.cells.forEach(c=>{ if(c&&typeof c.d==='number'&&typeof c.w==='number'){ const cd=Math.floor((c.d-land.d0)/land.cellSize), cw=Math.floor((c.w-land.w0)/land.cellSize); if(cd>=0&&cd<land.gD&&cw>=0&&cw<land.gW) land.heights[cd*land.gW+cw]=(typeof c.h==='number'?c.h:-1); } }); } // 旧(d,h,w)形式も読める
     selOne(-1); landSyncGrid(); landPersistNow(); renderLandCtrl(); render(); status('地形を読込しました');
   }catch(err){ status('地形JSONを読めません: '+((err&&err.message)||err)); } }
-async function openLandPicker(){ if(window.showOpenFilePicker){ try{ const [h]=await window.showOpenFilePicker({types:[{description:'landform json',accept:{'application/json':['.json']}}], id:'cb-landform'}); applyLandJson(await (await h.getFile()).text()); }catch(err){ if(err&&err.name!=='AbortError') status('開けません'); } return; }
+async function openLandPicker(){ if(window.showOpenFilePicker){ try{ const opts={types:[{description:'landform json',accept:{'application/json':['.json']}}], id:'cb-landform'}; if(LDIR||DIR) opts.startIn=LDIR||DIR; const [h]=await window.showOpenFilePicker(opts); applyLandJson(await (await h.getFile()).text()); }catch(err){ if(err&&err.name!=='AbortError') status('開けません'); } return; }
   const inp=document.createElement('input'); inp.type='file'; inp.accept='.json'; inp.onchange=async()=>{ const f=inp.files&&inp.files[0]; if(f) applyLandJson(await f.text()); }; inp.click(); }
 
 function boot(){
@@ -2080,8 +2097,9 @@ function boot(){
   $('#paste').onclick=doPaste;
   document.querySelectorAll('.hundo').forEach(b=>b.onclick=undo);
   document.querySelectorAll('.hredo').forEach(b=>b.onclick=redo);
-  $('#save').onclick=async(ev)=>{ const btn=ev.currentTarget; const ok=await savePlanPicker(); if(ok) flashBtn(btn); }; // 保存ダイアログでフォルダを選んで保存（非対応環境は名前入力）
+  $('#save').onclick=async(ev)=>{ const btn=ev.currentTarget; const ok=(MODE==='land')?await saveLandPicker():await savePlanPicker(); if(ok) flashBtn(btn); }; // タブ連動：land=地形を保存／plan=plan を保存
   $('#open').onclick=async ()=>{
+    if(MODE==='land'){ openLandPicker(); return; } // タブ連動：land=地形を開く
     if(FS_OK){
       try{
         const opts={types:[{description:'plan.json',accept:{'application/json':['.json']}}]};
@@ -2121,8 +2139,6 @@ function boot(){
   if($('#lf-add-circle')) $('#lf-add-circle').onclick=()=>landAddArea('CIRCLE');
   if($('#lf-add-poly')) $('#lf-add-poly').onclick=()=>landAddArea('POLY');
   if($('#lf-gen')) $('#lf-gen').onclick=landGenerate;
-  if($('#lf-save')) $('#lf-save').onclick=saveLandPicker;
-  if($('#lf-open')) $('#lf-open').onclick=openLandPicker;
   if($('#lf-help')) $('#lf-help').onclick=()=>$('#lfhelp').classList.add('on');
   if($('#pv-labels')) $('#pv-labels').onclick=()=>{ SETTINGS.showLabels=!SETTINGS.showLabels; saveSettings(); updateLabelBtn(); render(); }; // エントリ名ラベル ON/OFF
   if($('#pv-coords')) $('#pv-coords').onclick=()=>{ SETTINGS.showCoords=!SETTINGS.showCoords; saveSettings(); updateLabelBtn(); render(); }; // 座標(d,h,w) ON/OFF
@@ -2132,6 +2148,8 @@ function boot(){
   if($('#lfhelp')) $('#lfhelp').onclick=e=>{if(e.target.id==='lfhelp')$('#lfhelp').classList.remove('on');};
   $('#fphelp').onclick=e=>{if(e.target.id==='fphelp')$('#fphelp').classList.remove('on');};
   $('#dirhelp').onclick=e=>{if(e.target.id==='dirhelp')$('#dirhelp').classList.remove('on');};
+  if($('#ldirhelp')) $('#ldirhelp').onclick=e=>{if(e.target.id==='ldirhelp')$('#ldirhelp').classList.remove('on');};
+  if($('#sdirhelp')) $('#sdirhelp').onclick=e=>{if(e.target.id==='sdirhelp')$('#sdirhelp').classList.remove('on');};
   $('#pdirhelp').onclick=e=>{if(e.target.id==='pdirhelp')$('#pdirhelp').classList.remove('on');};
   $('#refhelp').onclick=e=>{if(e.target.id==='refhelp')$('#refhelp').classList.remove('on');};
   $('#areahelp').onclick=e=>{if(e.target.id==='areahelp')$('#areahelp').classList.remove('on');};
@@ -2245,6 +2263,7 @@ loadData().then(()=>{ $('#addtype').innerHTML=allTypes().map(t=>'<option>'+t+'</
 if(FS_OK) idbGet('dir_plan').then(h=>{ if(h) DIR=h; }).catch(()=>{}); // 保存先は⚙設定モーダルで表示/変更
 if(FS_OK) idbGet('dir_structure').then(h=>{ if(h) SDIR=h; }).catch(()=>{}); // structure 参照の読込先（⚙設定で指定）
 if(FS_OK) idbGet('dir_presets').then(async h=>{ if(h){ PDIR=h; await loadPresetFile(); if(sel>=0) renderTParams(); } }).catch(()=>{}); // preset同期フォルダ
+if(FS_OK) idbGet('dir_land').then(h=>{ if(h) LDIR=h; }).catch(()=>{}); // plan_land（地形）の保存/読込フォルダ
 loadUserPresets(); // 端末(localStorage)からユーザープリセットを復元
 loadSettings(); // 各種設定を復元
 if('serviceWorker' in navigator){
