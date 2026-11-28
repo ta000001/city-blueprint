@@ -262,7 +262,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
       <textarea id="json" readonly spellcheck="false" style="margin-top:0"></textarea>
     </div>
     <div class="panel p-land">
-      <div class="ph"><h2>landform <span class="qbtn" id="lf-help" role="button" tabindex="0" title="地形の説明">?</span></h2></div>
+      <div class="ph"><h2>landform <span class="qbtn" id="lf-help" role="button" tabindex="0" title="地形の説明">?</span></h2><span class="htools" id="lf-htools"></span></div>
       <div id="landctrl"></div>
     </div>
     <div class="panel p-landjson">
@@ -361,7 +361,7 @@ body.mode-land .cvwrap .landlegend{display:flex;position:absolute;top:8px;right:
 </div></div></div>
 
 <script>
-const APP_VERSION='1.90';
+const APP_VERSION='1.91';
 /* =====================================================================
    plan.json データ契約（取り違え注意）
    ● mod(SceneRunner/Params.resolve)が読むのは: type/relPos/relDir/margin/ground/params/plan/structure のみ。
@@ -2076,9 +2076,9 @@ function renderLandCtrl(){ const box=$('#landctrl'); if(!box){ renderLandSel(); 
   const rows=[ frRow('atmosTop','', numStepper('lf-atmos', land.atmosTop), '','','','', 'fp'),
     frRow('groundBottom','', numStepper('lf-gbot', land.groundBottom), '','','','', 'fp'),
     frRow('groundMat','', '<button id="lf-mat">'+matLabelOf(land.groundMat)+'</button>', '','','','', 'fp'),
-    frRow('cellSize','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp'),
-    frRow('','', '<button id="lf-ref"'+(plan.landform?' class="pri"':'')+' title="この地形を plan に設定/解除">'+(plan.landform?'landを解除':'landを設定')+'</button>', '','','','', 'fp') ].join('');
+    frRow('cellSize','', numStepper('lf-cs', land.cellSize||1), '','','','', 'fp') ].join('');
   box.innerHTML = rows; wireSteppers(box); // 情報行(範囲/マス数/area数)やファイル名の画面直書きは廃止（説明は「?」・未設定案内はキャンバス表示に集約）
+  const ht=$('#lf-htools'); if(ht) ht.innerHTML='<button id="lf-ref"'+(plan.landform?' class="pri"':'')+' title="この地形を plan に設定/解除">'+(plan.landform?'landを解除':'landを設定')+'</button>'; // 設定/解除ボタンはエリア右上(ヘッダ)へ
   const at=$('#lf-atmos'); if(at) at.oninput=()=>{ land.atmosTop=Math.round(+at.value||0); landPersist(); render(); };
   const gb=$('#lf-gbot'); if(gb) gb.oninput=()=>{ land.groundBottom=Math.round(+gb.value||0); landPersist(); render(); };
   const cse=$('#lf-cs'); if(cse) cse.oninput=()=>{ land.cellSize=Math.max(1,Math.round(+cse.value||1)); landSyncGrid(); landPersist(); renderLandCtrl(); render(); };
